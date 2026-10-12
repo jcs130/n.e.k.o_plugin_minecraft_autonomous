@@ -22,4 +22,6 @@ config.local.toml
 /local/
 /runtime/
 /logs/
+node_modules/
+*.tgz
 .DS_Store

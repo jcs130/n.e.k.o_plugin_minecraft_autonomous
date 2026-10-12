@@ -5,7 +5,7 @@ description = "N.E.K.O autonomous Minecraft plugin foundation; backend integrati
 requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"
-dependencies = []
+dependencies = ["mcp==2.1.1"]
 
 [project.urls]
 Repository = "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous"
