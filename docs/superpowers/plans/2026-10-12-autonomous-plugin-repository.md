@@ -90,9 +90,27 @@ before creating and pushing the public repository.
     /path/to/minecraft_autonomous
   ```
 
-- [ ] Inspect the generated ZIP, staged diff and secret/path scan. Commit the initial
+- [x] Inspect the generated ZIP, staged diff and secret/path scan. Commit the initial
   source using a public noreply author email. Create the public repository with no
   auto-generated README/license, then push `main` without pushing any tags.
-- [ ] Verify the remote commit, repository metadata, and exact-commit Verify workflow
+- [x] Verify the remote commit, repository metadata, and exact-commit Verify workflow
   result; inspect any failures and fix them within this repository. Leave Market
   submission and live-game acceptance for the functional increment.
+
+## Execution evidence
+
+- Backend intentionally left unselected at the owner's request.
+- Generated Hello World failed the four new behavior tests for missing entries;
+  the completed scaffold passes all six tests using the real public SDK.
+- Windows asyncio initializes its internal socket pair before the test I/O guard;
+  plugin construction and entry execution remain guarded against socket connections,
+  subprocess launches and host chat messages.
+- Ruff 0.12.4: passed. Official `check --release --market-release`: passed;
+  package payload hash verified. No tag was created, so tag/version alignment is
+  intentionally unchecked rather than reported as passing.
+- Package inspected: development directories, runtime data and machine paths absent;
+  README, Apache-2.0 license and NOTICE retained.
+- Initial source commit: `2d7ed8e777f87df9faddb735c8c81c49fc5b48ec`.
+- Public repository and remote `main` verified; GitHub recognizes Apache-2.0.
+- [Official Verify run for the initial source commit](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/actions/runs/38270962714): success.
+- No release tags, Releases, Market submission, game connection or service startup.
