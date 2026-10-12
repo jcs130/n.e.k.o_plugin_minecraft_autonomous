@@ -24,8 +24,11 @@
 - 只把有用的当前事实放入决策上下文；原始证据保留查询入口。
 - 固定规则和工具定义保持稳定，动态状态集中放在请求末尾，减少重复拼接。
 
-以上为待实现的产品目标。具体 Minecraft Agent 框架及版本尚未选定，当前没有绑定后端协议。
-架构与后续验收边界见 [设计说明](docs/design.md)。
+以上为待实现的产品目标。后端已选定独立的 `agent-mc-world@0.3.0-next.2`，
+已有固定来源、显式安装器、配置和 MCP 传输基础；禁止网络的离线工具发现已验证，
+尚未接入插件入口或完成自主循环。
+架构与后续验收边界见 [设计说明](docs/design.md)，
+以及 [Cortico / N.E.K.O 对照研究](docs/research/neko-integration-architecture.md)。
 
 ## 当前可用入口
 
@@ -36,7 +39,8 @@
 | `stop` | 返回当前停止状态，可以重复调用 |
 | startup / shutdown | 初始化时只报告状态，退出时保持停止 |
 
-没有游戏连接、后台循环、进程启动、模型请求或聊天发送。
+插件生命周期和以上入口不会启动进程、连接游戏、调用模型或发送聊天。
+独立的开发安装与离线桥接检查需显式执行，不能由导入或 startup 自动触发。
 入口成功返回状态并不代表已经连上游戏或实现自主生存。
 
 ## 配置
@@ -74,7 +78,8 @@ VS Code 任务直接使用 `NEKO_ROOT`，修改环境变量后重新打开编辑
 任务中的环境变量用法见 [VS Code 官方文档](https://code.visualstudio.com/docs/reference/variables-reference#_environment-variables)。
 
 运行时依赖在 `pyproject.toml` 声明，由官方 CLI 同步到 `vendor/` 后打包。
-当前基础没有额外运行时依赖；`vendor/`、构建结果和运行数据均不提交。
+MCP 传输依赖官方 Python `mcp==2.1.1`；独立 Node.js 22+ 执行后端需要另外显式安装。
+`vendor/`、Node 依赖、构建结果和运行数据均不提交。
 详细开发流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 后续发布

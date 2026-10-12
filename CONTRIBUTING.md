@@ -1,6 +1,7 @@
 # Contributing
 
-当前增量建立插件仓库基础。提交游戏功能前，先确定后端框架、版本及许可证，并补充可验证的接口设计。
+当前增量在标准仓库上接入独立 Agent MC World；版本和来源见 `backend/source.json`。
+执行接口的离线验证与完整自治行为分别验收，接口差异见 `docs/research/neko-integration-architecture.md`。
 
 ## 开发环境
 
@@ -24,7 +25,9 @@ uv run --project "$env:NEKO_ROOT" neko-plugin check --release --market-release .
 ## 提交要求
 
 - 使用小范围提交，更新受影响的测试与说明。
-- 测试使用临时存储并禁止网络连接、进程启动和消息发送，不依赖真实游戏。
+- 单元测试使用临时存储并禁止网络连接、真实进程启动和消息发送，不依赖真实游戏。
+- 单独的 `backend/check_disconnected.py` 检查会显式启动自己拥有的 MCP 子进程，
+  使用禁止网络和 Cortico 导入的预加载器；禁用 HTTP/viewer 监听，不执行 connect，不调用模型。
 - 不提交令牌、账号会话、私服配置、模型权重、参考音频和个人存档。
 - 配置默认不自动开始游戏。启动、停止、取消及接管语义必须可观察、可测试。
 - 不把 HTTP 成功、模型输出或工具调用受理等同于动作完成。
@@ -35,6 +38,16 @@ uv run --project "$env:NEKO_ROOT" neko-plugin check --release --market-release .
 
 新增后端应提供观测、有限时动作、取消及结果回执。正常长动作期间不因例行决策反复取消。
 提示词保持固定前缀，动态事实集中在末尾；原文留存及查询入口不能因压缩上下文丢失。
+
+开发者显式安装固定后端后，可以独立验证 MCP 传输：
+
+```powershell
+python backend/install.py --destination ./local/backend --archive /path/to/agent-mc-world-0.3.0-next.2.tgz
+python backend/check_disconnected.py --directory ./local/backend
+```
+
+安装器校验归档 SHA256，并通过 `npm ci --ignore-scripts --omit=dev` 装配依赖；
+第二条命令仅核实断开状态、工具发现及错误回执，不证明已登录或可自主游玩。
 
 普通源码推送只触发 Verify。后端未完成现场验收前，不创建发布 tag、不手动触发 Release、
 不调用 `neko-plugin publish`，也不将开发基础作为可玩的插件提交 Market。
