@@ -1,0 +1,17 @@
+[project]
+name = "minecraft_autonomous"
+version = "0.1.0"
+description = "N.E.K.O autonomous Minecraft plugin foundation; backend integration pending"
+requires-python = ">=3.11"
+readme = "README.md"
+license = "Apache-2.0"
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous"
+Issues = "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/issues"
+
+[tool.neko.build]
+exclude_dirs = ["tests", "docs", "local", "runtime", "logs"]
+exclude_files = ["AGENTS.md", "CONTRIBUTING.md", "ruff.toml", ".gitignore", ".gitattributes", ".editorconfig"]
+exclude = [".env", ".env.*", "*.key", "*.pem", "*.log", "config.local.toml"]

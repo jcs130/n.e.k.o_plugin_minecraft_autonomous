@@ -1,0 +1,8 @@
+[plugin_runtime]
+enabled = true
+auto_start = false
+
+# Reserved for the future backend. Setting this to true does not enable gameplay
+# in the repository scaffold; start still returns backend_not_integrated.
+[autonomy]
+enabled = false
