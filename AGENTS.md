@@ -10,6 +10,13 @@
 - Keep automatic startup and autonomy disabled by default. Preserve explicit stop.
 - Add only the dependencies needed for the selected backend; do not copy a legacy
   deployment, private config, credentials, weights, voice caches or user world saves.
+- Before enabling gameplay, require a core whose source, build, default entry and
+  public types are independent of Cortico. Optional host adapters depend on neutral
+  contracts and the core; do not import Core/Persona/provider/Memory implementations.
+  Preserve useful behavior from the user's fork through explicit contracts and tests.
+- Treat the pinned Agent MC World release as a transport/capability baseline until
+  the documented decoupling gaps are resolved. Legacy speech discovery, server
+  policies and additional model endpoints must be explicit optional integrations.
 - Before committing, run pytest, Ruff and the official release/Market-structure check
   using the commands in `CONTRIBUTING.md`. Inspect package contents and staged changes.
 - Do not create release tags, publish releases or submit to Market unless that work

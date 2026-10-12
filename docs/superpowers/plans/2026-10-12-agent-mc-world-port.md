@@ -4,7 +4,7 @@
 
 **Goal:** Adapt the independent Minecraft client to the public N.E.K.O SDK, with autonomous decisions, remote servers and the existing modern viewer.
 
-**Architecture (revised after source research on 2026-10-13):** Reuse the independent `agent-mc-world` execution layer and its modern viewer. A single plugin game controller owns actions; N.E.K.O Main handles user goals, takeover, stop and character communication. The plugin model gateway supplies inference but does not inherit Main's persona or memory. Preserve the Cortico host's event, turn and cancellation semantics before implementing autonomous decisions. Current MCP transport alone does not carry that full contract. See [integration research](../../research/neko-integration-architecture.md).
+**Architecture (revised after the fork and decoupling audit on 2026-10-13):** Reuse the useful Minecraft execution behavior and modern viewer through a core that builds without Cortico. A single plugin game controller owns actions; N.E.K.O Main handles user goals, takeover, stop and character communication. The plugin model gateway supplies inference but does not inherit Main's persona or memory. Define versioned neutral event, turn and cancellation contracts, then map both host adapters to them. Do not import the Cortico Core/Persona runtime. Current MCP transport and build boundaries are incomplete. See [integration research](../../research/neko-integration-architecture.md) and [fork audit](../../research/fork-improvements-and-decoupling-boundary.md).
 
 **Tech stack:** Python 3.11+, public N.E.K.O SDK, official Python MCP client, Node.js 22+, Agent MC World 0.3.0-next.2, hosted TSX.
 
@@ -31,7 +31,20 @@ Files: `backend/source.json`, `backend/package.json`, `backend/package-lock.json
 - [x] Implement one task owning `stdio_client` and `ClientSession`. Forward bounded tool/resource requests through a queue; fail pending requests on EOF; close only the owned child.
 - [x] Verify malformed configuration, missing runtime, MCP error receipts, startup/stop and cancellation without real I/O. Run real disconnected MCP discovery separately under a network-denial loader.
 
-## Task 2a: Preserve the host contract before enabling autonomy
+## Task 1b: Complete source, build and optional-adapter separation
+
+Task 1 proved only disconnected transport. The pinned release remains a comparison
+artifact until the [decoupling audit](../../research/agent-mc-world-decoupling-audit.md)
+is resolved in a separately verified backend revision.
+
+- [ ] Move the maintained Minecraft source into the independent core, preserving the user's fork improvements and licenses. A normal core build must not fetch a Cortico checkout, import its publisher, or reapply patches to its internal source paths.
+- [ ] Give the default package entry and public types a host-neutral contract. Put Cortico-specific registration, types and console wiring behind an optional adapter dependency directed toward the core.
+- [ ] Replace legacy speech port discovery with an explicitly configured optional adapter. Move server-specific commands/capabilities out of the generic core; changing a default to false is not source separation.
+- [ ] Make host cognition/model access an explicit capability, disabled when absent. Do not transfer provider endpoints, Persona, private Memory paths or deployment lifecycle into the execution core.
+- [ ] Record the fork-to-core/controller capability mapping, exact source and patch differences from the evaluated release, and data/procedure compatibility. No blind namespace replacement or license removal.
+- [ ] Verify clean core build and public-type consumption without Cortico, same-bot viewer without legacy speech probes, and no unconfigured model calls using offline fixtures. Pin the resulting release only after these checks pass.
+
+## Task 2a: Preserve behavior through a neutral host contract
 
 Files: independent client SDK/MCP adapter and contract tests; plugin-side event/turn adapter. Keep upstream improvements generic and pin their verified source/package separately.
 
@@ -40,7 +53,7 @@ Files: independent client SDK/MCP adapter and contract tests; plugin-side event/
 - [ ] Supply honest model modality/window information; mark absent optional cognition capabilities explicitly.
 - [ ] Correlate acceptance, task terminal receipts and world effects; support run/cursor gaps and bounded raw archive lookup.
 - [ ] Keep cancellation available while events or tools are waiting. Confirm persisted stop prevents engine restart or late action submission.
-- [ ] Validate these contracts offline against the pinned Cortico semantics. Do not advertise L3/L4 parity based on tools/list.
+- [ ] Replay the same offline event/action scenarios across SDK and MCP. Use the user's fork as the behavior baseline, not as a runtime dependency. Do not advertise gameplay or host-contract parity based on tools/list.
 
 ## Task 2b: N.E.K.O autonomous driver
 

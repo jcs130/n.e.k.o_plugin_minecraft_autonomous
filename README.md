@@ -24,9 +24,11 @@
 - 只把有用的当前事实放入决策上下文；原始证据保留查询入口。
 - 固定规则和工具定义保持稳定，动态状态集中放在请求末尾，减少重复拼接。
 
-以上为待实现的产品目标。后端已选定独立的 `agent-mc-world@0.3.0-next.2`，
+以上为待实现的产品目标。候选后端与迁移对照版本为 `agent-mc-world@0.3.0-next.2`，
 已有固定来源、显式安装器、配置和 MCP 传输基础；禁止网络的离线工具发现已验证，
 尚未接入插件入口或完成自主循环。
+独立入口不需要 Cortico npm 运行依赖，但上游构建与部分接口仍有耦合；
+接入前必须完成[解耦验收](docs/research/fork-improvements-and-decoupling-boundary.md)。
 架构与后续验收边界见 [设计说明](docs/design.md)，
 以及 [Cortico / N.E.K.O 对照研究](docs/research/neko-integration-architecture.md)。
 
