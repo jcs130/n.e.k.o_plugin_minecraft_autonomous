@@ -109,6 +109,28 @@ NeoForge handshake or registry. See [native-adapter evaluation](research/agent-m
 
 ## Verification boundary
 
+Embedded inference uses public Neko usage aliases: decision (text/tools), vision (image/text/tools),
+and optionally fast (structured choice over chat tools). Provider configuration stays with the host.
+An unavailable decision route preserves native observation and retries no sooner than 60 seconds;
+this is degraded execution, not arbitrary planning without a model. Missing/invalid vision responses
+fall back once to text and suppress further vision attempts for 60 seconds.
+
+Only bounded PNG artifacts from the current MCP connection's mc_view_map/mc_visual can enter a
+request. They expire after 15 seconds, consume an 8192-token conservative reservation and appear
+once at the final user message. Cached artifact retrieval cannot refresh capture age. The headless
+pin has no matching 3D viewer; an inventory map is explicitly distinguished from a camera frame.
+
+Fast focus is optional advice at a planning checkpoint, not a replacement physical controller.
+Rules handle emergencies/pending work without inference. Configured System One or Neko selection
+has a 2-second deadline, finite allowlisted distributions, confidence checks and a 60-second error
+cooldown. Only selected current facts and the bounded goal are sent; no full persona/history or images.
+External mode cannot read or override standalone provider credentials via Neko model configuration.
+
+The hosted panel projects allowlisted settings and bounded audit tails through public SDK UI
+context/actions. Opening/refreshing is passive. Settings save does not launch/restart gameplay;
+embedded active settings are rejected until explicit stop. Model diagnostics are explicit actions
+using a neutral tool and synthetic calibration image, never dispatched to the native executor.
+
 Offline tests exercise SDK-free startup, repeated autonomous actions without user input, native feedback
 insert/resume, replacement, stale inference cancellation, deduplication, process ownership and uncertain
 outcome refusal. They use fake models and bodies with network/process launching forbidden. The separate

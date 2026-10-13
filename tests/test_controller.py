@@ -303,6 +303,21 @@ def test_progressive_tool_docs_preserve_constraints(plugin_module):
     assert original["description"] == "长说明" * 800
 
 
+def test_compact_schema_keeps_coordinate_semantics_without_long_manuals(plugin_module):
+    module = importlib.import_module(plugin_module.__name__ + ".autonomy.controller")
+    bounds = {"type": "array", "minItems": 6, "maxItems": 6, "items": {"type": "integer"},
+              "description": "Relative to feet: [xmin,ymin,zmin,xmax,ymax,zmax], inclusive volume <=512"}
+    rays = {"type": "array", "maxItems": 64, "items": {"type": "array", "items": {"type": "number"}},
+            "description": "[pitch degrees,yaw degrees,distance]"}
+    original = {"name": "mc_scout", "inputSchema": {"type": "object", "properties": {
+        "steps": {"type": "array", "description": "Full manual " * 100,
+                  "items": {"oneOf": [{"properties": {"bounds": bounds, "rays": rays}}]}}}}}
+    compact = module.model_tools([original])[0]["function"]["parameters"]
+    step = compact["properties"]["steps"]
+    assert "description" not in step
+    assert step["items"]["oneOf"][0]["properties"] == {"bounds": bounds, "rays": rays}
+
+
 def test_advanced_router_cannot_invoke_host_connection(plugin_module, tmp_path, run_async):
     async def decide(*_):
         result = choose()
@@ -313,6 +328,16 @@ def test_advanced_router_cannot_invoke_host_connection(plugin_module, tmp_path, 
     with pytest.raises(ValueError, match="unavailable advanced tool"):
         run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
     assert not any(row[0] in {"mc_do", "mc_connection"} for row in bridge.calls)
+
+
+def test_large_script_and_artifact_schemas_remain_discoverable_on_demand(plugin_module):
+    module = importlib.import_module(plugin_module.__name__ + ".autonomy.controller")
+    catalogue = [{"name": name, "inputSchema": {"type": "object", "properties": {
+        "source": {"type": "string", "maxLength": 4000}}}} for name in ("mc_script", "mc_artifact")]
+    tools = {t["function"]["name"]: t["function"] for t in module.model_tools(catalogue)}
+    assert "mc_script" not in tools and "mc_artifact" not in tools
+    assert tools["mc_invoke"]["parameters"]["properties"]["name"]["enum"] == ["mc_artifact", "mc_script"]
+    assert json.loads(module.tool_help(catalogue, {"name": "mc_script"})["text"]) == catalogue[0]
 
 
 def test_urgent_event_discards_inflight_plan(plugin_module, tmp_path, run_async):
@@ -357,6 +382,14 @@ def test_context_tail_replaces_facts_and_budgets_all_fields(plugin_module):
     assert not json.loads(other[-1]["content"])["current_facts"]
     with pytest.raises(ValueError, match="context_budget_exceeded"):
         context.assemble("stable", tools * 5, "survive", facts, [], [], context_tokens=8000, reserved_output=1024)
+
+
+def test_tight_context_keeps_survival_facts_before_incidental_clock(plugin_module):
+    context = importlib.import_module(plugin_module.__name__ + ".autonomy.context")
+    _, base = context.assemble("stable", [], "survive", {"parts": []}, [], [], context_tokens=32768, reserved_output=1024)
+    facts = {"parts": [{"key": "realclock", "text": "x" * 240}, {"key": "body", "text": "health 4/20"}]}
+    messages, _ = context.assemble("stable", [], "survive", facts, [], [], context_tokens=base["total"] + 300, reserved_output=1024)
+    assert json.loads(messages[-1]["content"])["current_facts"] == [facts["parts"][1]]
 
 
 def test_standing_goal_report_is_rejected_without_stopping_or_writing_game(plugin_module, tmp_path, run_async):

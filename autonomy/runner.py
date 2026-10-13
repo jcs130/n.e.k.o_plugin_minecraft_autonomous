@@ -11,6 +11,7 @@ from pathlib import Path
 from .bridge import MinecraftBridge
 from .configuration import Settings
 from .controller import Controller
+from .fast import FastPolicy, SystemOne
 from .mailbox import Mailbox
 from .ownership import session_lease
 from .planner import Planner
@@ -29,6 +30,7 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
     """Own the injected planner, lease, config, controller and all cleanup."""
     state = {"phase": "starting", "game_connected": False, "autonomy_running": False, "standing_goal": goal}
     directory = data_root / "sessions" / settings.identity / "host"
+    system_one = None
 
     def update(**values):
         state.update(values)
@@ -50,7 +52,11 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
             update()
             bridge = bridge_factory(settings.node, entry, config, directory / "backend.log")
             try:
-                await Controller(bridge, planner.decide if planner else None, settings, directory, update, stopped, commands).run(goal.strip())
+                if settings.fast.mode == "system_one" and planner:
+                    system_one = SystemOne(settings.fast)
+                selector = system_one.select if system_one else getattr(planner, "select_fast", None) if settings.fast.mode == "neko" else None
+                policy = FastPolicy(settings.fast, selector)
+                await Controller(bridge, planner.decide if planner else None, settings, directory, update, stopped, commands, policy).run(goal.strip())
             except asyncio.CancelledError:
                 commands.stop_queued()
                 update(phase="stopped")
@@ -61,5 +67,7 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
             finally:
                 update(game_connected=False, autonomy_running=False)
     finally:
+        if system_one:
+            await system_one.aclose()
         if planner:
             await planner.aclose()

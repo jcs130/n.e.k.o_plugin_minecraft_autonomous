@@ -1,24 +1,99 @@
-"""Optional decision-model adapter, distinct from N.E.K.O's main persona and voice."""
+"""Public Neko model-slot adapters. Provider credentials stay in the host."""
 
-from .autonomy.planner import decision
+import json
+import time
+
+from openai import APIConnectionError, APIStatusError
+from plugin.sdk.plugin import TransportError
+
+from .autonomy.fast import CRITERIA, QUESTION
+from .autonomy.perception import has_images, text_only
+from .autonomy.planner import PlannerResponseError, decision
+
+
+def error_code(error):
+    body = getattr(error, "body", None)
+    if isinstance(body, dict):
+        detail = body.get("error", body)
+        if isinstance(detail, dict) and detail.get("code") in {
+            "model_usage_not_bound", "model_usage_not_declared", "model_capability_mismatch",
+        }:
+            return detail["code"]
+    return "model_gateway_unavailable"
 
 
 class NekoPlanner:
     def __init__(self, gateway, max_output_tokens):
         self.gateway, self.max_output_tokens = gateway, max_output_tokens
         self.client = None
+        self.vision_retry_after = 0.0
 
-    async def decide(self, messages, tools):
+    async def _client(self):
+        if self.gateway is None:
+            raise ValueError("model_gateway_unavailable")
         if self.client is None:
             self.client = await self.gateway.get_client()
-        response = await self.client.chat.completions.create(
-            model="decision", messages=messages, tools=tools, parallel_tool_calls=False,
-            max_completion_tokens=self.max_output_tokens,
-        )
-        choice = response.choices[0]
-        if choice.finish_reason not in {"stop", "tool_calls"}:
-            raise ValueError("brain_response_incomplete")
-        return decision(choice.message.model_dump(exclude_none=True))
+        return self.client
+
+    async def decide(self, messages, tools):
+        started = time.monotonic()
+        images = has_images(messages)
+        route = "vision" if images and started >= self.vision_retry_after else "decision"
+        fallback = "vision_cooldown" if images and route == "decision" else None
+        try:
+            client = await self._client()
+        except (TransportError, ValueError):
+            return {"content": None, "tool_calls": [], "model_status": {"route": "unavailable", "reason": "model_gateway_unavailable"}}
+        for _ in range(2):
+            try:
+                response = await client.chat.completions.create(
+                    model=route, messages=messages if route == "vision" else text_only(messages),
+                    tools=tools, parallel_tool_calls=False, max_completion_tokens=self.max_output_tokens,
+                )
+                choice = response.choices[0]
+                if choice.finish_reason not in {"stop", "tool_calls"}:
+                    raise PlannerResponseError({"finish_reason": choice.finish_reason})
+                result = decision(choice.message.model_dump(exclude_none=True))
+                usage = response.usage.model_dump(exclude_none=True) if getattr(response, "usage", None) else {}
+                return {**result, "model_status": {"route": route, "fallback": fallback, "image_used": route == "vision",
+                        "latency_ms": round((time.monotonic() - started) * 1000),
+                        "usage": {k: v for k, v in usage.items() if k in {"prompt_tokens", "completion_tokens", "total_tokens"} and type(v) is int}}}
+            except (APIConnectionError, APIStatusError, TransportError) as error:
+                code = error_code(error)
+                if route == "vision":
+                    self.vision_retry_after = time.monotonic() + 60
+                    route, fallback = "decision", code
+                    continue
+                return {"content": None, "tool_calls": [], "model_status": {"route": "unavailable", "reason": code, "fallback": fallback}}
+            except (PlannerResponseError, IndexError, AttributeError, TypeError, ValueError):
+                if route == "vision":
+                    self.vision_retry_after = time.monotonic() + 60
+                    route, fallback = "decision", "invalid_vision_response"
+                    continue
+                raise PlannerResponseError({"reason": "invalid_model_response"}) from None
+
+    async def select_fast(self, state):
+        schema = {"type": "object", "properties": {
+            "choice": {"enum": list(CRITERIA)}, "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "probabilities": {"type": "object", "properties": {k: {"type": "number", "minimum": 0, "maximum": 1} for k in CRITERIA},
+                              "required": list(CRITERIA), "additionalProperties": False}},
+            "required": ["choice", "confidence", "probabilities"], "additionalProperties": False}
+        try:
+            client = await self._client()
+            response = await client.chat.completions.create(model="fast", messages=[
+                {"role": "system", "content": json.dumps(QUESTION, ensure_ascii=False)},
+                {"role": "user", "content": json.dumps(state, ensure_ascii=False)}],
+                tools=[{"type": "function", "function": {"name": "select_focus", "description": "Select planning focus only.", "parameters": schema}}],
+                tool_choice="required", parallel_tool_calls=False, max_completion_tokens=256)
+            choice = response.choices[0]
+            result = decision(choice.message.model_dump(exclude_none=True))
+            calls = result["tool_calls"]
+            if choice.finish_reason not in {"stop", "tool_calls"} or len(calls) != 1 or calls[0]["function"]["name"] != "select_focus":
+                raise ValueError("fast_invalid_response")
+            return {**json.loads(calls[0]["function"]["arguments"]), "type": "choice"}
+        except (APIConnectionError, APIStatusError, TransportError, AttributeError) as error:
+            raise ValueError(error_code(error)) from None
 
     async def aclose(self):
-        await self.gateway.aclose()
+        if self.gateway:
+            await self.gateway.aclose()

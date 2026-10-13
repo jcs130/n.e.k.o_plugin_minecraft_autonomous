@@ -11,13 +11,14 @@ from .autonomy.configuration import Settings
 from .autonomy.mailbox import Mailbox, observation
 from .autonomy.runner import run_session
 from .backend.install import verify_runtime
+from .dashboard import Dashboard
 from .neko_planner import NekoPlanner
 from .neko_tools import NekoAutonomyTools
 from .worker import Worker
 
 
 @neko_plugin
-class MinecraftAutonomousPlugin(NekoAutonomyTools, NekoPluginBase):
+class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoPluginBase):
     def __init__(self, ctx):
         super().__init__(ctx)
         self._control_lock = threading.RLock()
@@ -94,8 +95,6 @@ class MinecraftAutonomousPlugin(NekoAutonomyTools, NekoPluginBase):
                 return Err({"code": "autonomy_disabled", "message": "先在配置中启用 autonomy；插件不会自动进入游戏。"})
             settings.require_server()
             entry = verify_runtime(settings.runtime_directory(self.cache_path()))
-            if self.ctx.models is None:
-                return Err({"code": "model_gateway_unavailable", "message": "需要支持公共模型接口的 N.E.K.O，并绑定 decision 模型。"})
             data_root = settings.data_root(self.data_path())
             data = data_root / "sessions" / settings.identity / "host"
 

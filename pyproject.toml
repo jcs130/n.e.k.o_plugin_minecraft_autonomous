@@ -1,11 +1,11 @@
 [project]
 name = "minecraft_autonomous"
-version = "0.3.0"
+version = "0.4.0"
 description = "Independent Minecraft 1.21.1 autonomy with an optional N.E.K.O frontend"
 requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"
-dependencies = ["mcp==2.1.1", "httpx>=0.27,<1"]
+dependencies = ["mcp==2.1.1", "httpx>=0.27,<1", "openai>=1,<3"]
 
 [project.urls]
 Repository = "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous"

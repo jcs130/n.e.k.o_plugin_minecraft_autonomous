@@ -119,7 +119,9 @@ def test_http_adapter_is_explicit_no_retry_and_hides_error_body(plugin_module, r
         client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
         brain = brain_module.HttpPlanner(config, 512, 30, client=client)
         messages = [{"role": "user", "content": "latest facts"}]
-        assert await brain.decide(messages, []) == choose()
+        response = await brain.decide(messages, [])
+        assert {k: response[k] for k in ("content", "tool_calls")} == choose()
+        assert response["model_status"]["route"] == "standalone_text"
         payload = json.loads(calls[0].content)
         assert payload["model"] == "chosen-model" and payload["messages"] == messages
         assert payload["max_tokens"] == 512 and not payload["parallel_tool_calls"]
@@ -151,6 +153,21 @@ def test_truncated_response_is_rejected_before_partial_tool_dispatch(plugin_modu
             assert str(caught.value) == "brain_response_invalid_or_incomplete"
         assert len(requests) == 1  # Recovery belongs to the event-aware controller.
 
+    run_async(exercise())
+
+
+@pytest.mark.parametrize("content", [None, "", " \n\t"])
+def test_empty_success_response_is_rejected_and_journalable(plugin_module, run_async, content):
+    planner_module, *_ = modules(plugin_module)
+    choice = {"finish_reason": "stop", "message": {"content": content, "tool_calls": []}}
+
+    async def exercise():
+        client = httpx.AsyncClient(transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"choices": [choice]})))
+        brain = planner_module.HttpPlanner(planner_module.HttpPlannerConfig("http://model.test/v1", "model"), 512, 30, client=client)
+        with pytest.raises(planner_module.PlannerResponseError) as rejected:
+            await brain.decide([], [])
+        assert rejected.value.diagnostic == {"choice": choice}
+        await brain.aclose()
     run_async(exercise())
 
 

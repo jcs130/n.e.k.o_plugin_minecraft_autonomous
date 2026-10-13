@@ -10,12 +10,14 @@ from pathlib import Path
 
 from .bridge import json_content, outcome, text_content
 from .context import assemble, encode
+from .fast import FastPolicy, focus_state, rule_focus
+from .perception import IMAGE_RESERVE, attach_frame, latest_png
 from .planner import PlannerResponseError
 
 PROTOCOL = "agent-mc/v1"
 READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
 HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_visual"}
-DIRECT_TOOLS = {"mc_help", "mc_do", "mc_scout", "mc_script", "mc_artifact", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape"}
+DIRECT_TOOLS = {"mc_help", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape"}
 
 
 def fact_fingerprint(facts):
@@ -24,12 +26,23 @@ def fact_fingerprint(facts):
 
 
 def model_tools(catalogue):
+    def numeric_field(value):
+        types = value.get("type", [])
+        types = [types] if isinstance(types, str) else types
+        return bool({"number", "integer"}.intersection(types)) or (
+            "array" in types and isinstance(value.get("items"), dict) and numeric_field(value["items"]))
+
     def structural(value):
         if isinstance(value, list):
             return [structural(item) for item in value]
         if isinstance(value, dict):
             result = {}
             for key, item in value.items():
+                # Short parameter semantics (units, coordinate order, volume
+                # limits) are needed to use a schema, not optional long manuals.
+                if key == "description" and isinstance(item, str) and len(item) <= 240 and numeric_field(value):
+                    result[key] = item
+                    continue
                 if key in {"description", "title", "examples", "$comment", "default"}:
                     continue
                 if key in {"properties", "patternProperties", "$defs", "definitions", "dependentSchemas"}:
@@ -108,7 +121,7 @@ def online(status):
 
 
 class Controller:
-    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None):
+    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None, fast_policy=None):
         self.bridge, self.decide, self.settings = bridge, decide, settings
         self.data, self.publish = data, publish
         self.operator_stop = False
@@ -134,6 +147,8 @@ class Controller:
         self.planner_retry_at = 0.0
         self.planner_notice = None
         self.state_path = data / "host-state.json"
+        self.fast_policy = fast_policy or FastPolicy(settings.fast)
+        self.frame = None
 
     def persist(self, **changes):
         self.data.mkdir(parents=True, exist_ok=True)
@@ -272,6 +287,11 @@ class Controller:
         else:
             raw = await self.bridge.call(name, arguments, request_id=request_id, turn_id=self.turn)
         result = outcome(raw)
+        if self.settings.vision_enabled:
+            frame = latest_png(raw, name)
+            if frame:
+                self.frame = frame
+                self.publish(perception={k: v for k, v in frame.items() if k not in {"url", "received_at"}})
         compact = await self.archive_receipt(request_id, name, result)
         meta = next((t for t in self.bridge.tools if t["name"] == name), {}).get("_meta", {}).get(PROTOCOL, {})
         if not raw.get("structuredContent") and {"write", "speak", "act"}.intersection(meta.get("tags", [])):
@@ -356,16 +376,44 @@ class Controller:
         self.turn = str(uuid.uuid4())
         await self.protocol("begin_turn", id=self.turn)
         try:
-            for _ in range(self.settings.max_tool_rounds):
+            focus = None
+            for round_index in range(self.settings.max_tool_rounds):
                 if self.stop_requested():
                     return
                 facts = await self.protocol("facts")
+                state = focus_state(goal, facts, self.pending)
+                if round_index == 0:
+                    focus = await self.fast_policy.choose(state)
+                    if focus["source"] != "rules":
+                        fresh = await self.protocol("facts")
+                        if fact_fingerprint(fresh) != fact_fingerprint(facts):
+                            focus = {"source": "rules", "choice": rule_focus(focus_state(goal, fresh, self.pending)),
+                                     "reason": "state_changed", "advisory_only": True}
+                        facts = fresh
+                    self.publish(fast_focus=focus)
+                else:
+                    focus = {"source": "rules", "choice": rule_focus(state), "advisory_only": True}
                 self.last_facts = fact_fingerprint(facts)
                 consumed = tuple(self.recent)
                 self.deferred_wake = False
-                messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
-                                            context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
-                                            planner_notice=self.planner_notice)
+                frame = self.frame
+                self.frame = None
+                _, image_ready = attach_frame([{"role": "user", "content": ""}], frame)
+                reserve = IMAGE_RESERVE if image_ready else 0
+                try:
+                    messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
+                        context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
+                        planner_notice=self.planner_notice, fast_focus=focus)
+                except ValueError:
+                    if not reserve:
+                        raise
+                    reserve = 0
+                    messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
+                        context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
+                        planner_notice=self.planner_notice, fast_focus=focus)
+                if reserve:
+                    messages, _ = attach_frame(messages, frame)
+                budget.update(image_reserve=reserve, total=budget["total"] + reserve, limit=self.settings.context_tokens)
                 self.publish(context=budget)
                 try:
                     response = await self.decide_with_events(messages, tools)
@@ -386,6 +434,12 @@ class Controller:
                 self.planner_retry_at = 0.0
                 self.planner_notice = None
                 self.publish(planner_error=None, planner_failures=0)
+                model_status = response.get("model_status", {})
+                if model_status:
+                    self.publish(model_status=model_status, autonomy_running=model_status.get("route") != "unavailable")
+                if model_status.get("route") == "unavailable":
+                    self.planner_retry_at = time.monotonic() + 60
+                    self.continuation_needed = True
                 # Retain the exact model result before validation, including rejected
                 # calls. Runtime diagnostics must not require replaying a game action.
                 with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:

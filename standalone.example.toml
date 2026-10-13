@@ -33,3 +33,14 @@ base_url = "" # Explicit OpenAI-compatible API base, including /v1 where require
 model = ""
 api_key_env = "" # Environment variable name only; blank permits an anonymous local endpoint.
 output_parameter = "max_tokens" # Or max_completion_tokens, as required by your provider.
+image_input = false # Explicit capability; do not guess from the model name.
+
+[perception]
+enabled = true
+
+[fast]
+mode = "rules" # system_one enables an explicitly configured local/remote provider.
+endpoint = ""
+model = ""
+api_key_env = ""
+min_confidence = 0.75

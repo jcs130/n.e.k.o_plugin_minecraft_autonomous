@@ -34,3 +34,13 @@ console_port = 0
 [runtime]
 mode = "embedded" # external: N.E.K.O only observes/submits; shutdown leaves standalone running.
 data_directory = "" # external mode: same absolute data root used by standalone.py.
+
+[perception]
+enabled = true # Only actual core PNG artifacts. Bind optional vision slot in Neko.
+
+[fast]
+mode = "rules" # rules | neko (public fast slot) | system_one (Jev/Decider protocol)
+endpoint = "" # Explicit full endpoint, e.g. https://api.typesafe.ai/v1/systemone
+model = "" # e.g. jev-latest; local services use their own model name.
+api_key_env = "" # Environment VARIABLE NAME only, never a secret value.
+min_confidence = 0.75

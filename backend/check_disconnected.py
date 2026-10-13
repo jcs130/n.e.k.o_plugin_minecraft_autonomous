@@ -39,6 +39,12 @@ async def check(directory: Path, node: str) -> dict:
             assert "mc_help" in environment
             _, budget = controller.assemble(environment, controller.model_tools(bridge.tools), "survive", {"parts": []}, [], [],
                                             context_tokens=32768, reserved_output=1024)
+            # Keep room for one image and essential body facts in the default
+            # 32k budget, while complete large tool manuals stay retrievable.
+            _, image_budget = controller.assemble(environment, controller.model_tools(bridge.tools), "survive", {"parts": [
+                {"key": "body", "text": "health 20/20, hunger 20/20"}, {"key": "place", "text": "overworld (0,64,0)"}]}, [], [],
+                context_tokens=32768 - controller.IMAGE_RESERVE, reserved_output=2048)
+            assert not image_budget["omitted"]
             facts = module.json_content(await bridge.call("mc_protocol", {"protocol": "agent-mc/v1", "action": "facts"}))
             assert "1.21.1" in facts["parts"][0]["text"]
             refused = await bridge.call("mc_bag", {})
@@ -58,6 +64,7 @@ async def check(directory: Path, node: str) -> dict:
             return {"ok": True, "protocol": "MCP stdio", "profile": status["profile"], "tools": len(names),
                     "phase": status["phase"], "game_connected": False, "network_denied": True,
                     "minecraft_version": "1.21.1", "stable_context_byte_budget": budget["total"],
+                    "image_and_body_facts_fit_default_budget": True,
                     "concurrent_status_and_cancel": True,
                     "cortico_installed": (directory / "node_modules/cortico").exists()}
         finally:

@@ -1,6 +1,18 @@
 # Changelog
 
-## 0.3.0 — Unreleased
+## 0.4.0 — Unreleased
+
+- Add public Neko `decision`, optional `vision` and `fast` model routing without reading provider credentials.
+- Fall back to text on unavailable/invalid vision responses; keep native observation/queues alive when decision is unbound.
+- Consume one fresh core PNG at the request tail with a separate image budget; standalone vision capability is explicit.
+- Add optional bounded System One (remote Jev/local compatible Decider) or Neko-slot focus selection, with rules as the default and failure fallback. Native physical control stays in the core.
+- Add a Hosted TSX panel for validated settings, natural-language goals and bounded real observations, decision/receipt samples, usage and latency.
+- Add explicit text/tool and synthetic-image model diagnostics through the same SDK adapter; no game commands are dispatched.
+- Keep short numeric/coordinate descriptions, prioritize survival facts under pressure and load script/artifact schemas on demand; one image still fits the default context budget.
+- Reject empty provider successes before dispatch and record them for bounded recovery.
+- Verify real public-gateway text/tool calls, missing-vision text fallback, bound-vision recognition and hosted settings/context APIs. Browser visual acceptance and paid Jev inference remain unverified.
+
+## 0.3.0 — Development snapshot
 
 ### Added
 

@@ -15,7 +15,8 @@ def load_file(name, relative):
     return module
 
 
-Settings = load_file("minecraft_settings_test", "autonomy/configuration.py").Settings
+load_file("minecraft_settings_test", "autonomy/__init__.py")
+Settings = __import__("minecraft_settings_test.configuration", fromlist=["Settings"]).Settings
 installer = load_file("minecraft_installer_test", "backend/install.py")
 
 

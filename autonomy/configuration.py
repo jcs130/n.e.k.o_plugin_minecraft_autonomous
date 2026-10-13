@@ -5,9 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
+
+from .fast import FastSettings
 
 
 def _text(section: dict, key: str, default: str = "") -> str:
@@ -65,6 +67,8 @@ class Settings:
     max_decisions: int = 100
     runtime_mode: str = "embedded"
     data_directory: str = ""
+    vision_enabled: bool = True
+    fast: FastSettings = field(default_factory=FastSettings)
 
     @classmethod
     def parse(cls, raw: dict) -> Settings:
@@ -72,6 +76,9 @@ class Settings:
         if not all(isinstance(section, dict) for section in sections):
             raise ValueError("autonomy, server, backend and viewer must be tables")
         autonomy, server, backend, viewer = sections
+        perception = raw.get("perception", {})
+        if not isinstance(perception, dict):
+            raise ValueError("perception must be a table")
         runtime = raw.get("runtime", {})
         if not isinstance(runtime, dict) or runtime.get("mode", "embedded") not in {"embedded", "external"}:
             raise ValueError("runtime.mode must be embedded or external")
@@ -104,6 +111,7 @@ class Settings:
             context_tokens=_integer(autonomy, "context_tokens", 32768, 4096, 262144),
             max_decisions=_integer(autonomy, "max_decisions", 100, 0, 10000),
             runtime_mode=_text(runtime, "mode", "embedded"), data_directory=_text(runtime, "data_directory"),
+            vision_enabled=_boolean(perception, "enabled", True), fast=FastSettings.parse(raw.get("fast", {})),
         )
 
     def require_server(self) -> None:
@@ -127,7 +135,7 @@ class Settings:
         self.require_server()
         private = data / "sessions" / self.identity
         return {
-            "dataDir": str(private / "client"), "timezone": "Asia/Shanghai", "acceptsImages": False,
+            "dataDir": str(private / "client"), "timezone": "Asia/Shanghai", "acceptsImages": self.vision_enabled,
             "metricsPort": 0, "consolePort": self.console_port,
             "world": {
                 "host": self.host, "port": self.port, "username": self.username, "auth": self.auth,
