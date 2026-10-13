@@ -1,7 +1,7 @@
 import {
   Page, Card, Stack, Grid, Inline, Text, StatCard, StatusBadge, DataTable,
   Field, Input, Select, Switch, Textarea, Button, ActionButton, RefreshButton,
-  Alert, Accordion, JsonView, useState,
+  Alert, Accordion, JsonView, FileDownload, useState,
 } from "@neko/plugin-ui"
 import type { PluginSurfaceProps } from "@neko/plugin-ui"
 
@@ -16,6 +16,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const [notice, setNotice] = useState("")
   const [failure, setFailure] = useState(false)
   const [modelCheck, setModelCheck] = useState<any>(null)
+  const [viewerDraft, setViewerDraft] = useState<string | null>(null)
   const settings = state.settings || {}
   const runtime = state.runtime || {}
   const audit = state.audit || {}
@@ -43,6 +44,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   return <Page title="Minecraft 自主游玩" subtitle="Java 1.21.1 · 原生任务队列 · Neko 高层目标与演出">
     <Stack gap={18}>
       {state.error && <Alert tone="danger" message="配置或观测暂不可用。请先检查插件配置。" />}
+      {runtime.phase === "failed" && <Alert tone="danger" message="框架最近记录为运行失败；下方保留最后观测，刷新页面不会自动恢复游玩。" />}
       <Inline justify="space-between">
         <Inline><StatusBadge label={runtime.phase || "未启动"} tone={runtime.game_connected ? "success" : "default"} />
           <Text>{external ? "独立运行 · Neko 观察与投递" : "Neko 嵌入式运行"}</Text></Inline>
@@ -56,6 +58,21 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <StatCard label="最近样本 Token" value={audit.usage_recorded ? audit.sample_tokens : "未记录"} />
       </Grid>
       {notice && <Alert tone={failure ? "danger" : "info"} message={notice} />}
+      <Card title="观战与状态"><Stack gap={10}>
+        <Text>在上方「观战与状态」页查看生命、饥饿、原生任务队列、决策耗时与中间结果，也可独立打开。</Text>
+        <FileDownload href={`${props.host?.origin || ""}/plugin/minecraft_autonomous/ui/`} label="打开观战与状态" tone="primary" openExternal />
+        <Field label="现代可视化页面地址"><Input value={viewerDraft ?? state.viewer_url ?? ""} placeholder="http://你的观战主机:端口/dungeon/" onChange={v=>setViewerDraft(v)} /></Field>
+        <Button disabled={busy || viewerDraft === null} onClick={async()=>{
+          const url = viewerDraft ?? ""
+          if(await call("save_settings",{settings:{viewer:{url}}})) {
+            if(draft)setDraft({...draft,viewer:{url}})
+            setViewerDraft(null)
+          }
+        }}>仅保存观战地址</Button>
+        <Text>使用已部署且与当前角色配套的 HTTP(S) 页面，不填含账号、密码或查询参数的地址。保存地址不重启游戏；观战页点击后才载入画面。</Text>
+        {!state.viewer_url && <Alert tone="info" message="当前尚未配置现代观战地址，运行数据仍可查看。" />}
+        {state.viewer_url && !state.viewer_body_binding_verified && <Alert tone="warning" message="已保存页面地址；画面与当前 1.21.1 角色的绑定尚未核验。" />}
+      </Stack></Card>
       <Card title="当前工作与用户反馈"><Stack gap={12}>
         <Text>当前目标：{runtime.current_goal?.goal || runtime.standing_goal || "尚无目标"}</Text>
         <DataTable data={runtime.pending || []} columns={[{key:"id",label:"原生任务"},{key:"phase",label:"执行状态"}]} emptyText="没有待结算动作" />
@@ -90,7 +107,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Accordion title="上下文预算与最近图像"><JsonView data={{context:runtime.context,perception:runtime.perception}} /></Accordion>
       </Stack></Card>
       <Card title="插件设置"><Stack gap={12}>
-        <Text>保存不会启动或重启游戏。嵌入式运行期间请先显式停止再改设置。外部模式下，这些设置只改变 Neko 观察入口；独立运行的模型与策略请同步到 standalone 配置。</Text>
+        <Text>保存不会启动或重启游戏。嵌入式运行参数须先显式停止再修改，观战地址可在上方单独保存。外部模式下，这些设置只改变 Neko 观察入口；独立运行的模型与策略请同步到 standalone 配置。</Text>
         {!editing && <Button onClick={() => { setDraft(JSON.parse(JSON.stringify(settings))); setEditing(true) }}>编辑设置</Button>}
         {editing && draft && <Stack gap={12}>
           <Grid cols={2}>

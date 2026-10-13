@@ -1,6 +1,6 @@
 [project]
 name = "minecraft_autonomous"
-version = "0.4.0"
+version = "0.5.0"
 description = "Independent Minecraft 1.21.1 autonomy with an optional N.E.K.O frontend"
 requires-python = ">=3.11"
 readme = "README.md"

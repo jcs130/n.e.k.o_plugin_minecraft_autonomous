@@ -16,6 +16,7 @@
 ```powershell
 $env:NEKO_ROOT = '/path/to/N.E.K.O'
 uv run --project "$env:NEKO_ROOT" python -m pytest tests -q
+node --test tests/observer-data.test.mjs
 uvx ruff==0.12.4 check --ignore-noqa --config ruff.toml .
 uv run --project "$env:NEKO_ROOT" neko-plugin check --release --market-release .
 ```
@@ -24,6 +25,9 @@ uv run --project "$env:NEKO_ROOT" neko-plugin check --release --market-release .
 本地测试通过 `NEKO_ROOT` 找到真实 SDK；官方 CI 将插件挂载到宿主源码树后验证。
 `tests/standalone_probe.py` 在隔离 Python 进程中禁止宿主导入、网络和游戏进程，
 用假模型与假执行器检验自主循环和纯原生队列模式。端到端演出/语音仍须另行实测。
+观战页的 Node 测试只检查展示数据与 URL 校验，不请求宿主、游戏或模型。
+界面改动还需在实际 Neko 管理器的两个面板验收：配置保存、隐藏后停止读取、
+失效快照、窄屏布局，以及以隔离页面验证按需载入/关闭观战窗口。不得把页面加载当成真实游戏画面验收。
 
 ## 提交要求
 

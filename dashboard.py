@@ -125,8 +125,8 @@ class Dashboard:
             merged = {**original, **{key: {**original.get(key, {}), **value} for key, value in settings.items()}}
             Settings.parse(merged)
             with self._control_lock:
-                if self._worker and self._worker.snapshot().get("worker_alive"):
-                    return Err({"code": "settings_runtime_active", "message": "请先显式停止嵌入式运行，再保存设置；模型槽绑定可在宿主单独修改。"})
+                if set(settings) != {"viewer"} and self._worker and self._worker.snapshot().get("worker_alive"):
+                    return Err({"code": "settings_runtime_active", "message": "运行参数须先显式停止嵌入式运行再保存；观战地址可单独保存，模型槽绑定可在宿主修改。"})
             await self.config.update(settings)
             return Ok({"saved": True, "running_session_changed": False, "applies": "next_explicit_start_or_observer_read"})
         except (ValueError, TypeError):

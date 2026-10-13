@@ -237,6 +237,21 @@ def test_explicit_model_diagnostic_uses_same_gateway_and_never_dispatches(plugin
     assert isinstance(run_async(plugin_instance.check_model("other")), Err)
 
 
+def test_viewer_setting_can_change_without_stopping_active_body(plugin_instance, run_async, monkeypatch):
+    worker = SimpleNamespace(snapshot=lambda: {"worker_alive": True})
+    plugin_instance._worker = worker
+    update = AsyncMock(return_value={})
+    monkeypatch.setattr(plugin_instance.config, "update", update)
+    patch = {"viewer": {"url": "http://127.0.0.1:3000/dungeon/"}}
+    result = run_async(plugin_instance.save_settings(patch))
+    assert isinstance(result, Ok) and not result.value["running_session_changed"]
+    update.assert_awaited_once_with(patch)
+    assert plugin_instance._worker is worker
+    assert isinstance(run_async(plugin_instance.save_settings({"autonomy": {"enabled": False}})), Err)
+    assert isinstance(run_async(plugin_instance.save_settings({**patch, "server": {"port": 25566}})), Err)
+    assert update.await_count == 1
+
+
 def test_missing_model_keeps_controller_turn_and_retry_bounded(plugin_module, tmp_path, run_async):
     from test_controller import setup
     async def decide(*_):

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 — Unreleased
+
+- Declare separate Neko configuration/control and observation panels through public UI APIs, with a legacy static UI entry.
+- Add real bounded runtime statistics, health/food/position observations, native queue, latency chart and decision/receipt details. Stale reads and failed runs remain visible.
+- Embed a configured modern viewer only after an explicit click, with separate-window and unload controls. No viewer deployment, second account or player-binding claim is implied.
+- Allow validated viewer-only settings to change without stopping an embedded worker; keep runtime changes blocked while it is active.
+- Pause observation reads when the page or its Neko panel is hidden. Render observations as text and reject unsafe viewer URLs.
+- Verify the actual Neko manager tabs, public assets/context, viewer-only save, responsive layout and isolated viewer loading. The current 1.21.1 body still needs a matching modern renderer transport.
+
 ## 0.4.0 — Unreleased
 
 - Add public Neko `decision`, optional `vision` and `fast` model routing without reading provider credentials.
