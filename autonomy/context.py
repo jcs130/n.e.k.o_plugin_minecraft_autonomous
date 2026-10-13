@@ -2,9 +2,12 @@
 
 import json
 
+from .observations import spatial_text
+
 RULES = """You are an autonomous Minecraft player. Pursue the user's goal through observed world changes.
 Minecraft Java protocol is 1.21.1. Discover needed commands with mc_help; do not assume server mods or permissions.
 Tool schemas retain parameter constraints. Use mc_tool_help(name,path) for full descriptions and defaults.
+Use targeted observations; once facts answer the next action's needs, act instead of repeatedly scanning.
 Advanced capabilities use mc_invoke(name,arguments) after reading that tool's schema; the backend validates it.
 Only call functions advertised in this request. Other tool names in core guides are capabilities to route through mc_invoke.
 Keep a useful running action. Acceptance, validation and terminal completion do not prove goal success.
@@ -21,7 +24,7 @@ Do not broadcast tool results or internal plans to game chat. Social speech must
 The host manages turns, barriers, polling and connections. Dynamic facts at the end replace older facts.
 Be concise. No goal-completion claim without independent world evidence. Optional images come from actual core
 artifacts such as mc_view_map; if no image is attached, reason from text facts. Built-in camera capture is
-unavailable in this headless build; the external viewer is not automatically bound to this body.
+unavailable through the core camera in this headless build; viewer screenshots are not supplied to you.
 Fast focus is advisory only; native safety reflexes and explicit user goals retain priority.
 """
 
@@ -30,7 +33,7 @@ def encode(value) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
-def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None):
+def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None, fast_focus=None, tool_failure=None):
     """UTF-8 bytes are a conservative bound, not a model-specific tokenizer.
 
     Account for the entire messages/tools JSON plus an explicit framing reserve.
@@ -45,6 +48,8 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
         tail["planner_notice"] = planner_notice
     if fast_focus:
         tail["fast_focus"] = fast_focus
+    if tool_failure:
+        tail["tool_failure"] = tool_failure
     if events:
         tail["recent_events_archive"] = {"run": events[0].get("run"), "after": max(0, events[0].get("cursor", 1) - 1)}
 
@@ -72,6 +77,8 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
     unique = {part["key"]: part for part in facts.get("parts", [])}
     priority = {key: rank for rank, key in enumerate(("body", "health", "place", "gear", "foodReserve", "queue", "lastTask", "structure"))}
     for key, fact in sorted(unique.items(), key=lambda item: priority.get(item[0], len(priority))):
+        if key == "lastTask":
+            fact = {**fact, "text": spatial_text(fact.get("text", ""))}
         tail["current_facts"].append(fact)
         if cost() > context_tokens:
             tail["current_facts"].pop()
@@ -80,7 +87,7 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
                 tail["omitted_facts"].pop()
     for event in reversed(events[-24:]):
         item = {key: event[key] for key in ("run", "cursor", "type", "trigger", "execution") if key in event}
-        item["text"] = str(event.get("text", ""))[:700]
+        item["text"] = spatial_text(str(event.get("text", "")))[:700]
         item["original"] = {"tool": "mc_protocol", "action": "archive", "run": event.get("run"), "after": max(0, event.get("cursor", 1) - 1), "limit": 1}
         tail["events"].insert(0, item)
         if cost() > context_tokens:

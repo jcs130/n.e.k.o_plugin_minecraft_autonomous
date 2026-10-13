@@ -11,6 +11,7 @@ from pathlib import Path
 from .bridge import json_content, outcome, text_content
 from .context import assemble, encode
 from .fast import FastPolicy, focus_state, rule_focus
+from .observations import spatial_text
 from .perception import IMAGE_RESERVE, attach_frame, latest_png
 from .planner import PlannerResponseError
 
@@ -22,7 +23,7 @@ DIRECT_TOOLS = {"mc_help", "mc_do", "mc_scout", "mc_protocol", "mc_bag", "mc_que
 
 def fact_fingerprint(facts):
     # The sample timestamp is useful context, but is not a decision trigger.
-    return encode([(p["key"], p["text"]) for p in facts.get("parts", []) if p["key"] != "sample"])
+    return encode([(p["key"], p["text"]) for p in facts.get("parts", []) if p["key"] not in {"sample", "realclock"}])
 
 
 def model_tools(catalogue):
@@ -120,6 +121,40 @@ def online(status):
     return status.get("phase") == "started" and any(lamp.get("label") == "服务器" and lamp.get("state") == "online" for lamp in status.get("lamps", []))
 
 
+def failure_context(catalogue, name, arguments, result):
+    """Make rejected parameters actionable without adding a second model call.
+
+    The core's flat skill schema delegates cross-field semantics to documentation.
+    Generic enum errors alone do not say which values belong to which tool.
+    Keep only the submitted fields' original constraints, bounded at the tail.
+    """
+    schema = next((t["inputSchema"] for t in catalogue if t["name"] == name), {})
+    properties = schema.get("properties", {})
+    fields = [(key, properties.get(key, {})) for key in arguments if key != "steps"]
+    steps = arguments.get("steps")
+    if isinstance(steps, list):
+        step_properties = properties.get("steps", {}).get("items", {}).get("properties", {})
+        keys = {key for step in steps if isinstance(step, dict) for key in step}
+        fields += [("steps." + key, step_properties.get(key, {})) for key in sorted(keys)]
+    notice = {"tool": name, "arguments": encode(arguments)[:1200], "error": str(result.get("text", ""))[:700],
+              "next_step": "Do not repeat rejected arguments. Read mc_help for the selected skill and mc_tool_help for the tool schema; then correct the call or choose another useful action.",
+              "parameter_help": {}, "original_receipts": "receipts.jsonl"}
+    if name == "mc_scout" and isinstance(steps, list) and any(isinstance(step, dict) and step.get("skill") == "find" for step in steps):
+        notice["next_step"] += " find belongs to mc_do, not mc_scout."
+    if isinstance(steps, list) and any(isinstance(step, dict) and step.get("skill") == "observe" and step.get("mode") == "voxels" for step in steps):
+        notice["next_step"] += " For voxels, omit bounds for the native default or use a small relative box such as [-2,-1,-2,2,3,2] (125 cells). Do not read the entire neighborhood to perform a simple known action."
+    for key, spec in fields:
+        short = {k: v for k, v in spec.items() if k in {"type", "enum", "minimum", "maximum", "minItems", "maxItems", "required"}}
+        if spec.get("description"):
+            short["description"] = spec["description"][:240]
+        if not spec:
+            short = {"documented": False, "lookup": "mc_tool_help"}
+        notice["parameter_help"][key] = short
+        if len(encode(notice).encode("utf-8")) > 4500:
+            del notice["parameter_help"][key]
+    return notice
+
+
 class Controller:
     def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None, fast_policy=None):
         self.bridge, self.decide, self.settings = bridge, decide, settings
@@ -146,6 +181,8 @@ class Controller:
         self.planner_failures = 0
         self.planner_retry_at = 0.0
         self.planner_notice = None
+        self.tool_failure = None
+        self.rejected_calls = set()
         self.state_path = data / "host-state.json"
         self.fast_policy = fast_policy or FastPolicy(settings.fast)
         self.frame = None
@@ -215,7 +252,10 @@ class Controller:
         for offset in range(0, len(original), 16000):
             refs.append(json_content(await self.bridge.call("mc_artifact", {
                 "action": "put", "text": original[offset:offset + 16000], "mime": "text/plain"})) ["handle"])
-        return encode({"text": result.get("text", "")[:1200], "failed": result.get("failed"),
+        # The context budget counts UTF-8 bytes, not Python characters. Chinese
+        # help pages must not become a 10 KiB preview that evicts its own reply.
+        preview = spatial_text(result.get("text", "")).encode("utf-8")[:2800].decode("utf-8", errors="ignore")
+        return encode({"text": preview, "failed": result.get("failed"),
                        "control": result.get("control"), "execution": result.get("execution"),
                        "original_chunks": refs, "retrieve": "mc_original(handle,offset,limit), chunks in order"})
 
@@ -403,14 +443,14 @@ class Controller:
                 try:
                     messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens - reserve, reserved_output=self.settings.max_output_tokens,
-                        planner_notice=self.planner_notice, fast_focus=focus)
+                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure)
                 except ValueError:
                     if not reserve:
                         raise
                     reserve = 0
                     messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
                         context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
-                        planner_notice=self.planner_notice, fast_focus=focus)
+                        planner_notice=self.planner_notice, fast_focus=focus, tool_failure=self.tool_failure)
                 if reserve:
                     messages, _ = attach_frame(messages, frame)
                 budget.update(image_reserve=reserve, total=budget["total"] + reserve, limit=self.settings.context_tokens)
@@ -478,7 +518,28 @@ class Controller:
                     elif name == "mc_do" and self.feedback_pending:
                         arguments["queue"] = "append"
                 request_id = str(uuid.uuid4())
+                rejected_key = json.dumps([name, arguments], sort_keys=True, ensure_ascii=False)
+                if rejected_key in self.rejected_calls:
+                    # Only known pre-dispatch schema rejections enter this set.
+                    # No action is replayed or silently rewritten on the user's behalf.
+                    self.planner_notice = "The exact same call already failed argument validation. It was NOT dispatched again. Consult mc_help/mc_tool_help and change the invalid parameters."
+                    self.planner_retry_at = time.monotonic() + max(30, self.settings.min_decision_seconds)
+                    self.continuation_needed = True
+                    self.publish(planner_error="repeated_invalid_tool_call", rejected_tool=name)
+                    return
                 result, compact = await self.dispatch(name, arguments, request_id)
+                if result.get("failed"):
+                    self.tool_failure = failure_context(self.bridge.tools, name, arguments, result)
+                    failure = str(result.get("text", ""))
+                    # Pinned core enqueueTool returns this exact parse-error form
+                    # before admission or dispatch. Runtime/unknown errors do not.
+                    parse_rejected = name in {"mc_do", "mc_scout"} and failure.startswith(f"[{name} 失败]") and "。你写的是 " in failure
+                    if not result.get("execution") and (failure.startswith("Invalid arguments:") or parse_rejected):
+                        if len(self.rejected_calls) >= 16:
+                            self.rejected_calls.clear()
+                        self.rejected_calls.add(rejected_key)
+                elif result.get("execution"):
+                    self.tool_failure = None
                 self.groups.append([{"role": "assistant", "content": response.get("content"), "tool_calls": calls},
                                     {"role": "tool", "tool_call_id": call["id"], "content": compact}])
                 self.groups = self.groups[-8:]

@@ -97,6 +97,58 @@ def test_bounded_read_round_can_continue_without_unrelated_world_change(plugin_m
     assert len(controller.groups) == 1
 
 
+def test_rejected_tool_exposes_exact_parameter_help_in_next_request(plugin_module, tmp_path, run_async):
+    seen = []
+
+    async def decide(messages, _):
+        seen.append(messages)
+        if len(seen) == 1:
+            result = choose()
+            result["tool_calls"][0]["function"] = {"name": "mc_scout", "arguments": '{"steps":[{"skill":"find","bounds":[-8,-2,-8,7,6,7]}]}'}
+            return result
+        return {"content": "Read the corrected schema", "tool_calls": []}
+
+    module, bridge, controller = setup(plugin_module, tmp_path, decide)
+    bridge.tools.append({"name": "mc_scout", "inputSchema": {"type": "object", "properties": {
+        "steps": {"type": "array", "items": {"type": "object", "properties": {
+            "skill": {"type": "string", "enum": ["observe", "probe"]},
+            "bounds": {"type": "array", "description": "Inclusive volume <=512 cells"}}}}}}})
+    original_call = bridge.call
+
+    async def call(name, args, **kwargs):
+        if name == "mc_scout":
+            bridge.calls.append((name, args, kwargs))
+            return {"isError": True, "content": [{"type": "text", "text": "Invalid arguments: data/steps/0/skill must be equal to one of the allowed values"}]}
+        return await original_call(name, args, **kwargs)
+
+    bridge.call = call
+    run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
+    tail = json.loads(seen[1][-1]["content"])
+    recovery = tail["tool_failure"]
+    assert recovery["tool"] == "mc_scout"
+    assert recovery["parameter_help"]["steps.skill"]["enum"] == ["observe", "probe"]
+    assert recovery["parameter_help"]["steps.bounds"]["description"] == "Inclusive volume <=512 cells"
+    assert "find" in str(recovery["arguments"])
+    assert "mc_help" in recovery["next_step"]
+
+
+@pytest.mark.parametrize("error", ["Invalid arguments: missing block", '[mc_do 失败] 第 1 步 voxels 请求尺寸超限。你写的是 [{"skill":"observe"}]'])
+def test_identical_rejected_call_is_not_dispatched_again(plugin_module, tmp_path, run_async, error):
+    seen = []
+
+    async def decide(messages, _):
+        seen.append(messages)
+        return choose()
+
+    module, bridge, controller = setup(plugin_module, tmp_path, decide)
+    bridge.result = {"text": error, "protocol": "agent-mc/v1", "failed": True, "execution": None}
+    run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
+    assert len([c for c in bridge.calls if c[0] == "mc_do"]) == 1
+    assert len(seen) == 2
+    assert controller.continuation_needed and controller.planner_retry_at > 0
+    assert not controller.pending and controller.inflight_request is None
+
+
 def test_native_scout_is_advertised_and_defaults_to_append(plugin_module, tmp_path, run_async):
     async def decide(*_):
         response = choose()
@@ -382,6 +434,25 @@ def test_context_tail_replaces_facts_and_budgets_all_fields(plugin_module):
     assert not json.loads(other[-1]["content"])["current_facts"]
     with pytest.raises(ValueError, match="context_budget_exceeded"):
         context.assemble("stable", tools * 5, "survive", facts, [], [], context_tokens=8000, reserved_output=1024)
+
+
+def test_large_chinese_receipt_has_bounded_preview_and_lossless_originals(plugin_module, tmp_path, run_async):
+    module, bridge, controller = setup(plugin_module, tmp_path, None)
+    result = {"text": "查询结果：中文和表情🌲" * 4000, "failed": False}
+    compact = json.loads(run_async(controller.archive_receipt("large", "mc_help", result)))
+    assert len(compact["text"].encode("utf-8")) <= 2800
+    assert len(json.dumps(compact, ensure_ascii=False).encode("utf-8")) < 4000
+    assert json.loads("".join(bridge.artifacts)) == result
+    assert json.loads((tmp_path / "receipts.jsonl").read_text(encoding="utf-8"))["result"] == result
+
+
+def test_realclock_alone_does_not_trigger_another_decision(plugin_module):
+    module = importlib.import_module(plugin_module.__name__ + ".autonomy.controller")
+    parts = [{"key": "body", "text": "health 20/20"}]
+    before = {"parts": parts + [{"key": "realclock", "text": "20:00"}, {"key": "sample", "text": "A"}]}
+    after = {"parts": parts + [{"key": "realclock", "text": "20:01"}, {"key": "sample", "text": "B"}]}
+    assert module.fact_fingerprint(before) == module.fact_fingerprint(after)
+    assert module.fact_fingerprint(before) != module.fact_fingerprint({"parts": [{"key": "body", "text": "health 4/20"}]})
 
 
 def test_tight_context_keeps_survival_facts_before_incidental_clock(plugin_module):
