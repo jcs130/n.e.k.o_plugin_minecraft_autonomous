@@ -19,6 +19,7 @@ store.db
 *.pem
 *.log
 config.local.toml
+*.local.toml
 /local/
 /runtime/
 /logs/

@@ -12,13 +12,13 @@ from types import ModuleType
 
 async def check(directory: Path, node: str) -> dict:
     root = Path(__file__).resolve().parents[1]
-    spec = importlib.util.spec_from_file_location("minecraft_check_bridge", root / "bridge.py")
+    spec = importlib.util.spec_from_file_location("minecraft_check_bridge", root / "autonomy/bridge.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     package = ModuleType("mc_offline_check")
     package.__path__ = [str(root)]
     sys.modules[package.__name__] = package
-    controller = importlib.import_module(package.__name__ + ".controller")
+    controller = importlib.import_module(package.__name__ + ".autonomy.controller")
     installer = importlib.import_module(package.__name__ + ".backend.install")
     installer.verify_runtime(directory.resolve())
     with tempfile.TemporaryDirectory(prefix="neko-minecraft-offline-") as temporary:

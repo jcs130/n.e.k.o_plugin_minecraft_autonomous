@@ -62,3 +62,30 @@ def test_stop_persists_and_wins_over_inflight_start(plugin_instance, run_async, 
         assert json.loads(plugin_instance.data_path("operator.json").read_text())["explicit_stop"]
 
     run_async(exercise())
+
+
+def test_external_shutdown_is_read_only_and_keeps_framework_ownership(plugin_instance, run_async, monkeypatch, tmp_path):
+    async def config(**_):
+        return {"runtime": {"mode": "external", "data_directory": str(tmp_path / "separate-runtime")},
+                "autonomy": {"enabled": True}, "server": {"host": "example.test", "username": "Alice"}}
+    monkeypatch.setattr(plugin_instance.config, "dump", config)
+    result = run_async(plugin_instance.on_shutdown())
+    assert isinstance(result, Ok) and result.value["mode"] == "external"
+    assert result.value["observation"]["phase"] == "not_observed"
+    assert not (tmp_path / "separate-runtime").exists()
+    assert plugin_instance._worker is None
+
+
+def test_natural_feedback_entry_does_not_call_model_game_or_voice(plugin_instance, run_async, monkeypatch, tmp_path):
+    import uuid
+
+    async def config(**_):
+        return {"runtime": {"mode": "external", "data_directory": str(tmp_path / "separate-runtime")},
+                "autonomy": {"enabled": True}, "server": {"host": "example.test", "username": "Alice"}}
+    monkeypatch.setattr(plugin_instance.config, "dump", config)
+    request_id = str(uuid.uuid4())
+    result = run_async(plugin_instance.feedback(goal="别挖了，回家", mode="replace", request_id=request_id))
+    assert isinstance(result, Ok) and result.value["delivery"] == "queued"
+    assert run_async(plugin_instance.feedback(goal="别挖了，回家", mode="replace", request_id=request_id)) == result
+    receipt = run_async(plugin_instance.task_receipt(request_id=request_id))
+    assert receipt.value["command"]["delivery"] == "queued"

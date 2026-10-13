@@ -30,3 +30,7 @@ directory = "" # Defaults to the plugin cache / agent-mc-world-0.4.0-headless.
 url = "" # Optional existing viewer, e.g. https://viewer.example.org/dungeon/.
 port = 0
 console_port = 0
+
+[runtime]
+mode = "embedded" # external: N.E.K.O only observes/submits; shutdown leaves standalone running.
+data_directory = "" # external mode: same absolute data root used by standalone.py.

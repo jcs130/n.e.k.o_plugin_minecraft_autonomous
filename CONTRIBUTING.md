@@ -8,6 +8,7 @@
 - Python 3.11+；使用独立的 N.E.K.O 开发环境。
 - `NEKO_ROOT` 指向包含 `plugin/sdk/plugin` 的 N.E.K.O 源码目录。
 - 仅导入公共 `plugin.sdk.plugin` API，不复制或伪造 SDK。
+- `autonomy/` 与 `standalone.py` 不导入宿主 SDK；Neko 适配器通过同一运行层操作。
 - 运行时依赖写入 `pyproject.toml`，测试依赖放在开发环境中。
 
 在本插件仓库根目录验证：
@@ -21,6 +22,8 @@ uv run --project "$env:NEKO_ROOT" neko-plugin check --release --market-release .
 
 也可使用已配置开发环境的 Python 直接执行 `python -m pytest tests -q`。
 本地测试通过 `NEKO_ROOT` 找到真实 SDK；官方 CI 将插件挂载到宿主源码树后验证。
+`tests/standalone_probe.py` 在隔离 Python 进程中禁止宿主导入、网络和游戏进程，
+用假模型与假执行器检验自主循环和纯原生队列模式。端到端演出/语音仍须另行实测。
 
 ## 提交要求
 

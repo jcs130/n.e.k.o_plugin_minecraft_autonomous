@@ -1,4 +1,4 @@
-"""One task owns the official MCP session and its independent Node child."""
+"""Host-neutral ownership of an MCP session and its independent Node child."""
 
 from __future__ import annotations
 

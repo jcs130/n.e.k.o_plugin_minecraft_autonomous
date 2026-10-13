@@ -1,4 +1,4 @@
-"""Validated plugin settings, remote server identity and private client assembly."""
+"""Host-neutral settings, remote server identity and private client assembly."""
 
 from __future__ import annotations
 
@@ -63,6 +63,8 @@ class Settings:
     model_timeout_seconds: int = 180
     context_tokens: int = 32768
     max_decisions: int = 100
+    runtime_mode: str = "embedded"
+    data_directory: str = ""
 
     @classmethod
     def parse(cls, raw: dict) -> Settings:
@@ -70,6 +72,9 @@ class Settings:
         if not all(isinstance(section, dict) for section in sections):
             raise ValueError("autonomy, server, backend and viewer must be tables")
         autonomy, server, backend, viewer = sections
+        runtime = raw.get("runtime", {})
+        if not isinstance(runtime, dict) or runtime.get("mode", "embedded") not in {"embedded", "external"}:
+            raise ValueError("runtime.mode must be embedded or external")
         host = _text(server, "host")
         if host and (len(host) > 253 or re.search(r"[\s/@?#\\]", host) or "://" in host):
             raise ValueError("server.host must be a DNS name or IP address, not a URL")
@@ -97,7 +102,8 @@ class Settings:
             max_output_tokens=_integer(autonomy, "max_output_tokens", 1024, 128, 4096),
             model_timeout_seconds=_integer(autonomy, "model_timeout_seconds", 180, 10, 300),
             context_tokens=_integer(autonomy, "context_tokens", 32768, 4096, 262144),
-            max_decisions=_integer(autonomy, "max_decisions", 100, 1, 10000),
+            max_decisions=_integer(autonomy, "max_decisions", 100, 0, 10000),
+            runtime_mode=_text(runtime, "mode", "embedded"), data_directory=_text(runtime, "data_directory"),
         )
 
     def require_server(self) -> None:
@@ -113,6 +119,9 @@ class Settings:
 
     def runtime_directory(self, cache: Path) -> Path:
         return Path(self.backend_directory).expanduser().resolve() if self.backend_directory else cache / "agent-mc-world-0.4.0-headless"
+
+    def data_root(self, default: Path) -> Path:
+        return Path(self.data_directory).expanduser().resolve() if self.data_directory else default
 
     def client_config(self, data: Path) -> dict:
         self.require_server()

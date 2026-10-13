@@ -63,7 +63,7 @@ class Bridge:
 
 
 def setup(plugin_module, tmp_path, decide, stop=lambda: False):
-    module = importlib.import_module(plugin_module.__name__ + ".controller")
+    module = importlib.import_module(plugin_module.__name__ + ".autonomy.controller")
     bridge = Bridge()
     settings = dataclasses.replace(plugin_module.Settings(), max_decisions=2)
     controller = module.Controller(bridge, decide, settings, tmp_path, lambda **_: None, stop)
@@ -202,19 +202,19 @@ def test_events_reconcile_terminal_but_ignore_archived_and_stale(plugin_module, 
 
 
 def test_started_engine_without_server_lamp_is_not_online(plugin_module):
-    module = importlib.import_module(plugin_module.__name__ + ".controller")
+    module = importlib.import_module(plugin_module.__name__ + ".autonomy.controller")
     assert not module.online({"phase": "started", "lamps": []})
 
 
 def test_sample_timestamp_alone_does_not_trigger_decisions(plugin_module):
-    module = importlib.import_module(plugin_module.__name__ + ".controller")
+    module = importlib.import_module(plugin_module.__name__ + ".autonomy.controller")
     first = {"parts": [{"key": "sample", "text": "now"}, {"key": "health", "text": "20"}]}
     later = {"parts": [{"key": "sample", "text": "later"}, {"key": "health", "text": "20"}]}
     assert module.fact_fingerprint(first) == module.fact_fingerprint(later)
 
 
 def test_progressive_tool_docs_preserve_constraints(plugin_module):
-    module = importlib.import_module(plugin_module.__name__ + ".controller")
+    module = importlib.import_module(plugin_module.__name__ + ".autonomy.controller")
     original = {"name": "mc_do", "description": "长说明" * 800, "inputSchema": {
         "type": "object", "properties": {"steps": {"type": "array", "minItems": 1, "description": "步骤文档" * 200},
                                           "description": {"type": "string", "description": "This is a real parameter"}},
@@ -268,7 +268,7 @@ def test_chat_arriving_during_model_wait_reaches_next_turn(plugin_module, tmp_pa
 
 
 def test_context_tail_replaces_facts_and_budgets_all_fields(plugin_module):
-    context = importlib.import_module(plugin_module.__name__ + ".context")
+    context = importlib.import_module(plugin_module.__name__ + ".autonomy.context")
     tools = [{"name": "tool", "description": "文" * 1000}]
     facts = {"parts": [{"key": "health", "text": "old"}, {"key": "health", "text": "20", "original": "log:h"},
                        {"key": "chat", "text": "聊天" * 20000, "original": "log:chat"}]}

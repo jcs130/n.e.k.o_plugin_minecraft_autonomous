@@ -1,4 +1,4 @@
-"""Host-owned bounded decisions using the independent agent-mc/v1 execution protocol."""
+"""Framework-owned bounded decisions over the independent agent-mc/v1 protocol."""
 
 from __future__ import annotations
 
@@ -47,6 +47,8 @@ def model_tools(catalogue):
         schema = structural(tool["inputSchema"])
         if tool["name"] == "mc_protocol":
             schema["properties"]["action"] = {"enum": sorted(READ_PROTOCOL)}
+        if tool["name"] == "mc_do":
+            schema.setdefault("properties", {})["queue"] = {"enum": ["append", "afterCheckpoint", "now"]}
         tools.append({"type": "function", "function": {"name": tool["name"], "description": tool.get("description", "")[:450], "parameters": schema}})
     if advanced:
         tools.append({"type": "function", "function": {"name": "mc_invoke",
@@ -63,6 +65,11 @@ def model_tools(catalogue):
                  "description": "Read the original tool description/schema on demand. Large nodes list JSON-pointer child paths; request a specific path for full detail.",
                  "parameters": {"type": "object", "properties": {"name": {"enum": available},
                     "path": {"type": "string", "description": "JSON pointer, e.g. /inputSchema/properties/steps"}}, "required": ["name"], "additionalProperties": False}}})
+    tools.append({"type": "function", "function": {"name": "goal_report",
+                  "description": "Report the current user goal as reported_done or blocked only after native tasks end. Supply observed evidence and remaining uncertainty. This is a planner report, not independently verified goal success; it yields to the next goal.",
+                  "parameters": {"type": "object", "properties": {"outcome": {"enum": ["reported_done", "blocked"]},
+                    "evidence": {"type": "string", "minLength": 1, "maxLength": 1200}},
+                    "required": ["outcome", "evidence"], "additionalProperties": False}}})
     return tools
 
 
@@ -100,10 +107,16 @@ def online(status):
 
 
 class Controller:
-    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested):
+    def __init__(self, bridge, decide, settings, data: Path, publish, stop_requested, commands=None):
         self.bridge, self.decide, self.settings = bridge, decide, settings
-        self.data, self.publish, self.stop_requested = data, publish, stop_requested
+        self.data, self.publish = data, publish
+        self.operator_stop = False
+        self.stop_requested = lambda: self.operator_stop or stop_requested()
+        self.commands = commands
+        self.active_goal = None
+        self.feedback_pending = False
         self.pending = {}
+        self.action_owners = {}
         self.recent = []
         self.groups = []
         self.turn = None
@@ -134,11 +147,19 @@ class Controller:
             key = (execution["kind"], execution["id"])
             if execution.get("terminal") is True:
                 self.pending.pop(key, None)
+                self.action_owners.pop(key, None)
             else:
                 self.pending[key] = execution
             self.persist(pending=list(self.pending.values()))
         self.recent.extend(e for e in value.get("events", []) if e.get("contextDelivery") != "archive-only" and not e.get("meta", {}).get("staleEpoch"))
         self.recent = self.recent[-64:]
+
+    def current_work(self):
+        if self.active_goal and self.active_goal.get("mode") == "insert":
+            # Earlier work resumes natively after a checkpoint insertion. It does
+            # not prevent the inserted goal from observing/reporting its own result.
+            return any(self.action_owners.get(key) in {None, self.active_goal["id"]} for key in self.pending)
+        return bool(self.pending)
 
     async def protocol(self, action, **arguments):
         return json_content(await self.bridge.call("mc_protocol", {"protocol": PROTOCOL, "action": action, **arguments}))
@@ -198,6 +219,11 @@ class Controller:
                 done, _ = await asyncio.wait({task}, timeout=1)
                 if self.stop_requested():
                     return None
+                if self.commands and self.commands.ready(allow_goal=self.active_goal is None and not self.pending):
+                    # Close this decision turn before delivering external work;
+                    # a stale model completion must not replace a newly inserted job.
+                    self.preempted = True
+                    return None
                 if done:
                     return await task
                 wake, urgent, _ = await self.events()
@@ -209,6 +235,108 @@ class Controller:
             if not task.done():
                 task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+
+    async def dispatch(self, name, arguments, request_id):
+        if name == "goal_report" and (not self.active_goal or self.current_work() or arguments.get("outcome") not in {"reported_done", "blocked"}
+                or not isinstance(arguments.get("evidence"), str) or not 1 <= len(arguments["evidence"]) <= 1200):
+            raise ValueError("goal_report_requires_active_goal_no_pending_actions_and_evidence")
+        # Journal before sending: unknown delivery never gets a new request ID.
+        self.inflight_request = request_id
+        self.persist(inflight_request=request_id, uncertain=True)
+        if name == "goal_report":
+            report = {**arguments, "verified": False, "source": "planner_report",
+                      "observed_facts": await self.protocol("facts"), "original_receipts": "receipts.jsonl"}
+            self.commands.report_goal(self.active_goal["id"], report)
+            self.active_goal = self.commands.resume_goal()
+            self.feedback_pending = bool(self.active_goal and self.active_goal.get("mode") and not self.active_goal.get("queue_policy_consumed"))
+            self.continuation_needed = True
+            self.publish(current_goal=self.active_goal, last_goal_report=report)
+            raw = {"structuredContent": {"protocol": PROTOCOL, "text": encode(report), "endsTurn": True}}
+        elif name == "mc_original":
+            raw = {"structuredContent": {"protocol": PROTOCOL, **await self.original_page(arguments)}}
+        elif name == "mc_tool_help":
+            if arguments.get("name") not in {t["name"] for t in self.bridge.tools} - HIDDEN_TOOLS:
+                raise ValueError("Unavailable tool documentation")
+            raw = {"structuredContent": {"protocol": PROTOCOL, **tool_help(self.bridge.tools, arguments)}}
+        else:
+            raw = await self.bridge.call(name, arguments, request_id=request_id, turn_id=self.turn)
+        result = outcome(raw)
+        compact = await self.archive_receipt(request_id, name, result)
+        meta = next((t for t in self.bridge.tools if t["name"] == name), {}).get("_meta", {}).get(PROTOCOL, {})
+        if not raw.get("structuredContent") and {"write", "speak", "act"}.intersection(meta.get("tags", [])):
+            raise RuntimeError("outcome_unknown: mutation returned no structured execution receipt")
+        execution = result.get("execution")
+        if execution and not execution.get("terminal"):
+            self.action_owners[(execution["kind"], execution["id"])] = self.active_goal["id"] if self.active_goal else "base-goal"
+        self.receipt(result)
+        if name == "mc_do" and self.feedback_pending and result.get("execution") and not result.get("failed"):
+            self.feedback_pending = False
+            self.commands.consume_queue_policy(self.active_goal["id"])
+        self.inflight_request = None
+        self.persist(inflight_request=None, uncertain=False)
+        control = result.get("control") or {}
+        if control.get("barrierAfter"):
+            await self.protocol("ack_barrier", id=control["requestId"])
+        return result, compact
+
+    async def external_command(self):
+        command = self.commands.claim(allow_goal=self.active_goal is None and not self.pending) if self.commands else None
+        if not command:
+            return False
+        if command["kind"] == "stop":
+            self.operator_stop = True
+            self.commands.stop_queued()
+            self.commands.finish(command["id"], {"stop_requested": True, "disconnect_confirmed": False})
+            return True
+        if command["kind"] == "feedback":
+            if self.decide is None:
+                self.commands.finish(command["id"], {"failed": True, "reason": "planner_unavailable"})
+                return True
+            if command["payload"]["mode"] == "replace":
+                # Only an explicit replacement cancels native work. Archive its
+                # actual stop receipt before adopting the new high-level goal.
+                self.turn = str(uuid.uuid4())
+                await self.protocol("begin_turn", id=self.turn)
+                try:
+                    result, _ = await self.dispatch("mc_stop", {}, command["id"])
+                    if result.get("failed"):
+                        self.commands.finish(command["id"], result)
+                        return True
+                finally:
+                    if not self.inflight_request:
+                        await self.protocol("end_turn", id=self.turn)
+                        self.turn = None
+            self.commands.activate_feedback(command)
+            self.active_goal = self.commands.active_goal()
+            self.feedback_pending = True
+            self.groups = []
+            self.last_decision = 0
+            self.publish(current_goal=self.active_goal)
+            return True
+        if command["kind"] == "goal":
+            if self.decide is None:
+                self.commands.report_goal(command["id"], {"outcome": "blocked", "reason": "planner_unavailable", "verified": False})
+            else:
+                self.active_goal = {"id": command["id"], **command["payload"]}
+                self.groups = []  # Keep original receipts on disk; discard old-goal context.
+                self.last_decision = 0
+                self.publish(current_goal=self.active_goal)
+            return True
+        self.turn = str(uuid.uuid4())
+        await self.protocol("begin_turn", id=self.turn)
+        try:
+            result, _ = await self.dispatch("mc_do", command["payload"], command["id"])
+            self.commands.finish(command["id"], result)
+        finally:
+            if not self.inflight_request:
+                await self.protocol("end_turn", id=self.turn)
+                self.turn = None
+        return True
+
+    async def observe_queue(self):
+        # Native readout is authoritative. Do not infer execution from inbox order.
+        self.publish(native_queue=outcome(await self.bridge.call("mc_queue", {})),
+                     facts=await self.protocol("facts"), pending=list(self.pending.values()))
 
     async def turn_once(self, goal, prefix, tools):
         self.preempted = False
@@ -251,35 +379,25 @@ class Controller:
                     name, arguments = arguments["name"], arguments["arguments"]
                 if name == "mc_protocol" and arguments.get("action") not in READ_PROTOCOL:
                     raise ValueError("The host owns turn boundaries and cancellation")
+                if self.feedback_pending:
+                    tags = next((t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])
+                    if name != "mc_do" and {"act", "write", "speak"}.intersection(tags):
+                        raise ValueError("Pending feedback must submit its body plan through mc_do")
+                if name in {"mc_do", "mc_scout"}:
+                    if arguments.get("queue", "append") not in {"append", "afterCheckpoint", "now"}:
+                        raise ValueError("Queue replacement is not available in the autonomous controller")
+                    arguments = {**arguments, "queue": arguments.get("queue", "append")}
+                    if name == "mc_do" and self.active_goal and self.active_goal.get("mode") == "insert":
+                        arguments["queue"] = "afterCheckpoint"
+                    elif name == "mc_do" and self.feedback_pending:
+                        arguments["queue"] = "append"
                 request_id = str(uuid.uuid4())
-                # Journal before dispatch so a killed process cannot silently
-                # restart with a new request id after an uncertain mutation.
-                self.inflight_request = request_id
-                self.persist(inflight_request=request_id, uncertain=True)
-                if name == "mc_original":
-                    raw = {"structuredContent": {"protocol": PROTOCOL, **await self.original_page(arguments)}}
-                elif name == "mc_tool_help":
-                    if arguments.get("name") not in available:
-                        raise ValueError("Unavailable tool documentation")
-                    raw = {"structuredContent": {"protocol": PROTOCOL, **tool_help(self.bridge.tools, arguments)}}
-                else:
-                    raw = await self.bridge.call(name, arguments, request_id=request_id, turn_id=self.turn)
-                result = outcome(raw)
-                # Save complete receipt before acknowledging the tool barrier.
-                compact = await self.archive_receipt(request_id, name, result)
-                meta = next((t for t in self.bridge.tools if t["name"] == name), {}).get("_meta", {}).get(PROTOCOL, {})
-                if not raw.get("structuredContent") and {"write", "speak", "act"}.intersection(meta.get("tags", [])):
-                    raise RuntimeError("outcome_unknown: mutation returned no structured execution receipt")
-                self.receipt(result)
-                self.inflight_request = None
-                self.persist(inflight_request=None, uncertain=False)
+                result, compact = await self.dispatch(name, arguments, request_id)
                 self.groups.append([{"role": "assistant", "content": response.get("content"), "tool_calls": calls},
                                     {"role": "tool", "tool_call_id": call["id"], "content": compact}])
                 self.groups = self.groups[-8:]
                 control = result.get("control") or {}
-                if control.get("barrierAfter"):
-                    await self.protocol("ack_barrier", id=control["requestId"])
-                if control.get("endTurnRequested") or result.get("endsTurn") or self.pending:
+                if control.get("endTurnRequested") or result.get("endsTurn") or (self.current_work() and not self.feedback_pending):
                     return
             # A bounded documentation/read chain can continue in a fresh turn;
             # waiting for an unrelated world change here would strand the goal.
@@ -290,6 +408,10 @@ class Controller:
                 self.turn = None
 
     async def run(self, goal):
+        if self.commands:
+            self.commands.check_uncertain()
+            self.active_goal = self.commands.active_goal()
+            self.feedback_pending = bool(self.active_goal and self.active_goal.get("mode") and not self.active_goal.get("queue_policy_consumed"))
         if self.state_path.exists():
             previous = json.loads(self.state_path.read_text(encoding="utf-8"))
             if previous.get("uncertain") or previous.get("pending") or previous.get("inflight_request"):
@@ -309,12 +431,21 @@ class Controller:
                 await asyncio.sleep(1)
             if self.stop_requested():
                 return
-            self.publish(phase="running", game_connected=True, autonomy_running=True)
+            self.publish(phase="running", game_connected=True, autonomy_running=self.decide is not None, current_goal=self.active_goal)
             prefix = text_content(await self.bridge.resource("mc://environment"))
             tools = model_tools(self.bridge.tools)
             wake, urgent = True, False
             last_status_check = time.monotonic()
-            while not self.stop_requested() and self.count < self.settings.max_decisions:
+            if self.commands:
+                await self.observe_queue()
+            while not self.stop_requested() and (self.settings.max_decisions == 0 or self.count < self.settings.max_decisions):
+                inserted = await self.external_command()
+                if self.stop_requested():
+                    break
+                if inserted:
+                    await self.observe_queue()
+                    wake = True
+                urgent |= self.feedback_pending
                 event_wake, event_urgent, more = await self.events()
                 wake |= event_wake
                 urgent |= event_urgent
@@ -326,12 +457,18 @@ class Controller:
                     if not online(status):
                         raise RuntimeError("connection_lost: stopped decisions; inspect authentication and connection logs")
                     last_status_check = time.monotonic()
+                    if self.commands:
+                        await self.observe_queue()
                 elapsed = time.monotonic() - self.last_decision
-                if not self.pending and elapsed >= self.settings.idle_decision_seconds:
+                if self.decide and not self.current_work() and elapsed >= self.settings.idle_decision_seconds:
                     # Poll state without a model request when nothing has changed.
                     wake |= fact_fingerprint(await self.protocol("facts")) != self.last_facts
-                if (wake and (not self.pending or urgent) and elapsed >= self.settings.min_decision_seconds):
-                    await self.turn_once(goal, prefix, tools)
+                if (self.decide and wake and (not self.current_work() or urgent) and elapsed >= self.settings.min_decision_seconds):
+                    current_goal = ("Submitted goal: " + self.active_goal["goal"] if self.active_goal
+                                    else "Standing goal: " + goal + "\nContinue this goal; goal_report is unavailable without a submitted goal.")
+                    if self.feedback_pending:
+                        current_goal += "\nCurrent user feedback takes priority. Plan through mc_do; the framework applies the requested native queue policy."
+                    await self.turn_once(current_goal, prefix, tools)
                     self.count += 1
                     self.last_decision = time.monotonic()
                     wake, urgent = self.preempted or self.deferred_wake or self.continuation_needed, self.preempted

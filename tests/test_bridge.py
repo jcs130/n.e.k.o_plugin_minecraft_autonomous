@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-spec = importlib.util.spec_from_file_location("minecraft_bridge_test", Path(__file__).resolve().parents[1] / "bridge.py")
+spec = importlib.util.spec_from_file_location("minecraft_bridge_test", Path(__file__).resolve().parents[1] / "autonomy/bridge.py")
 bridge_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bridge_module)
 

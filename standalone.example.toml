@@ -1,0 +1,35 @@
+# Copy to config.local.toml; importing or checking never starts the game.
+[runtime]
+mode = "external"
+data_directory = "" # Use the SAME absolute root in the N.E.K.O observer configuration.
+
+[autonomy]
+enabled = false
+max_decisions = 0 # Run until explicit stop/error; set a positive number for a bounded trial.
+max_tool_rounds = 6
+context_tokens = 32768
+max_output_tokens = 1024
+model_timeout_seconds = 180
+
+[server]
+host = ""
+port = 25565
+username = ""
+auth = "offline"
+version = "1.21.1"
+
+[backend]
+node = "node"
+directory = "" # Absolute verified backend installation directory.
+
+[viewer]
+url = ""
+port = 0
+console_port = 0
+
+# Omit this table when using --queue-only. No model is discovered automatically.
+[planner]
+base_url = "" # Explicit OpenAI-compatible API base, including /v1 where required.
+model = ""
+api_key_env = "" # Environment variable name only; blank permits an anonymous local endpoint.
+output_parameter = "max_tokens" # Or max_completion_tokens, as required by your provider.

@@ -1,18 +1,20 @@
 # Minecraft Autonomous · 我的世界自主生存
 
-面向 [N.E.K.O](https://github.com/Project-N-E-K-O/N.E.K.O) 的 Minecraft 自主游玩插件。
-Neko 提供模型接口与用户目标，插件负责事件调度，独立执行核心负责观察世界、操作和回执。
+Minecraft 自主框架，以及面向 [N.E.K.O](https://github.com/Project-N-E-K-O/N.E.K.O) 的接入插件。
+Neko 提供高层目标、策略、角色演出与语音；独立框架细化规划并驱动原生执行队列。
+没有用户新消息时继续推进目标；新反馈可以在检查点插入，或明确替换当前行为。
+框架有独立入口，不安装、不启动 Neko 也能运行。
 可配置其他人的兼容服务器，不要求在本机开服。
 Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minecraft-ai-friend` 项目。
 
-**0.2.0 开发版：已接入自主控制流程并完成离线验证，真实进服、长期生存及观战绑定尚未验收。**
-默认关闭自主游玩，必须显式 `start`。本次开发没有启动旧 Neko、模型或游戏，没有发布 Release/Market。
+**0.3.0 开发版：独立运行、自然语言目标、反馈插入和原生队列接入已做离线验证；真实进服、长期生存、Neko 演出链路及观战绑定尚未验收。**
+默认关闭自主游玩，必须显式执行独立 `run` 或内嵌 `start`。本次开发没有启动旧 Neko、模型或游戏，没有发布 Release/Market。
 
 | 项目 | 内容 |
 | --- | --- |
 | Plugin ID | `minecraft_autonomous` |
 | SDK 入口 | `plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin` |
-| 环境 | Python 3.11+；Node 22+；支持公共插件模型网关的 N.E.K.O |
+| 环境 | Python 3.11+；Node 22+；N.E.K.O 为可选前端 |
 | 游戏协议 | **Java 1.21.1（767）**，拒绝 `auto` 和其他版本 |
 | 执行核心 | `agent-mc-world@0.4.0`，来源提交 `7889ce261a2309d94400b739c6198468d8271d83` |
 | 构建 | 固定源码 + 本仓库的解耦补丁，派生的 `neko-headless` |
@@ -21,14 +23,70 @@ Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minec
 ## 架构与版本选择
 
 ```text
-用户目标 / N.E.K.O 插件入口
-  → 公共模型绑定 decision（推理）
-  → Python 控制器（事件、上下文预算、停止、动作账本）
-  → MCP stdio / agent-mc/v1（回合、屏障、回执）
-  → 独立 Agent MC World 核心 → 一个 Mineflayer 客户端 → 远程 Java 1.21.1 服务器
+N.E.K.O 主脑：目标 / 新反馈 / 解说 / 语音 / 表演
+  ↕ 自然语言目标与反馈；原生状态及回执（不需要逐动作点头）
+独立框架：目标管理 → 可替换规划模型 → 事件调度与执行账本
+  → MCP stdio / agent-mc/v1 → Agent MC World 原生队列
+  → 一个 Mineflayer 客户端 → 远程 Java 1.21.1 服务器
 
 外部现代化可视化页面 ← 自己的数据/画面来源（需另行核验与该角色的绑定）
 ```
+
+Neko 主脑、低层规划模型和 Minecraft 执行器是三个职责。Neko 的主对话人格、记忆、语音情绪
+由 Neko 自己管理；`decision` 模型槽只是可选的规划模型来源，不等于主脑完整会话。
+SQLite 只保存目标和跨进程指令投递、去重及回执；正在执行哪一步、待执行动作和抢占规则
+以 **原生 `mc_queue` / `mc_do` / task 事件**为准，不再复制一个身体执行器。
+
+最新上游已核对：主分支 `7c0bdc5` 增加空间短诊断；实验分支 `7983039` 增加有限模型试玩宿主，
+但仍绑定具体服务器和模型，且核心包相对当前 pin 没变。本次保留已验证核心，
+结论和可转发给上游的文本见 [上游更新核查](docs/research/upstream-autonomy-2026-10-13.md)。
+
+## 独立运行与 Neko 旁路接入
+
+先按下节安装固定后端，再把 `standalone.example.toml` 复制为忽略提交的 `config.local.toml`。
+配置服务器、后端路径、共享 `runtime.data_directory`，以及显式的 `[planner]` 模型端点和模型名。
+密钥只填写环境变量名 `api_key_env`，不写进配置。独立模式只需要 Python 依赖，不需要 Neko SDK：
+
+```powershell
+python -m pip install 'mcp==2.1.1' 'httpx>=0.27,<1'
+python standalone.py check --config config.local.toml
+# 自行配置 autonomy.enabled=true 后才可显式启动；本次开发没有执行此行。
+python standalone.py run --config config.local.toml --goal '自主生存，合理收集资源并维护安全住所'
+```
+
+`check` 只校验，不访问模型或游戏。前台 `run` 的 Ctrl+C 停止自己的运行实例。
+`max_decisions=0` 表示持续运行到显式停止或错误；正数适合有限试跑。每轮工具、上下文和超时仍有界。
+稳定世界状态不导致空转模型调用，原生队列会自行推进已规划的多步动作，终态与重要事件推动下一次规划。
+没有可用规划模型时不能生成任意新计划；`run --queue-only` 仅执行已规划的原生任务和内置反射。
+
+Neko 插件配置选择 `runtime.mode="external"`，服务器/账号和 `runtime.data_directory` 必须与独立进程一致。
+此模式无需绑定 `decision`，不会启动第二个游戏客户端，关闭 Neko 也不会停止外部框架。
+Neko 可读取 `status` 的原生队列、事实、当前目标和采样时间，用自己的解说、语音与演出通路表达。
+本插件不合成语音，也不会把解说或工具结果发到游戏公屏；端到端演出效果尚待实测。
+
+| 入口 | 意图与行为 |
+| --- | --- |
+| `submit_goal(goal,request_id)` | 新的自然语言目标，当前目标及原生动作结束后由独立规划器接续 |
+| `feedback(goal,mode="insert",request_id)` | 优先采用新反馈，取消过时推理，按原生安全检查点插入；结束后恢复原目标 |
+| `feedback(goal,mode="replace",request_id)` | 明确替换：先调用原生 stop 清空旧动作，保存回执，再按新目标规划 |
+| `status` / `task_receipt(request_id)` | 读取最后观察到的状态和原始回执；保留采样时间，不把文件存在等同于进程存活 |
+| `submit_steps(steps,request_id,queue)` | 高级接口：投递已规划动作，默认 append；也支持 afterCheckpoint / now |
+| `stop` | 显式停止外部实例需由其确认；shutdown 在 external 模式只读取状态 |
+
+每个新目标或反馈生成一个 UUID `request_id`；确认不明时用同一个 ID 查询或重试，不换 ID 重投。
+`queued` 只说明指令已投递，`planning` 说明已采用目标，原生 `accepted` 也不等于完成。
+规划器提交的 `reported_done` 始终附 `verified=false`、当时事实与原始回执入口，不能冒充独立验收。
+在命令行也可操作同一入口：
+
+```powershell
+python standalone.py submit-goal --config config.local.toml --request-id 11111111-1111-4111-8111-111111111111 --goal '收集木头并制作工作台'
+python standalone.py feedback --config config.local.toml --request-id 22222222-2222-4222-8222-222222222222 --mode replace --goal '别挖了，返回安全住所'
+python standalone.py receipt --config config.local.toml --request-id 22222222-2222-4222-8222-222222222222
+python standalone.py status --config config.local.toml
+```
+
+示例 ID 只演示格式，实际每个新指令生成新 UUID；重复查询同一指令保留原 ID。
+完整所有权、反馈与恢复规则见 [架构说明](docs/design.md)。
 
 不依赖 Cortico Core、Persona、provider 或 Memory；公共类型和构建不需要 Cortico checkout。
 本次采用的是指定提交内的独立核心，**没有将整个 My Agent World 服务器工程搬进插件**。
@@ -57,7 +115,7 @@ python backend/check_disconnected.py --directory ./local/backend-04
 需要重新核查构建产物，不能直接跳过校验。已准备运行目录不等于已登录游戏。
 发布到其他机器时，同样需要显式准备后端；`.neko-plugin` 不夹带 Node、账号或原生 SDK。
 
-## 配置和使用
+## Neko 内嵌运行（可选）
 
 以 `config.example.toml` 为模板，在 N.E.K.O 的插件配置中填写：
 
@@ -67,7 +125,7 @@ python backend/check_disconnected.py --directory ./local/backend-04
 - `viewer.url`：可填现有现代化可视化页面。这里只返回入口，不会接管页面、额外开观战账号或谎称已绑定本角色。
 - `autonomy.enabled=true`：允许显式启动；`plugin_runtime.auto_start=false` 保持默认。
 
-在宿主的模型槽配置中，将插件声明的 **`decision`** 绑定到支持文本和工具调用的模型。
+选择 `runtime.mode="embedded"` 时，在宿主的模型槽配置中，将插件声明的 **`decision`** 绑定到支持文本和工具调用的模型。
 `context_tokens` 应不大于该模型实际上下文额度，输出预留由 `max_output_tokens` 指定。
 插件不保存模型密钥，不自行选择其他模型或显卡。公共模型网关只提供推理；
 Neko 主对话的完整角色记忆、语音情绪和长期经验不会自动注入这条独立决策循环。
@@ -79,8 +137,8 @@ Neko 主对话的完整角色记忆、语音情绪和长期经验不会自动注
 | `stop` | 停止模型等待，断开该插件拥有的客户端；保留原始账本，重复调用安全 |
 | startup / shutdown | startup 被动查询；shutdown 执行 stop；不自动恢复上次目标 |
 
-更换目标需先 `stop` 再 `start`；重复 start 不会创建第二个身体。
-每次启动最多 `max_decisions` 个决策回合，每回合最多 `max_tool_rounds` 次模型请求，达到上限即停止。
+运行时通过同一 `submit_goal` / `feedback` 入口调整目标；重复 start 不会创建第二个身体。
+`max_decisions` 为正数时限定总回合，为 0 时持续运行；每回合最多 `max_tool_rounds` 次模型请求。
 长动作期间继续收取事件；普通快照不打断动作，受伤等紧急事件可取消等待中的推理。
 动作 accepted、RPC 成功、HTTP 200 都不是任务完成证据。结果未知时停下并保留请求 ID，禁止自动重放。
 
@@ -115,9 +173,9 @@ Neko 主对话的完整角色记忆、语音情绪和长期经验不会自动注
 
 ## English / 日本語
 
-Development integration of an independent Minecraft Java 1.21.1 execution core with N.E.K.O-owned decisions.
-Explicit start, bounded context and receipt-based execution are implemented and tested offline. Live gameplay,
-native My Agent World integration and external viewer/body binding remain unverified. No automatic startup.
+Independent Minecraft Java 1.21.1 autonomy with natural-language goals and native queue execution.
+N.E.K.O is an optional strategy, narration and voice frontend. Standalone planning uses an explicitly configured
+model. Offline tests cover feedback, stop and receipts; live gameplay, performance and viewer binding are unverified.
 
-N.E.K.O が判断し、独立した実行コアが Minecraft Java 1.21.1 を操作する開発版です。
-明示的な起動・停止とオフライン検証を実装しています。実サーバー、自律生存、専用MOD対応と観戦の紐付けは未検証です。
+Minecraft Java 1.21.1 の独立自律フレームワークです。N.E.K.O は目標・方針・解説・音声を担当します。
+明示起動とオフライン検証を実装しています。実サーバー、長期生存、演出と観戦の紐付けは未検証です。

@@ -3,13 +3,15 @@
 import asyncio
 import json
 import threading
+import uuid
 
 from plugin.sdk.plugin import Err, NekoPluginBase, Ok, TransportError, lifecycle, neko_plugin, plugin_entry
 
+from .autonomy.configuration import Settings
+from .autonomy.mailbox import Mailbox, observation
+from .autonomy.runner import run_session
 from .backend.install import verify_runtime
-from .bridge import MinecraftBridge
-from .configuration import Settings
-from .controller import Controller
+from .neko_planner import NekoPlanner
 from .worker import Worker
 
 
@@ -34,6 +36,9 @@ class MinecraftAutonomousPlugin(NekoPluginBase):
 
     @lifecycle(id="shutdown")
     async def on_shutdown(self, **_):
+        settings = Settings.parse(await self.config.dump())
+        if settings.runtime_mode == "external":
+            return await self.status()
         return await self.stop()
 
     @plugin_entry(
@@ -50,6 +55,12 @@ class MinecraftAutonomousPlugin(NekoPluginBase):
         ready, reason, viewer = False, "backend_missing", ""
         try:
             settings = Settings.parse(await self.config.dump())
+            if settings.runtime_mode == "external":
+                if not settings.data_directory:
+                    return Err({"code": "external_data_directory_required", "message": "填写与 standalone 相同的 runtime.data_directory。"})
+                directory = settings.data_root(self.data_path()) / "sessions" / settings.identity / "host"
+                return Ok({"mode": "external", "minecraft_version": "1.21.1", "observation": observation(directory),
+                           "viewer_url": settings.external_viewer_url, "viewer_body_binding_verified": False})
             viewer = settings.external_viewer_url
             verify_runtime(settings.runtime_directory(self.cache_path()))
             ready, reason = True, "ready_for_explicit_start"
@@ -76,39 +87,25 @@ class MinecraftAutonomousPlugin(NekoPluginBase):
             if not isinstance(goal, str) or not goal.strip() or len(goal) > 4000:
                 raise ValueError("invalid_goal: goal must contain 1..4000 characters")
             settings = Settings.parse(await self.config.dump())
+            if settings.runtime_mode == "external":
+                return Err({"code": "external_runtime", "message": "此入口只观察和投递任务。请显式启动 standalone.py run；Neko 不接管外部运行进程。"})
             if not settings.enabled:
                 return Err({"code": "autonomy_disabled", "message": "先在配置中启用 autonomy；插件不会自动进入游戏。"})
             settings.require_server()
             entry = verify_runtime(settings.runtime_directory(self.cache_path()))
             if self.ctx.models is None:
                 return Err({"code": "model_gateway_unavailable", "message": "需要支持公共模型接口的 N.E.K.O，并绑定 decision 模型。"})
-            data = self.data_path("sessions", settings.identity, "host")
-            config_path = data / "client.json"
+            data_root = settings.data_root(self.data_path())
+            data = data_root / "sessions" / settings.identity / "host"
 
             async def play(goal, publish, stopped):
-                try:
-                    client = await self.ctx.models.get_client()
-
-                    async def decide(messages, tools):
-                        response = await client.chat.completions.create(
-                            model="decision", messages=messages, tools=tools, parallel_tool_calls=False,
-                            max_completion_tokens=settings.max_output_tokens,
-                        )
-                        message = response.choices[0].message
-                        return {"content": message.content, "tool_calls": [call.model_dump(exclude_none=True)
-                                                                         for call in message.tool_calls or []]}
-
-                    bridge = MinecraftBridge(settings.node, entry, config_path, data / "backend.log")
-                    if not stopped():
-                        await Controller(bridge, decide, settings, data, publish, stopped).run(goal)
-                finally:
-                    await self.ctx.models.aclose()
+                await run_session(settings, entry, data_root, NekoPlanner(self.ctx.models, settings.max_output_tokens),
+                                  goal, publish, stopped)
 
             with self._control_lock:
                 if generation != self._generation:
                     return Err({"code": "start_cancelled", "message": "启动期间已收到停止指令。"})
                 data.mkdir(parents=True, exist_ok=True)
-                config_path.write_text(json.dumps(settings.client_config(self.data_path()), ensure_ascii=False), encoding="utf-8")
                 self._operator_state(False)
                 self._worker = Worker(play, data / "host-error.log")
                 self._worker.start(goal.strip())
@@ -124,7 +121,7 @@ class MinecraftAutonomousPlugin(NekoPluginBase):
         description="停止决策并断开插件拥有的 Minecraft 连接，保留账本；可重复调用。",
         timeout=30,
     )
-    async def stop(self, **_):
+    async def stop(self, request_id: str = "", **_):
         with self._control_lock:
             self._generation += 1
             self._operator_state(True)
@@ -132,4 +129,42 @@ class MinecraftAutonomousPlugin(NekoPluginBase):
         stopped = await asyncio.to_thread(worker.stop) if worker else True
         if not stopped:
             return Err({"code": "stop_pending", "message": "停止指令已生效，资源仍在清理；新的启动会被拒绝。"})
+        settings = Settings.parse(await self.config.dump())
+        if settings.runtime_mode == "external":
+            return await self._submit("stop", {}, request_id or str(uuid.uuid4()))
         return await self.status()
+
+    async def _submit(self, kind, payload, request_id):
+        try:
+            settings = Settings.parse(await self.config.dump())
+            if kind != "stop" and not settings.enabled:
+                return Err({"code": "autonomy_disabled", "message": "自主框架未启用，未投递指令。"})
+            if settings.runtime_mode == "external" and not settings.data_directory:
+                raise ValueError("external_data_directory_required")
+            settings.require_server()
+            directory = settings.data_root(self.data_path()) / "sessions" / settings.identity / "host"
+            return Ok(Mailbox(directory).submit(kind, payload, request_id))
+        except (OSError, ValueError) as error:
+            return Err({"code": "command_rejected", "message": str(error)})
+
+    @plugin_entry(id="submit_steps", name="插入原生任务 / Insert native task / タスク追加",
+                  description="投递已规划的 mc_do.steps。默认 append；afterCheckpoint 安全检查点插入；now 明确抢占。必须提供 UUID request_id，重试复用原 ID。投递成功不等于原生受理或执行完成。")
+    async def submit_steps(self, steps: list[dict], request_id: str, queue: str = "append", **_):
+        return await self._submit("steps", {"steps": steps, "queue": queue}, request_id)
+
+    @plugin_entry(id="submit_goal", name="加入自主目标 / Add autonomous goal / 目標追加",
+                  description="投递自然语言目标，由独立规划器在当前目标及原生动作结束后接续。Neko 可继续解说。request_id 必须是 UUID，确认不明时复用原 ID。需要外部规划模型或 embedded decision 模型。")
+    async def submit_goal(self, goal: str, request_id: str, **_):
+        return await self._submit("goal", {"goal": goal}, request_id)
+
+    @plugin_entry(id="feedback", name="更新当前意图 / Update current intent / 方針変更",
+                  description="用户新反馈优先于旧规划。mode=insert：在原生安全检查点插入，之后恢复原工作；mode=replace：明确停止并清空旧原生队列，改为新目标。必须明确选择模式；复用同一个 UUID request_id 查询或重试，语音/解说不走游戏队列。")
+    async def feedback(self, goal: str, mode: str, request_id: str, **_):
+        return await self._submit("feedback", {"goal": goal, "mode": mode}, request_id)
+
+    @plugin_entry(id="task_receipt", name="任务回执 / Task receipt / 実行結果", kind="service",
+                  description="只读查询投递状态与原生回执。请结合 status 的原生队列与采样时间解说；不把受理称为完成。")
+    async def task_receipt(self, request_id: str, **_):
+        settings = Settings.parse(await self.config.dump())
+        directory = settings.data_root(self.data_path()) / "sessions" / settings.identity / "host"
+        return Ok({"command": Mailbox(directory).get(request_id)})
