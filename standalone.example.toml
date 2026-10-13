@@ -23,6 +23,10 @@ node = "node"
 directory = "" # Absolute verified backend installation directory.
 
 [viewer]
+renderer_directory = ""
+catalog_file = ""
+listen_port = 28985
+auto_open = true # A configured viewer opens only after the game is connected.
 url = ""
 port = 0
 console_port = 0

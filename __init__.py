@@ -10,15 +10,17 @@ from plugin.sdk.plugin import Err, NekoPluginBase, Ok, TransportError, lifecycle
 from .autonomy.configuration import Settings
 from .autonomy.mailbox import Mailbox, observation
 from .autonomy.runner import run_session
+from .autonomy.viewer import viewer_observation
 from .backend.install import verify_runtime
 from .dashboard import Dashboard
 from .neko_planner import NekoPlanner
+from .neko_presentation import NekoPresentation
 from .neko_tools import NekoAutonomyTools
 from .worker import Worker
 
 
 @neko_plugin
-class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoPluginBase):
+class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoPresentation, NekoPluginBase):
     def __init__(self, ctx):
         super().__init__(ctx)
         self._control_lock = threading.RLock()
@@ -61,8 +63,9 @@ class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoPluginBase):
                 if not settings.data_directory:
                     return Err({"code": "external_data_directory_required", "message": "填写与 standalone 相同的 runtime.data_directory。"})
                 directory = settings.data_root(self.data_path()) / "sessions" / settings.identity / "host"
-                return Ok({"mode": "external", "minecraft_version": "1.21.1", "observation": observation(directory),
-                           "viewer_url": settings.external_viewer_url, "viewer_body_binding_verified": False})
+                snapshot = observation(directory)
+                return Ok({"mode": "external", "minecraft_version": "1.21.1", "observation": snapshot,
+                           **viewer_observation(settings, snapshot)})
             viewer = settings.external_viewer_url
             verify_runtime(settings.runtime_directory(self.cache_path()))
             ready, reason = True, "ready_for_explicit_start"
@@ -72,7 +75,8 @@ class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoPluginBase):
             reason = "configuration_unavailable"
         return Ok({"plugin_id": "minecraft_autonomous", "mode": "autonomous", "stage": "development",
                    "minecraft_version": "1.21.1", "backend_ready": ready, "reason": reason,
-                   "viewer_url": viewer, "viewer_body_binding_verified": False, **state})
+                   "viewer_url": viewer, "viewer_body_binding_verified": False, **state,
+                   **(viewer_observation(settings, state) if ready else {})})
 
     @plugin_entry(
         id="start",

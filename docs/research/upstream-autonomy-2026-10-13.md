@@ -86,6 +86,19 @@ flowchart LR
 对应 detail 视图，元数据升级为 `mc-overview/v3`。它仍是视觉捕获的独立更新，不改变当前
 已校验的执行核心 pin。来源：[区域与细节对齐](https://github.com/jcs130/minecraft-ai-friend/commit/40eb7eea951e5569a68864feb8febfa48052c996)。
 
+## 21:32 追加复核
+
+远端 main 已到 `6a1612fada052ca2c3037fe473f76a0f6a649b55`。本次查看相对 `5aeea11`
+的执行核心差异：`b111807` 留存 Agent 实际照片并校验独立捕获 FOV；`6a1612f` 修复登录就绪、
+聊天来源、连接生命周期和实时读数。其 `requestFacts()` 改为直接取廉价实时快照与当前队列，
+不再依赖延迟事件渲染缓存；出生后也延后发布地形和在线名单，避免把未到齐的区块当成完整场景。
+这对之后更新核心有价值，但涉及桥接与生命周期，不能只改版本号就视作已部署。
+
+本轮为恢复 Neko 游戏反馈而修改的是前端公共通知与独立框架的请求装配；
+继续保留 `7889ce2` 派生 headless 核心，未自动升级或复制上游完整服务器工程。
+来源：[照片与 FOV](https://github.com/jcs130/minecraft-ai-friend/commit/b111807)、
+[登录与实时读数](https://github.com/jcs130/minecraft-ai-friend/commit/6a1612fada052ca2c3037fe473f76a0f6a649b55)。
+
 ## 可直接转发给上游的文本
 
 ```text

@@ -7,7 +7,11 @@
 - Embed a configured modern viewer only after an explicit click, with separate-window and unload controls. No viewer deployment, second account or player-binding claim is implied.
 - Allow validated viewer-only settings to change without stopping an embedded worker; keep runtime changes blocked while it is active.
 - Pause observation reads when the page or its Neko panel is hidden. Render observations as text and reject unsafe viewer URLs.
-- Verify the actual Neko manager tabs, public assets/context, viewer-only save, responsive layout and isolated viewer loading. The current 1.21.1 body still needs a matching modern renderer transport.
+- Add optional exact-version viewer assembly over the current player's native connection; request one browser open after joining. Keep full browser rendering separate from identity/data validation.
+- Forward fresh, deduplicated game changes through the public Neko notification API, with an explicit narration action and configurable role/rate limit. Verified official online voice delivery and desktop playback receipts.
+- Bound failure diagnostics and spatial previews while preserving original evidence, completed scout results and the latest synchronous inventory receipt.
+- Restrict action/scout queue policies consistently. Reject invalid replacement locally with a correctable receipt instead of disconnecting the body.
+- Verify the actual Neko manager tabs, public assets/context, viewer-only save, responsive layout and isolated viewer loading. Sustained vanilla survival and complete scene parity remain unverified.
 
 ## 0.4.0 — Unreleased
 

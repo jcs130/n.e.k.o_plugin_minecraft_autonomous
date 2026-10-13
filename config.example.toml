@@ -27,6 +27,10 @@ node = "node"
 directory = "" # Defaults to the plugin cache / agent-mc-world-0.4.0-headless.
 
 [viewer]
+renderer_directory = ""
+catalog_file = ""
+listen_port = 28985
+auto_open = true # Open once after an explicitly started session joins the game.
 url = "" # Optional existing viewer, e.g. https://viewer.example.org/dungeon/.
 port = 0
 console_port = 0
@@ -37,6 +41,11 @@ data_directory = "" # external mode: same absolute data root used by standalone.
 
 [perception]
 enabled = true # Only actual core PNG artifacts. Bind optional vision slot in Neko.
+
+[presentation]
+enabled = false # Optional meaningful game-event narration through Neko's official voice path.
+target = "" # Empty: host-selected role; otherwise a configured Neko character name.
+min_interval_seconds = 90 # Unchanged observations never trigger model calls.
 
 [fast]
 mode = "rules" # rules | neko (public fast slot) | system_one (Jev/Decider protocol)

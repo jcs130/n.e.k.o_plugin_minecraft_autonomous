@@ -58,6 +58,10 @@ class Settings:
     viewer_port: int = 0
     console_port: int = 0
     external_viewer_url: str = ""
+    viewer_auto_open: bool = True
+    viewer_renderer_directory: str = ""
+    viewer_catalog_file: str = ""
+    viewer_listen_port: int = 28985
     min_decision_seconds: int = 10
     idle_decision_seconds: int = 60
     max_tool_rounds: int = 6
@@ -97,6 +101,9 @@ class Settings:
         if _integer(viewer, "port", 0, 0, 65535) or _integer(viewer, "console_port", 0, 0, 65535):
             raise ValueError("This headless build uses viewer.url; bundled viewer and console ports must be zero")
         minimum = _integer(autonomy, "min_decision_seconds", 10, 5, 300)
+        renderer, catalog = _text(viewer, "renderer_directory"), _text(viewer, "catalog_file")
+        if bool(renderer) != bool(catalog):
+            raise ValueError("viewer.renderer_directory and viewer.catalog_file must be configured together")
         return cls(
             enabled=_boolean(autonomy, "enabled", False), host=host,
             port=_integer(server, "port", 25565, 1, 65535), username=username, auth=auth, version=version,
@@ -104,6 +111,9 @@ class Settings:
             login_config_file=_text(server, "login_config_file"),
             viewer_port=0, console_port=0,
             external_viewer_url=viewer_url(_text(viewer, "url")), min_decision_seconds=minimum,
+            viewer_auto_open=_boolean(viewer, "auto_open", True),
+            viewer_renderer_directory=renderer, viewer_catalog_file=catalog,
+            viewer_listen_port=_integer(viewer, "listen_port", 28985, 1024, 65535),
             idle_decision_seconds=_integer(autonomy, "idle_decision_seconds", 60, minimum, 3600),
             max_tool_rounds=_integer(autonomy, "max_tool_rounds", 6, 1, 12),
             max_output_tokens=_integer(autonomy, "max_output_tokens", 1024, 128, 4096),

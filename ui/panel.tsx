@@ -65,15 +65,17 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Button disabled={busy || viewerDraft === null} onClick={async()=>{
           const url = viewerDraft ?? ""
           if(await call("save_settings",{settings:{viewer:{url}}})) {
-            if(draft)setDraft({...draft,viewer:{url}})
+            if(draft)setDraft({...draft,viewer:{...draft.viewer,url}})
             setViewerDraft(null)
           }
         }}>仅保存观战地址</Button>
-        <Text>使用已部署且与当前角色配套的 HTTP(S) 页面，不填含账号、密码或查询参数的地址。保存地址不重启游戏；观战页点击后才载入画面。</Text>
-        {!state.viewer_url && <Alert tone="info" message="当前尚未配置现代观战地址，运行数据仍可查看。" />}
+        <Text>使用与当前角色配套的 HTTP(S) 页面。游戏连接成功后默认自动打开一次；重连不重复弹窗，可在设置中关闭。</Text>
+        {!state.viewer_url && <Alert tone="info" message="尚未取得可用的观战地址；可配置同角色渲染器与版本资源目录，运行数据仍可查看。" />}
+        {runtime.viewer && <Accordion title="资源版本与画面接入状态"><JsonView data={{pack:runtime.viewer.pack,version:runtime.viewer.minecraftVersion,reason:runtime.viewer.reason,window:runtime.viewer_window,content:runtime.viewer.content}} /></Accordion>}
         {state.viewer_url && !state.viewer_body_binding_verified && <Alert tone="warning" message="已保存页面地址；画面与当前 1.21.1 角色的绑定尚未核验。" />}
       </Stack></Card>
       <Card title="当前工作与用户反馈"><Stack gap={12}>
+        <ActionButton action={action("present_status")} />
         <Text>当前目标：{runtime.current_goal?.goal || runtime.standing_goal || "尚无目标"}</Text>
         <DataTable data={runtime.pending || []} columns={[{key:"id",label:"原生任务"},{key:"phase",label:"执行状态"}]} emptyText="没有待结算动作" />
         <Textarea value={goal} placeholder="例如：先收集食物，然后在安全地点建立庇护所。" onChange={v => { setGoal(v); setRequestId("") }} />
@@ -116,8 +118,13 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             <Field label="认证方式"><Select value={draft.server.auth} options={["offline","microsoft"]} onChange={v=>change("server","auth",v)} /></Field>
             <Field label="运行方式"><Select value={draft.runtime.mode} options={[{value:"embedded",label:"Neko 嵌入式"},{value:"external",label:"独立运行观察入口"}]} onChange={v=>change("runtime","mode",v)} /></Field>
             {field("runtime","data_directory","共享数据目录")}{field("backend","directory","已验证后端目录")}{field("viewer","url","外部观战地址")}
+            {field("viewer","renderer_directory","共享渲染器目录（可选）")}{field("viewer","catalog_file","版本资源目录 JSON（可选）")}{field("viewer","listen_port","本机观战端口","number")}
           </Grid>
           <Switch checked={draft.autonomy.enabled} label="允许显式启动自主游玩" onChange={v=>change("autonomy","enabled",v)} />
+          <Switch checked={draft.viewer.auto_open !== false} label="进入游戏后自动打开观战界面" onChange={v=>change("viewer","auto_open",v)} />
+          <Switch checked={draft.presentation?.enabled === true} label="让 Neko 解说重要游戏变化" onChange={v=>change("presentation","enabled",v)} />
+          {field("presentation","target","解说角色（留空跟随 Neko 当前角色）")}
+          {field("presentation","min_interval_seconds","解说最小间隔（秒）","number")}
           <Switch checked={draft.perception.enabled} label="接收核心真实图像（无图像或模型时文字回退）" onChange={v=>change("perception","enabled",v)} />
           <Field label="快决策方式"><Select value={draft.fast.mode} options={[{value:"rules",label:"规则（默认）"},{value:"neko",label:"Neko fast 模型槽"},{value:"system_one",label:"System One：远程 Jev / 本地 Decider"}]} onChange={v=>change("fast","mode",v)} /></Field>
           {draft.fast.mode === "system_one" && <Grid cols={2}>

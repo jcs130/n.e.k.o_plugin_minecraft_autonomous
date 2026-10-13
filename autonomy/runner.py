@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from .fast import FastPolicy, SystemOne
 from .mailbox import Mailbox
 from .ownership import session_lease
 from .planner import Planner
+from .viewer import ViewerWindow
 
 
 def validate_start(settings: Settings, goal: str):
@@ -26,19 +28,38 @@ def validate_start(settings: Settings, goal: str):
 
 
 async def run_session(settings: Settings, entry: Path, data_root: Path, planner: Planner | None, goal: str,
-                      publish, stopped, *, bridge_factory=MinecraftBridge):
+                      publish, stopped, *, bridge_factory=MinecraftBridge, viewer_opener=None):
     """Own the injected planner, lease, config, controller and all cleanup."""
     state = {"phase": "starting", "game_connected": False, "autonomy_running": False, "standing_goal": goal}
     directory = data_root / "sessions" / settings.identity / "host"
     system_one = None
+    viewer = ViewerWindow(settings.external_viewer_url, settings.viewer_auto_open, opener=viewer_opener)
+    viewer_task = None
+    viewer_session = str(uuid.uuid4())
+
+    async def open_viewer():
+        result = await viewer.connected()
+        if result:
+            update(viewer_window=result)
 
     def update(**values):
+        nonlocal viewer_task
         state.update(values)
+        if settings.viewer_renderer_directory:
+            try:
+                current = json.loads((directory / "viewer-state.json").read_text(encoding="utf-8"))
+                if current.get("session") == viewer_session:
+                    state["viewer"] = current
+                    viewer.url = current.get("url", "") if current.get("available") else ""
+            except (OSError, ValueError):
+                pass
         state.update(updated_at=datetime.now(timezone.utc).isoformat(), owner_pid=os.getpid())
         temporary = directory / "status.tmp"
         temporary.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
         temporary.replace(directory / "status.json")
         publish(**state)
+        if state.get("game_connected") is True and viewer_task is None and settings.viewer_auto_open and viewer.url:
+            viewer_task = asyncio.create_task(open_viewer())
 
     try:
         validate_start(settings, goal)
@@ -48,7 +69,15 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
             commands = Mailbox(directory)
             commands.check_uncertain()
             config = directory / "client.json"
-            config.write_text(json.dumps(settings.client_config(data_root), ensure_ascii=False), encoding="utf-8")
+            client_config = settings.client_config(data_root)
+            if settings.viewer_renderer_directory:
+                client_config["viewerIntegration"] = {
+                    "packageDirectory": str(entry.parent.parent), "rendererDirectory": settings.viewer_renderer_directory,
+                    "catalogFile": settings.viewer_catalog_file, "port": settings.viewer_listen_port,
+                    "stateFile": str(directory / "viewer-state.json"), "session": viewer_session,
+                }
+                entry = Path(__file__).resolve().parent.parent / "backend" / "viewer-stdio.mjs"
+            config.write_text(json.dumps(client_config, ensure_ascii=False), encoding="utf-8")
             update()
             bridge = bridge_factory(settings.node, entry, config, directory / "backend.log")
             try:
@@ -67,6 +96,8 @@ async def run_session(settings: Settings, entry: Path, data_root: Path, planner:
             finally:
                 update(game_connected=False, autonomy_running=False)
     finally:
+        if viewer_task:
+            await viewer_task
         if system_one:
             await system_one.aclose()
         if planner:

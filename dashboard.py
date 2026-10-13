@@ -7,7 +7,9 @@ from dataclasses import asdict
 from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
 
 from .autonomy.configuration import Settings
+from .autonomy.viewer import viewer_observation
 from .model_check import check_model
+from .neko_presentation import PresentationSettings
 from .neko_tools import unwrap
 
 EDITABLE = {
@@ -15,8 +17,9 @@ EDITABLE = {
     "server": {"host", "port", "username", "auth", "version"},
     "runtime": {"mode", "data_directory"},
     "backend": {"node", "directory"},
-    "viewer": {"url"},
+    "viewer": {"url", "auto_open", "renderer_directory", "catalog_file", "listen_port"},
     "perception": {"enabled"},
+    "presentation": {"enabled", "target", "min_interval_seconds"},
     "fast": {"mode", "endpoint", "model", "api_key_env", "min_confidence"},
 }
 
@@ -27,7 +30,9 @@ def public_config(settings):
         "server": {key: getattr(settings, key) for key in EDITABLE["server"]},
         "runtime": {"mode": settings.runtime_mode, "data_directory": settings.data_directory},
         "backend": {"node": settings.node, "directory": settings.backend_directory},
-        "viewer": {"url": settings.external_viewer_url},
+        "viewer": {"url": settings.external_viewer_url, "auto_open": settings.viewer_auto_open,
+                   "renderer_directory": settings.viewer_renderer_directory, "catalog_file": settings.viewer_catalog_file,
+                   "listen_port": settings.viewer_listen_port},
         "perception": {"enabled": settings.vision_enabled},
         "fast": asdict(settings.fast),
     }
@@ -92,7 +97,8 @@ class Dashboard:
     @ui.context(id="dashboard")
     async def dashboard(self):
         try:
-            settings = Settings.parse(await self.config.dump())
+            raw = await self.config.dump()
+            settings = Settings.parse(raw)
             result = unwrap(await self.status())
             if result.get("is_error"):
                 return {"error": "configuration_or_observation_unavailable"}
@@ -100,13 +106,12 @@ class Dashboard:
             directory = settings.data_root(self.data_path()) / "sessions" / settings.identity / "host"
             state = {key: snapshot.get(key) for key in (
                 "phase", "game_connected", "autonomy_running", "updated_at", "decisions", "source", "live_verified",
-                "standing_goal", "current_goal", "context", "model_status", "fast_focus", "perception", "planner_error")}
+                "standing_goal", "current_goal", "context", "model_status", "fast_focus", "perception", "planner_error", "viewer", "viewer_window")}
             state["facts"] = [{"key": str(p.get("key", ""))[:80], "text": str(p.get("text", ""))[:900],
                                "has_more": len(str(p.get("text", ""))) > 900} for p in snapshot.get("facts", {}).get("parts", [])[:24]]
             state["pending"] = [{k: p.get(k) for k in ("kind", "id", "phase", "terminal")} for p in snapshot.get("pending", [])[:16]]
-            return {"settings": public_config(settings), "runtime": state, "audit": audit_sample(directory),
-                    "model_slots": ["decision", "vision", "fast"], "viewer_url": settings.external_viewer_url,
-                    "viewer_body_binding_verified": False}
+            return {"settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw))}, "runtime": state, "audit": audit_sample(directory),
+                    "model_slots": ["decision", "vision", "fast"], **viewer_observation(settings, snapshot)}
         except (OSError, ValueError, KeyError):
             return {"error": "configuration_or_observation_unavailable"}
 
@@ -124,8 +129,9 @@ class Dashboard:
             original = await self.config.dump()
             merged = {**original, **{key: {**original.get(key, {}), **value} for key, value in settings.items()}}
             Settings.parse(merged)
+            PresentationSettings.parse(merged)
             with self._control_lock:
-                if set(settings) != {"viewer"} and self._worker and self._worker.snapshot().get("worker_alive"):
+                if set(settings) - {"viewer", "presentation"} and self._worker and self._worker.snapshot().get("worker_alive"):
                     return Err({"code": "settings_runtime_active", "message": "运行参数须先显式停止嵌入式运行再保存；观战地址可单独保存，模型槽绑定可在宿主修改。"})
             await self.config.update(settings)
             return Ok({"saved": True, "running_session_changed": False, "applies": "next_explicit_start_or_observer_read"})
