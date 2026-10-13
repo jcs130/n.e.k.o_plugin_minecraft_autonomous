@@ -42,9 +42,20 @@ def is_stopped(plugin):
 
 
 def heartbeat_text(review):
-    prefix = ("Minecraft决策心跳 " + review["id"] + "。你是正在自主生存的主脑。"
-              "调用minecraft_autonomy_review选择continue或insert，再简短说明打算。需要细节先inspect。")
-    return prefix + review["summary"]
+    # The host's general notification preview is 200 tokens. A full objective
+    # before the facts hid inventory, the idle queue and repeated-read evidence.
+    # Transport a small cue; the existing inspection tool reads framework facts.
+    def brief(text, size):
+        raw = str(text).encode("utf-8")
+        return raw.decode() if len(raw) <= size else raw[:size - 3].decode("utf-8", errors="ignore") + "…"
+
+    evidence = review["evidence"]
+    facts = evidence["facts"]
+    readings = "；".join(brief(facts.get(key, ""), size) for key, size in (
+        ("queue", 90), ("body", 80), ("foodReserve", 65)))
+    reads = sum(evidence.get("read_activity", {}).values())
+    return ("Minecraft复盘 " + review["id"] + "。先用minecraft_autonomy_review的inspect读取完整现场，"
+            "再continue或insert；按实际队列和回执决策并简短解说。" + readings + f"；连续查询{reads}次。")
 
 
 class NekoHeartbeat:
@@ -83,7 +94,7 @@ class NekoHeartbeat:
 
     @llm_tool(name="minecraft_autonomy_review", timeout=10,
               description="回应Minecraft决策心跳：你是正在游戏中自主生存的主脑，负责阶段目标和策略。用通知里的heartbeat_id。"
-              "inspect读本次目标、身体、食物、物品、附近危险、原生队列和最近回执；读完必须continue或insert确认判断。"
+              "每次先inspect读本次目标、身体、食物、物品、附近危险、原生队列和最近回执；通知只是短预览，读完再continue或insert确认判断。"
               "正常工作用continue，不打断长动作；空闲/缺资源/受阻需改策略用insert加具体自然语言阶段目标，由独立框架规划、在安全检查点执行。"
               "队列空闲或持续无进展时自己决定下一项工作，不等待观众回复；同位反复观察不算生存进展。"
               "reason写观测依据。别重复提交现有目标；受理不是完成。之后用角色口吻简短说明打算，语音由宿主处理。"

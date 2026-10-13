@@ -60,6 +60,24 @@ def test_review_tool_routes_once_to_framework_mailbox(plugin_instance, run_async
     assert port.mailbox.get(first["request_id"])["delivery"] == "queued"
 
 
+def test_long_review_uses_small_inspection_cue_without_losing_framework_evidence(plugin_instance, run_async, monkeypatch):
+    port, snapshot, push = setup(plugin_instance, monkeypatch)
+    snapshot["standing_goal"] = "长期生存，获取食物和庇护所。" * 80
+    snapshot["facts"]["parts"][1]["text"] = "木镐1把、工作台1个、原木34个。" * 30
+    snapshot["read_activity"] = {"mc_bag": 18, "mc_scout": 8}
+    (port.directory / "status.json").write_text(json.dumps(snapshot), encoding="utf-8")
+    port.observe(snapshot)
+    review_id = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
+    cue = push.call_args.kwargs["parts"][0]["text"]
+    assert len(cue.encode("utf-8")) <= 600
+    assert "先" in cue and cue.index("inspect") < cue.index("continue")
+    assert "空闲" in cue and "26" in cue and "口粮0个" in cue
+    detail = run_async(plugin_instance.minecraft_autonomy_review(review_id, "inspect"))
+    assert "工作台1个" in detail["facts"]["gear"]
+    assert detail["read_activity"] == snapshot["read_activity"]
+    assert not port.state()["review"].get("result")
+
+
 def test_stop_blocks_transport_and_tool(plugin_instance, run_async, monkeypatch):
     port, snapshot, push = setup(plugin_instance, monkeypatch)
     port.observe(snapshot)
