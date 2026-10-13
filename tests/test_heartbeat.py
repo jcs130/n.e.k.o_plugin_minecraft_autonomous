@@ -78,6 +78,25 @@ def test_long_review_uses_small_inspection_cue_without_losing_framework_evidence
     assert not port.state()["review"].get("result")
 
 
+def test_revision_routes_through_framework_without_plugin_queue_policy(plugin_instance, run_async, monkeypatch):
+    port, snapshot, _ = setup(plugin_instance, monkeypatch)
+    port.observe(snapshot)
+    first_id = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
+    first = run_async(plugin_instance.minecraft_autonomy_review(first_id, "insert", "需要工具", "做好工具再找食物"))
+    port.mailbox.activate_feedback(port.mailbox.claim())
+    port.now = lambda: 10180
+    snapshot.update(updated_at=datetime.fromtimestamp(10180, timezone.utc).isoformat(), current_goal=port.mailbox.active_goal())
+    (port.directory / "status.json").write_text(json.dumps(snapshot), encoding="utf-8")
+    port.observe(snapshot)
+    review_id = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
+    assert run_async(plugin_instance.minecraft_autonomy_review(review_id, "inspect"))["stage_delivery"]["can_revise"]
+    args = (review_id, "revise", "已有木剑", "找食物")
+    result = run_async(plugin_instance.minecraft_autonomy_review(*args))
+    assert result == run_async(plugin_instance.minecraft_autonomy_review(*args))
+    assert result["dispatched"] and not result["verified"]
+    assert port.mailbox.claim()["payload"]["revision_of"] == first["request_id"]
+
+
 def test_stop_blocks_transport_and_tool(plugin_instance, run_async, monkeypatch):
     port, snapshot, push = setup(plugin_instance, monkeypatch)
     port.observe(snapshot)

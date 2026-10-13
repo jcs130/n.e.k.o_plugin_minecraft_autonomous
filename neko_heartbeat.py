@@ -55,7 +55,7 @@ def heartbeat_text(review):
         ("queue", 90), ("body", 80), ("foodReserve", 65)))
     reads = sum(evidence.get("read_activity", {}).values())
     return ("Minecraft复盘 " + review["id"] + "。先用minecraft_autonomy_review的inspect读取完整现场，"
-            "再continue或insert；按实际队列和回执决策并简短解说。" + readings + f"；连续查询{reads}次。")
+            "再continue/insert/revise；按实际队列和回执决策并简短解说。" + readings + f"；连续查询{reads}次。")
 
 
 class NekoHeartbeat:
@@ -94,13 +94,14 @@ class NekoHeartbeat:
 
     @llm_tool(name="minecraft_autonomy_review", timeout=10,
               description="回应Minecraft决策心跳：你是正在游戏中自主生存的主脑，负责阶段目标和策略。用通知里的heartbeat_id。"
-              "每次先inspect读本次目标、身体、食物、物品、附近危险、原生队列和最近回执；通知只是短预览，读完再continue或insert确认判断。"
+              "每次先inspect读本次目标、身体、食物、物品、附近危险、原生队列和最近回执；通知只是短预览。"
               "正常工作用continue，不打断长动作；空闲/缺资源/受阻需改策略用insert加具体自然语言阶段目标，由独立框架规划、在安全检查点执行。"
+              "已有自己插入的目标且stage_delivery.can_revise为true时，用revise修订该阶段；保留现有动作和原用户目标，不重复堆积任务。planning表示已送达，不能推断身体正忙。"
               "队列空闲或持续无进展时自己决定下一项工作，不等待观众回复；同位反复观察不算生存进展。"
               "reason写观测依据。别重复提交现有目标；受理不是完成。之后用角色口吻简短说明打算，语音由宿主处理。"
               "用户新反馈仍用minecraft_autonomy_intent并优先于旧心跳，停止只在用户明确要求时用stop。",
               parameters={"type": "object", "properties": {
-                  "heartbeat_id": {"type": "string"}, "decision": {"enum": ["inspect", "continue", "insert"]},
+                  "heartbeat_id": {"type": "string"}, "decision": {"enum": ["inspect", "continue", "insert", "revise"]},
                   "reason": {"type": "string", "maxLength": 600}, "goal": {"type": "string", "maxLength": 2000}},
                   "required": ["heartbeat_id", "decision"], "additionalProperties": False})
     async def minecraft_autonomy_review(self, heartbeat_id, decision, reason="", goal="", **_):
