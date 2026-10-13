@@ -1,7 +1,7 @@
 # Repository instructions
 
-- This repository is a N.E.K.O plugin for autonomous Minecraft play, currently at
-  the repository-scaffold stage. Do not claim the game backend works before it exists.
+- This repository is a N.E.K.O plugin for autonomous Minecraft play, with an implemented generic 1.21.1 controller.
+  Offline tests do not prove live gameplay, native-server support or viewer/body binding.
 - Use Python 3.11+ and the public `plugin.sdk.plugin` API. Do not modify the host SDK.
 - Keep plugin ID `minecraft_autonomous` and manifest/project versions consistent.
 - Keep the official managed Verify, Release and Ruff templates intact.
@@ -14,8 +14,8 @@
   public types are independent of Cortico. Optional host adapters depend on neutral
   contracts and the core; do not import Core/Persona/provider/Memory implementations.
   Preserve useful behavior from the user's fork through explicit contracts and tests.
-- Treat the pinned Agent MC World release as a transport/capability baseline until
-  the documented decoupling gaps are resolved. Legacy speech discovery, server
+- Use the pinned independent 0.4.0 headless core and its checked build receipt.
+  Do not replace it with the historical 0.3 distribution. Legacy speech discovery, server
   policies and additional model endpoints must be explicit optional integrations.
 - Before committing, run pytest, Ruff and the official release/Market-structure check
   using the commands in `CONTRIBUTING.md`. Inspect package contents and staged changes.

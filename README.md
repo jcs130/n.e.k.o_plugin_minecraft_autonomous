@@ -1,103 +1,123 @@
 # Minecraft Autonomous · 我的世界自主生存
 
 面向 [N.E.K.O](https://github.com/Project-N-E-K-O/N.E.K.O) 的 Minecraft 自主游玩插件。
-目标是让角色自己观察世界、制定目标、执行动作并根据结果调整，在用户没有逐步指挥时也能推进生存任务。
-用户可以改变目标、接管和停止；陪聊与解说是可选能力。
+Neko 提供模型接口与用户目标，插件负责事件调度，独立执行核心负责观察世界、操作和回执。
+可配置其他人的兼容服务器，不要求在本机开服。
+Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minecraft-ai-friend` 项目。
 
-**当前状态：仓库基础已建立，游戏后端尚未接入，不能实际自主游玩。**
-`0.1.0` 是开发中的初始版本，尚未发布 Release 或提交 Market 审核。
+**0.2.0 开发版：已接入自主控制流程并完成离线验证，真实进服、长期生存及观战绑定尚未验收。**
+默认关闭自主游玩，必须显式 `start`。本次开发没有启动旧 Neko、模型或游戏，没有发布 Release/Market。
 
 | 项目 | 内容 |
 | --- | --- |
 | Plugin ID | `minecraft_autonomous` |
-| 仓库 | `jcs130/n.e.k.o_plugin_minecraft_autonomous` |
 | SDK 入口 | `plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin` |
-| Python | 3.11+ |
-| 许可证 | Apache-2.0 |
+| 环境 | Python 3.11+；Node 22+；支持公共插件模型网关的 N.E.K.O |
+| 游戏协议 | **Java 1.21.1（767）**，拒绝 `auto` 和其他版本 |
+| 执行核心 | `agent-mc-world@0.4.0`，来源提交 `7889ce261a2309d94400b739c6198468d8271d83` |
+| 构建 | 固定源码 + 本仓库的解耦补丁，派生的 `neko-headless` |
+| 许可证 | 本插件 Apache-2.0；独立核心 MIT，归档保留其许可证和来源 |
 
-## 产品目标
+## 架构与版本选择
 
-- 自行感知位置、生命、饥饿、库存、附近风险和任务变化。
-- 自行规划采集、制作、探索、建造和生存行为，通过执行反馈判断进展。
-- 长动作期间少打断，遇到新的重要事件再决策。
-- 支持明确的停止、人工接管及恢复边界。
-- 只把有用的当前事实放入决策上下文；原始证据保留查询入口。
-- 固定规则和工具定义保持稳定，动态状态集中放在请求末尾，减少重复拼接。
+```text
+用户目标 / N.E.K.O 插件入口
+  → 公共模型绑定 decision（推理）
+  → Python 控制器（事件、上下文预算、停止、动作账本）
+  → MCP stdio / agent-mc/v1（回合、屏障、回执）
+  → 独立 Agent MC World 核心 → 一个 Mineflayer 客户端 → 远程 Java 1.21.1 服务器
 
-以上为待实现的产品目标。候选后端与迁移对照版本为 `agent-mc-world@0.3.0-next.2`，
-已有固定来源、显式安装器、配置和 MCP 传输基础；禁止网络的离线工具发现已验证，
-尚未接入插件入口或完成自主循环。
-独立入口不需要 Cortico npm 运行依赖，但上游构建与部分接口仍有耦合；
-接入前必须完成[解耦验收](docs/research/fork-improvements-and-decoupling-boundary.md)。
-架构与后续验收边界见 [设计说明](docs/design.md)，
-以及 [Cortico / N.E.K.O 对照研究](docs/research/neko-integration-architecture.md)。
-
-## 当前可用入口
-
-| 入口 | 当前行为 |
-| --- | --- |
-| `status` | 返回 `backend_ready=false`、`game_connected=false`、`autonomy_running=false` |
-| `start(goal="survive")` | 返回 `Err`，错误码为 `backend_not_integrated` |
-| `stop` | 返回当前停止状态，可以重复调用 |
-| startup / shutdown | 初始化时只报告状态，退出时保持停止 |
-
-插件生命周期和以上入口不会启动进程、连接游戏、调用模型或发送聊天。
-独立的开发安装与离线桥接检查需显式执行，不能由导入或 startup 自动触发。
-入口成功返回状态并不代表已经连上游戏或实现自主生存。
-
-## 配置
-
-`config.example.toml` 提供可移植的默认配置：
-
-```toml
-[plugin_runtime]
-enabled = true
-auto_start = false
-
-[autonomy]
-enabled = false
+外部现代化可视化页面 ← 自己的数据/画面来源（需另行核验与该角色的绑定）
 ```
 
-`autonomy.enabled` 为后端接入预留；当前即使改成 `true`，启动请求仍会返回后端未接入。
-本仓库不包含账号、服务器地址、模型配置、音色缓存或用户私有数据。
+不依赖 Cortico Core、Persona、provider 或 Memory；公共类型和构建不需要 Cortico checkout。
+本次采用的是指定提交内的独立核心，**没有将整个 My Agent World 服务器工程搬进插件**。
+该提交的 `@my-agent-world/agent-mc-host` 是另一种原生身体适配器，有模组操作、UUID 和原生账本约束。
+**接入 My Agent World / NeoForge 专用模组服时，普通 Mineflayer 1.21.1 不能替代其原生协议适配器。**
+原生适配器尚未接入本插件；具体价值、依赖、缺口及可转发提示词见
+[本次评估](docs/research/agent-mc-world-04-integration.md)。
 
-## 开发与验证
+## 准备后端
 
-先准备 N.E.K.O 源码和它的 Python 3.11 开发环境。
-`NEKO_ROOT` 指向宿主源码目录；验证只读取 SDK，不要求启动宿主或 Minecraft。
-
-在本插件仓库根目录执行，例如 PowerShell：
+插件导入、状态查询、startup 均不会下载后端、连接游戏或调用模型。
+没有假设 GitHub 上存在对应发行包。先从固定源码构建，再显式安装到独立目录：
 
 ```powershell
-$env:NEKO_ROOT = '/path/to/N.E.K.O'
-uv run --project "$env:NEKO_ROOT" python -m pytest tests -q
-uvx ruff==0.12.4 check --ignore-noqa --config ruff.toml .
-uv run --project "$env:NEKO_ROOT" neko-plugin check --release --market-release .
+git clone https://github.com/jcs130/minecraft-ai-friend.git ../minecraft-ai-friend
+git -C ../minecraft-ai-friend fetch origin 7889ce261a2309d94400b739c6198468d8271d83
+# 构建需要 pnpm 11.5.0；destination 必须为空。
+python backend/build.py --checkout ../minecraft-ai-friend --destination ../agent-mc-world-neko-build
+python backend/install.py --destination ./local/backend-04 --archive ../agent-mc-world-neko-build/agent-mc-world-0.4.0.tgz
+python backend/check_disconnected.py --directory ./local/backend-04
 ```
 
-未处于 Git tag 的本地 Market 结构检查会提示无法比对 tag；这不会发布插件。
-VS Code 任务直接使用 `NEKO_ROOT`，修改环境变量后重新打开编辑器。
-任务中的环境变量用法见 [VS Code 官方文档](https://code.visualstudio.com/docs/reference/variables-reference#_environment-variables)。
+安装器检查 `backend/source.json` 中的归档 SHA256、版本、源提交和编译文件清单，
+以及解耦补丁摘要；没有应用补丁的旧构建会被拒绝。
+使用固定 npm lockfile 和 `--ignore-scripts`。构建工具链差异导致哈希不符时会拒绝安装，
+需要重新核查构建产物，不能直接跳过校验。已准备运行目录不等于已登录游戏。
+发布到其他机器时，同样需要显式准备后端；`.neko-plugin` 不夹带 Node、账号或原生 SDK。
 
-运行时依赖在 `pyproject.toml` 声明，由官方 CLI 同步到 `vendor/` 后打包。
-MCP 传输依赖官方 Python `mcp==2.1.1`；独立 Node.js 22+ 执行后端需要另外显式安装。
-`vendor/`、Node 依赖、构建结果和运行数据均不提交。
-详细开发流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+## 配置和使用
 
-## 后续发布
+以 `config.example.toml` 为模板，在 N.E.K.O 的插件配置中填写：
 
-仓库保留官方 CLI 生成的 Verify / Release 工作流，推送源码会运行验证。
-Release 工作流仅在 `v*` tag 或手动触发时执行，不会因为普通源码推送发布。
+- `server.host` / `port`：可用的远程服务器；`version` 固定为 `1.21.1`。
+- `username` / `auth`：使用该服务器允许的账号。正版服使用 `microsoft`；首次认证可能需要按私有后端日志完成设备授权。`offline` 只适用于允许该认证方式的服务器。
+- `backend.directory`：安装后的绝对目录；留空则使用插件缓存内的 `agent-mc-world-0.4.0-headless`。
+- `viewer.url`：可填现有现代化可视化页面。这里只返回入口，不会接管页面、额外开观战账号或谎称已绑定本角色。
+- `autonomy.enabled=true`：允许显式启动；`plugin_runtime.auto_start=false` 保持默认。
 
-接入后端并完成实际游戏验收后，再按[官方插件贡献流程](https://project-neko.online/zh-CN/plugins/cli)
-提交首次审核。审核通过后，使用官方 `neko-plugin publish` 流程发布插件包及 Market 验证材料。
-当前不应把这个基础版本提交成已能自主游玩的插件。
+在宿主的模型槽配置中，将插件声明的 **`decision`** 绑定到支持文本和工具调用的模型。
+`context_tokens` 应不大于该模型实际上下文额度，输出预留由 `max_output_tokens` 指定。
+插件不保存模型密钥，不自行选择其他模型或显卡。公共模型网关只提供推理；
+Neko 主对话的完整角色记忆、语音情绪和长期经验不会自动注入这条独立决策循环。
+
+| 入口 | 行为 |
+| --- | --- |
+| `status` | 只读查询连接、决策次数、待完成动作、上下文预算、错误及外部观战地址 |
+| `start(goal="survive")` | 返回已受理/正在连接；实际进服以服务器在线灯和后续状态为准 |
+| `stop` | 停止模型等待，断开该插件拥有的客户端；保留原始账本，重复调用安全 |
+| startup / shutdown | startup 被动查询；shutdown 执行 stop；不自动恢复上次目标 |
+
+更换目标需先 `stop` 再 `start`；重复 start 不会创建第二个身体。
+每次启动最多 `max_decisions` 个决策回合，每回合最多 `max_tool_rounds` 次模型请求，达到上限即停止。
+长动作期间继续收取事件；普通快照不打断动作，受伤等紧急事件可取消等待中的推理。
+动作 accepted、RPC 成功、HTTP 200 都不是任务完成证据。结果未知时停下并保留请求 ID，禁止自动重放。
+
+## 上下文和恢复
+
+固定规则、稳定工具定义在前；完整的工具调用/回执对组成有限历史；最新事实和事件引用位于最后。
+工具说明按需读取；常用动作保留参数约束，高级能力通过 `mc_invoke` 路由并由原始后端校验。
+`mc_tool_help` 可逐级读取原始参数文档；`mc_original` 可分页读取事实、超长回执的完整原文。
+预算包括消息、工具、输出预留和消息框架余量，以 UTF-8 字节作保守估算；不是精确 tokenizer 或缓存命中实测。
+旧事实不会逐轮追加；仅采样时间变化不触发新模型请求。模型等待期间的新聊天保留到下一轮。
+
+私有数据按服务器与账号隔离，换后端版本不换账本。若出现 `outcome_unknown`，检查该会话下
+`host-state.json`、`receipts.jsonl`、后端原始请求与事件记录，确认原请求结果后再处理状态；
+不要删除目录、换 action ID 或把 unknown 当成失败后直接重试。此开发版不提供一键清除未知状态。
+
+## 观战与模组服边界
+
+上游打包的 viewer 资源属于 **1.20.6**。本次构建不包含它，不把它当成 1.21.1 渲染器。
+内置 viewer/console 端口必须为 0；文本观测与动作可用性仍需真实服务器验收。
+图像模型输入、NeoForge 原生注册表/握手、Numen 远程身体、原生服控制租约以及桌面语音不在本次通用接入范围内。
+外部页面能打开，也不能证明画面属于当前 Mineflayer 身体。
+
+## 验证和发布
+
+见 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [架构说明](docs/design.md)。
+单元测试使用真实公共 SDK和替身模型/执行器；独立 stdio 检查拒绝网络和 Cortico 导入。
+官方 Verify/Release/Ruff 模板保持原样。推送只触发源码验证，未创建 release tag、未发布 Market。
+包结构检查通过不能替代真实游戏验收。
+
+解耦审计、旧约定清理和可转发给源码维护者的提示词见
+[独立核心审计](docs/research/standalone-core-audit.md)。
 
 ## English / 日本語
 
-An autonomous Minecraft player plugin for N.E.K.O. This repository currently contains
-the official plugin scaffold, readiness entries, offline tests and Market workflows.
-The game backend is not integrated; autonomous gameplay is not available yet.
+Development integration of an independent Minecraft Java 1.21.1 execution core with N.E.K.O-owned decisions.
+Explicit start, bounded context and receipt-based execution are implemented and tested offline. Live gameplay,
+native My Agent World integration and external viewer/body binding remain unverified. No automatic startup.
 
-N.E.K.O 向けの自律型 Minecraft プレイヤープラグインです。現在は公式構成、状態確認、
-オフラインテストと公開用ワークフローのみです。ゲームバックエンドは未接続で、自律プレイはまだできません。
+N.E.K.O が判断し、独立した実行コアが Minecraft Java 1.21.1 を操作する開発版です。
+明示的な起動・停止とオフライン検証を実装しています。実サーバー、自律生存、専用MOD対応と観戦の紐付けは未検証です。

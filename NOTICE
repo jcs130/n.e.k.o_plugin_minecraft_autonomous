@@ -5,3 +5,11 @@ Initial repository scaffold generated with the N.E.K.O plugin CLI.
 Upstream: https://github.com/Project-N-E-K-O/N.E.K.O
 Source revision: bbfc07dcbb397953e697d52efbf480dcaab89bbb
 The upstream scaffold and SDK are distributed under Apache-2.0.
+
+The Minecraft execution plugin is authored and maintained by jcs130.
+The headless distribution uses agent-mc-world from jcs130/minecraft-ai-friend at
+7889ce261a2309d94400b739c6198468d8271d83, packages/agent-mc-world.
+This repository applies its own reviewed standalone cleanup patch.
+See backend/source.json for the base revision and patch hashes.
+Supplied MIT notices are preserved in backend/LICENSE-Agent-MC-World.txt;
+third-party dependency licenses remain with their respective packages.

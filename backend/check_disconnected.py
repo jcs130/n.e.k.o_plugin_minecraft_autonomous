@@ -4,8 +4,10 @@ import argparse
 import asyncio
 import importlib.util
 import json
+import sys
 import tempfile
 from pathlib import Path
+from types import ModuleType
 
 
 async def check(directory: Path, node: str) -> dict:
@@ -13,11 +15,17 @@ async def check(directory: Path, node: str) -> dict:
     spec = importlib.util.spec_from_file_location("minecraft_check_bridge", root / "bridge.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    package = ModuleType("mc_offline_check")
+    package.__path__ = [str(root)]
+    sys.modules[package.__name__] = package
+    controller = importlib.import_module(package.__name__ + ".controller")
+    installer = importlib.import_module(package.__name__ + ".backend.install")
+    installer.verify_runtime(directory.resolve())
     with tempfile.TemporaryDirectory(prefix="neko-minecraft-offline-") as temporary:
         data = Path(temporary)
         config = data / "client.json"
         config.write_text(json.dumps({"dataDir": str(data / "data"), "consolePort": 0, "metricsPort": 0,
-                                      "world": {"host": "example.test", "username": "OfflineCheck", "viewerPort": 0}}), encoding="utf-8")
+                                      "world": {"host": "example.test", "username": "OfflineCheck", "viewerPort": 0, "version": "1.21.1"}}), encoding="utf-8")
         bridge = module.MinecraftBridge(node, directory.resolve() / "node_modules/agent-mc-world/bin/minecraft-agent-mcp.mjs",
                                         config, data / "backend.log", node_args=("--import", (root / "backend/deny-network.mjs").as_uri()))
         try:
@@ -29,13 +37,28 @@ async def check(directory: Path, node: str) -> dict:
             assert status["phase"] == "disconnected" and status["facts"] is None
             environment = module.text_content(await bridge.resource("mc://environment"))
             assert "mc_help" in environment
+            _, budget = controller.assemble(environment, controller.model_tools(bridge.tools), "survive", {"parts": []}, [], [],
+                                            context_tokens=32768, reserved_output=1024)
+            facts = module.json_content(await bridge.call("mc_protocol", {"protocol": "agent-mc/v1", "action": "facts"}))
+            assert "1.21.1" in facts["parts"][0]["text"]
             refused = await bridge.call("mc_bag", {})
             assert refused.get("isError") is True
             assert "disconnected" in module.text_content(refused)
             invalid = await bridge.call("mc_connection", {"action": "not-an-action"})
             assert invalid.get("isError") is True
+            pending = asyncio.create_task(bridge.call("mc_events", {"after": 0, "waitMs": 30000}))
+            try:
+                await asyncio.sleep(0.05)
+                assert not pending.done()
+                concurrent = module.json_content(await bridge.call("mc_connection", {"action": "status"}, timeout=2))
+                assert concurrent["phase"] == "disconnected"
+            finally:
+                pending.cancel()
+                await asyncio.gather(pending, return_exceptions=True)
             return {"ok": True, "protocol": "MCP stdio", "profile": status["profile"], "tools": len(names),
                     "phase": status["phase"], "game_connected": False, "network_denied": True,
+                    "minecraft_version": "1.21.1", "stable_context_byte_budget": budget["total"],
+                    "concurrent_status_and_cancel": True,
                     "cortico_installed": (directory / "node_modules/cortico").exists()}
         finally:
             await bridge.close()

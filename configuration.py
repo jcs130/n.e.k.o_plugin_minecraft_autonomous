@@ -49,19 +49,20 @@ class Settings:
     port: int = 25565
     username: str = ""
     auth: str = "offline"
-    version: str = "auto"
+    version: str = "1.21.1"
     node: str = "node"
     backend_directory: str = ""
     login_config_file: str = ""
-    viewer_port: int = 7792
-    console_port: int = 7796
+    viewer_port: int = 0
+    console_port: int = 0
     external_viewer_url: str = ""
     min_decision_seconds: int = 10
     idle_decision_seconds: int = 60
-    context_chars: int = 24000
     max_tool_rounds: int = 6
     max_output_tokens: int = 1024
     model_timeout_seconds: int = 180
+    context_tokens: int = 32768
+    max_decisions: int = 100
 
     @classmethod
     def parse(cls, raw: dict) -> Settings:
@@ -78,23 +79,25 @@ class Settings:
         username = _text(server, "username")
         if len(username) > 254 or (username and auth == "offline" and not re.fullmatch(r"[A-Za-z0-9_]{1,16}", username)):
             raise ValueError("Invalid server.username for the selected authentication mode")
-        version = _text(server, "version", "auto")
-        if not re.fullmatch(r"auto|1\.\d{1,2}(?:\.\d{1,2})?", version):
-            raise ValueError("server.version must be auto or a Minecraft Java version")
+        version = _text(server, "version", "1.21.1")
+        if version != "1.21.1":
+            raise ValueError("server.version must be exactly 1.21.1 for this integration")
+        if _integer(viewer, "port", 0, 0, 65535) or _integer(viewer, "console_port", 0, 0, 65535):
+            raise ValueError("This headless build uses viewer.url; bundled viewer and console ports must be zero")
         minimum = _integer(autonomy, "min_decision_seconds", 10, 5, 300)
         return cls(
             enabled=_boolean(autonomy, "enabled", False), host=host,
             port=_integer(server, "port", 25565, 1, 65535), username=username, auth=auth, version=version,
             node=_text(backend, "node", "node"), backend_directory=_text(backend, "directory"),
             login_config_file=_text(server, "login_config_file"),
-            viewer_port=_integer(viewer, "port", 7792, 0, 65535),
-            console_port=_integer(viewer, "console_port", 7796, 0, 65535),
+            viewer_port=0, console_port=0,
             external_viewer_url=viewer_url(_text(viewer, "url")), min_decision_seconds=minimum,
             idle_decision_seconds=_integer(autonomy, "idle_decision_seconds", 60, minimum, 3600),
-            context_chars=_integer(autonomy, "context_chars", 24000, 8000, 120000),
             max_tool_rounds=_integer(autonomy, "max_tool_rounds", 6, 1, 12),
             max_output_tokens=_integer(autonomy, "max_output_tokens", 1024, 128, 4096),
             model_timeout_seconds=_integer(autonomy, "model_timeout_seconds", 180, 10, 300),
+            context_tokens=_integer(autonomy, "context_tokens", 32768, 4096, 262144),
+            max_decisions=_integer(autonomy, "max_decisions", 100, 1, 10000),
         )
 
     def require_server(self) -> None:
@@ -109,7 +112,7 @@ class Settings:
         return hashlib.sha256(text.encode()).hexdigest()[:24]
 
     def runtime_directory(self, cache: Path) -> Path:
-        return Path(self.backend_directory).expanduser().resolve() if self.backend_directory else cache / "agent-mc-world-0.3.0-next.2"
+        return Path(self.backend_directory).expanduser().resolve() if self.backend_directory else cache / "agent-mc-world-0.4.0-headless"
 
     def client_config(self, data: Path) -> dict:
         self.require_server()
@@ -122,6 +125,7 @@ class Settings:
                 "version": self.version, "profilesFolder": str(private / "auth"),
                 "loginConfigFile": str(Path(self.login_config_file).expanduser().resolve()) if self.login_config_file else "",
                 "viewerPort": self.viewer_port,
+                "performanceBridge": {"module": "", "endpoint": ""},
                 "local": {"startWithWorld": False, "serverDir": "", "cheats": False},
                 "client": {"enabled": False}, "player": {"enabled": False},
             },

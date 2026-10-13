@@ -1,2 +1,4 @@
 * text=auto eol=lf
 *.neko-plugin binary
+# Unified diffs need a single space for an empty context line.
+backend/patches/*.patch whitespace=-blank-at-eol

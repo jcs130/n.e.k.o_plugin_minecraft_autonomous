@@ -8,8 +8,6 @@ import json
 import os
 import shutil
 import subprocess
-import tempfile
-import urllib.request
 from pathlib import Path
 
 SOURCE_DIR = Path(__file__).resolve().parent
@@ -28,6 +26,19 @@ def verify_runtime(directory: Path) -> Path:
     package = json.loads(manifest.read_text(encoding="utf-8"))
     if (package.get("name"), package.get("version")) != (SOURCE["name"], SOURCE["version"]):
         raise ValueError("backend_version_mismatch: the installed client differs from backend/source.json.")
+    build = package.get("nekoBuild", {})
+    if (build.get("sourceRevision") != SOURCE["source_revision"] or build.get("profile") != "headless"
+            or build.get("patches") != SOURCE["patches"]):
+        raise ValueError("backend_build_mismatch: install the documented independent headless build.")
+    root = manifest.parent.resolve()
+    receipt = json.loads((root / "dist/neko-headless.json").read_text(encoding="utf-8"))
+    if (receipt.get("sourceRevision") != SOURCE["source_revision"] or receipt.get("bundledViewer") is not False
+            or receipt.get("patches") != SOURCE["patches"]):
+        raise ValueError("backend_build_mismatch: incorrect source or viewer profile.")
+    for item in receipt["files"]:
+        target = (root / item["file"]).resolve()
+        if not target.is_relative_to(root) or not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest() != item["sha256"]:
+            raise ValueError("backend_build_mismatch: a compiled file differs from its build receipt.")
     return entry
 
 
@@ -62,15 +73,7 @@ def prepare(directory: Path, archive: Path | None = None) -> Path:
         if archive.resolve() != target:
             shutil.copyfile(archive, target)
     elif not target.exists():
-        with tempfile.NamedTemporaryFile(dir=directory, delete=False) as temporary:
-            temporary_path = Path(temporary.name)
-        try:
-            with urllib.request.urlopen(SOURCE["url"], timeout=60) as response, temporary_path.open("wb") as output:
-                shutil.copyfileobj(response, output)
-            verify_archive(temporary_path)
-            temporary_path.replace(target)
-        finally:
-            temporary_path.unlink(missing_ok=True)
+        raise ValueError("backend_archive_required: build the pinned source and supply --archive; no upstream release is assumed.")
     verify_archive(target)
     for filename in ("package.json", "package-lock.json"):
         shutil.copyfile(SOURCE_DIR / filename, directory / filename)
@@ -86,6 +89,6 @@ def prepare(directory: Path, archive: Path | None = None) -> Path:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--destination", type=Path, required=True)
-    parser.add_argument("--archive", type=Path, help="Optional previously downloaded, hash-verified release archive")
+    parser.add_argument("--archive", type=Path, help="Hash-verified headless archive produced by backend/build.py")
     arguments = parser.parse_args()
     print(prepare(arguments.destination, arguments.archive))

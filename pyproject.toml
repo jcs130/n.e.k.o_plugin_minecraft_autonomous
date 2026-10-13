@@ -1,7 +1,7 @@
 [project]
 name = "minecraft_autonomous"
-version = "0.1.0"
-description = "N.E.K.O autonomous Minecraft plugin foundation; backend integration pending"
+version = "0.2.0"
+description = "N.E.K.O autonomous Minecraft 1.21.1 player with an independent execution core"
 requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"

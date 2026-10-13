@@ -2,9 +2,9 @@
   "name": "neko-minecraft-autonomous-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Pinned independent Minecraft execution client; no Cortico runtime",
+  "description": "Pinned standalone Minecraft execution plugin by jcs130",
   "engines": { "node": ">=22" },
   "dependencies": {
-    "agent-mc-world": "file:agent-mc-world-0.3.0-next.2.tgz"
+    "agent-mc-world": "file:agent-mc-world-0.4.0.tgz"
   }
 }

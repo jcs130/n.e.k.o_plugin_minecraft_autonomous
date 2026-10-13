@@ -1,7 +1,7 @@
 # Contributing
 
 当前增量在标准仓库上接入独立 Agent MC World；版本和来源见 `backend/source.json`。
-执行接口的离线验证与完整自治行为分别验收，接口差异见 `docs/research/neko-integration-architecture.md`。
+执行接口的离线验证与完整自治行为分别验收，接口差异见 `docs/research/agent-mc-world-04-integration.md`。
 
 ## 开发环境
 
@@ -42,11 +42,11 @@ uv run --project "$env:NEKO_ROOT" neko-plugin check --release --market-release .
 开发者显式安装固定后端后，可以独立验证 MCP 传输：
 
 ```powershell
-python backend/install.py --destination ./local/backend --archive /path/to/agent-mc-world-0.3.0-next.2.tgz
-python backend/check_disconnected.py --directory ./local/backend
+python backend/install.py --destination ./local/backend-04 --archive /path/to/agent-mc-world-0.4.0.tgz
+python backend/check_disconnected.py --directory ./local/backend-04
 ```
 
-安装器校验归档 SHA256，并通过 `npm ci --ignore-scripts --omit=dev` 装配依赖；
+安装器校验派生 headless 归档 SHA256 和编译文件清单，并通过 `npm ci --ignore-scripts --omit=dev` 装配依赖；
 第二条命令仅核实断开状态、工具发现及错误回执，不证明已登录或可自主游玩。
 
 普通源码推送只触发 Verify。后端未完成现场验收前，不创建发布 tag、不手动触发 Release、

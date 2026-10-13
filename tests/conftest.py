@@ -31,9 +31,19 @@ def run_async():
 
 
 @pytest.fixture
-def plugin_instance(monkeypatch, tmp_path, run_async):
+def plugin_module(monkeypatch):
+    module_name = "minecraft_autonomous_under_test"
+    spec = importlib.util.spec_from_file_location(module_name, ROOT / "__init__.py")
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, module_name, module)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture
+def plugin_instance(monkeypatch, tmp_path, run_async, plugin_module):
     def forbidden_io(*args, **kwargs):
-        raise AssertionError("The repository scaffold must not connect, launch processes, or send messages.")
+        raise AssertionError("Unit tests must not connect, launch processes, or send messages.")
 
     monkeypatch.setenv("NEKO_STORAGE_SELECTED_ROOT", str(tmp_path))
     monkeypatch.setattr(socket, "create_connection", forbidden_io)
@@ -41,12 +51,8 @@ def plugin_instance(monkeypatch, tmp_path, run_async):
     monkeypatch.setattr(socket.socket, "connect_ex", forbidden_io)
     monkeypatch.setattr(subprocess, "Popen", forbidden_io)
 
-    module_name = "minecraft_autonomous_under_test"
-    spec = importlib.util.spec_from_file_location(module_name, ROOT / "__init__.py")
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    monkeypatch.setitem(sys.modules, module_name, module)
-    spec.loader.exec_module(module)
+    async def get_own_config(**_):
+        return {}
 
     ctx = SimpleNamespace(
         plugin_id="minecraft_autonomous",
@@ -58,5 +64,6 @@ def plugin_instance(monkeypatch, tmp_path, run_async):
         models=None,
         push_message=forbidden_io,
         _effective_config={},
+        get_own_config=get_own_config,
     )
-    return module.MinecraftAutonomousPlugin(ctx)
+    return plugin_module.MinecraftAutonomousPlugin(ctx)

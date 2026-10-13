@@ -1,14 +1,19 @@
 {
-  "repository": "https://github.com/jcs130/cortico-world-qiandengji",
-  "inspected_revision": "084234b24f816562d6493da9d57fe9f11b0a7874",
-  "release_revision": "fb16e2d03e9f321a2c0a583de749c1fa9a0275d3",
+  "repository": "https://github.com/jcs130/minecraft-ai-friend",
+  "source_revision": "7889ce261a2309d94400b739c6198468d8271d83",
+  "source_path": "packages/agent-mc-world",
   "name": "agent-mc-world",
-  "version": "0.3.0-next.2",
-  "archive": "agent-mc-world-0.3.0-next.2.tgz",
-  "url": "https://github.com/jcs130/cortico-world-qiandengji/releases/download/v0.3.0-next.2/agent-mc-world-0.3.0-next.2.tgz",
-  "sha256": "761aca0745ffdda255fb254bf14ec8c51a9aec9ae7d20cf603e728ae3f9356bc",
-  "engine_revision": "8c00fbb022ea82fc9725301fde0437ccc00fdcc9",
-  "viewer_repository": "https://github.com/jcs130/mc-visual-console",
-  "viewer_revision": "6cd94b034f3064b74771464b192046b6d537f6f0",
-  "viewer_assets": "java-1.20.6"
+  "version": "0.4.0",
+  "archive": "agent-mc-world-0.4.0.tgz",
+  "sha256": "a4fcfabf5f5a6c9582f33bc8217eb8247dbf9f6a4abc6971605756a810e704c9",
+  "build_profile": "neko-headless",
+  "upstream_release": false,
+  "minecraft_version": "1.21.1",
+  "viewer_assets": null,
+  "patches": [
+    {
+      "file": "patches/0001-independent-minecraft-core.patch",
+      "sha256": "463500b9ebff81278114fd051052a912294922b82c9335f1ee0a2c3d90d42c16"
+    }
+  ]
 }

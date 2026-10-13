@@ -30,7 +30,7 @@ class MinecraftBridge:
 
     async def _serve(self) -> None:
         # MCP's AnyIO cancel scopes must be entered/exited by the same task.
-        current = None
+        pending: set[asyncio.Task] = set()
         try:
             from mcp import ClientSession, StdioServerParameters
             from mcp.client.stdio import stdio_client
@@ -42,16 +42,10 @@ class MinecraftBridge:
                     await session.initialize()
                     self.tools = [tool.model_dump(mode="json", exclude_none=True, by_alias=True) for tool in (await session.list_tools()).tools]
                     self._ready.set_result(None)
-                    while True:
-                        current = await self._queue.get()
-                        if current is None:
-                            break
-                        operation, arguments, future = current
-                        if future.cancelled():
-                            continue
+                    async def execute(operation, arguments, future):
                         try:
                             if operation == "tool":
-                                response = await session.call_tool(arguments[0], arguments[1])
+                                response = await session.call_tool(arguments[0], arguments[1], meta=arguments[2])
                             else:
                                 response = await session.read_resource(arguments[0])
                             if not future.done():
@@ -59,15 +53,37 @@ class MinecraftBridge:
                         except Exception as error:
                             if not future.done():
                                 future.set_exception(error)
-                        current = None
+                        finally:
+                            if not future.done():
+                                future.set_exception(RuntimeError("Minecraft request interrupted; delivery is uncertain"))
+
+                    try:
+                        while True:
+                            current = await self._queue.get()
+                            if current is None:
+                                break
+                            operation, arguments, future = current
+                            if future.cancelled():
+                                continue
+                            if len(pending) >= 16:
+                                future.set_exception(RuntimeError("Too many pending Minecraft requests"))
+                                continue
+                            task = asyncio.create_task(execute(operation, arguments, future))
+                            pending.add(task)
+                            task.add_done_callback(pending.discard)
+                            # Cancelling the waiter propagates MCP cancellation; a long
+                            # event wait cannot monopolize disconnect/cancel calls.
+                            future.add_done_callback(lambda done, task=task: task.cancel() if done.cancelled() else None)
+                    finally:
+                        for task in pending:
+                            task.cancel()
+                        await asyncio.gather(*pending, return_exceptions=True)
         except BaseException as error:
             self._error = RuntimeError(f"Minecraft transport closed ({type(error).__name__}); inspect private backend log")
             if self._ready and not self._ready.done():
                 self._ready.set_exception(self._error)
         finally:
             error = self._error or RuntimeError("Minecraft transport is stopped")
-            if current and not current[2].done():
-                current[2].set_exception(error)
             while not self._queue.empty():
                 item = self._queue.get_nowait()
                 if item and not item[2].done():
@@ -84,10 +100,12 @@ class MinecraftBridge:
             # Submission may already have reached the server. Never retry an action.
             raise RuntimeError("Minecraft request timed out; delivery is uncertain. Stop and inspect receipts before retrying.") from error
 
-    async def call(self, name: str, arguments: dict, *, timeout: float = 45) -> dict:
+    async def call(self, name: str, arguments: dict, *, timeout: float = 45,
+                   request_id: str | None = None, turn_id: str | None = None) -> dict:
         if name not in {tool["name"] for tool in self.tools}:
             raise ValueError("Unknown Minecraft tool; discover the actual tool catalogue first")
-        return await self._request("tool", name, arguments, timeout=timeout)
+        control = {key: value for key, value in (("requestId", request_id), ("turnId", turn_id)) if value is not None}
+        return await self._request("tool", name, arguments, {"agent-mc/v1": control} if control else None, timeout=timeout)
 
     async def resource(self, uri: str) -> dict:
         return await self._request("resource", uri)
@@ -120,3 +138,13 @@ def json_content(result: dict) -> dict:
     if not isinstance(value, dict):
         raise ValueError("Expected a structured Minecraft receipt")
     return value
+
+
+def outcome(result: dict) -> dict:
+    """Retain v1 control/execution/events; readable text need not be JSON."""
+    structured = result.get("structuredContent")
+    if isinstance(structured, dict):
+        if structured.get("protocol") != "agent-mc/v1":
+            raise ValueError("Unsupported Minecraft protocol receipt")
+        return {**structured, "failed": result.get("isError", False) or structured.get("failed", False)}
+    return {"text": text_content(result), "failed": result.get("isError", False), "control": None, "execution": None, "events": []}

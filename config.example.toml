@@ -2,7 +2,31 @@
 enabled = true
 auto_start = false
 
-# Reserved for the future backend. Setting this to true does not enable gameplay
-# in the repository scaffold; start still returns backend_not_integrated.
+# Enable only after installing the backend and binding the decision model.
+# Explicit start is always required, even when this is true.
 [autonomy]
 enabled = false
+min_decision_seconds = 10
+idle_decision_seconds = 60
+max_decisions = 100
+max_tool_rounds = 6
+context_tokens = 32768
+max_output_tokens = 1024
+model_timeout_seconds = 180
+
+[server]
+host = ""
+port = 25565
+username = ""
+auth = "offline" # Use microsoft for authenticated public servers.
+version = "1.21.1"
+login_config_file = "" # Optional private login configuration; never commit it.
+
+[backend]
+node = "node"
+directory = "" # Defaults to the plugin cache / agent-mc-world-0.4.0-headless.
+
+[viewer]
+url = "" # Optional existing viewer, e.g. https://viewer.example.org/dungeon/.
+port = 0
+console_port = 0

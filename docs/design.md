@@ -1,67 +1,50 @@
-# Minecraft Autonomous — repository scope
+# Minecraft Autonomous — architecture
 
-## Product goal
+## Current implementation
 
-Create a N.E.K.O plugin through which an AI player can autonomously play Minecraft:
-observe the world, choose goals, plan, execute actions, learn from results, and continue
-surviving without a human issuing every individual action. Human intervention can
-change goals, take over, or stop play. Commentary is optional output from gameplay.
+Version 0.2.0 uses the package-owned core from `minecraft-ai-friend@7889ce261a2309d94400b739c6198468d8271d83`,
+with a reviewed standalone cleanup patch. `backend/source.json` pins source, patch hashes, archive and the derived
+headless build profile. Runtime files and public declarations build without a framework checkout.
 
-## Current repository
+The N.E.K.O public SDK exposes explicit start/status/stop entries and the `decision` model usage. A single
+worker thread owns one asyncio loop, model client, MCP session and Minecraft child, across host entry loops.
+The model gateway supplies inference, not Main's persona/history, an autonomous scheduler or memory handoff.
 
-The official identity, inert SDK entry points, offline tests and Market workflows
-are established. Agent MC World 0.3.0-next.2 is pinned as the candidate game
-execution backend and migration baseline. An explicit installer, validated
-configuration and Python MCP transport have been prepared and exercised with
-networking denied. They are not yet
-connected to the plugin's start entry; the plugin continues to refuse gameplay.
-Source, disconnected transport verification and live gameplay are separate milestones.
-Its standalone entry needs no Cortico npm runtime, but the upstream build still
-extracts Cortico sources. Root exports/types, viewer speech discovery and host
-contract gaps must pass the decoupling checks before enabling the backend.
+`Controller` opens real decision turns, sends unique request/turn IDs, archives full tool receipts, acknowledges
+barriers and closes turns explicitly. Pending executions wake on terminal evidence or urgent events. Routine
+snapshots and polling do not replace useful long actions. Inference is cancellable; late results cannot dispatch
+after stop. Events arriving during inference remain queued for a later context. No tool results enter game chat
+except an intentional social action chosen within the user's goal.
 
-## Constraints
+Request construction keeps stable rules and curated schemas first, complete assistant/tool pairs next and
+replacement facts/events last. Long schema descriptions and advanced tools are discovered on demand.
+The backend still validates original schemas. Full originals remain in the archive, with bounded page reads.
+UTF-8 byte counting is conservative; real tokenizer/cache statistics have not been measured.
 
-- Plugin ID: `minecraft_autonomous`; entry class: `MinecraftAutonomousPlugin`.
-- Public GitHub repository: `jcs130/n.e.k.o_plugin_minecraft_autonomous`.
-- Python 3.11; use the public `plugin.sdk.plugin` facade.
-- Keep the official Verify/Release workflow templates intact.
-- Default `plugin_runtime.auto_start = false` and `autonomy.enabled = false`.
-- No game/model/voice processes, server connections, model requests, or automatic
-  recovery in this increment. Existing N.E.K.O services stay stopped.
-- Reuse Agent MC World and mc-visual-console without a Cortico runtime dependency.
-  The production core must also build and expose its public types without a
-  Cortico checkout. Host adapters depend on neutral contracts and the core;
-  the core must not depend on a host adapter or scan legacy speech services.
-  Do not bind the repository to the retired installation, account, GPU, credentials,
-  voice, or private server.
-- Record a structural scaffold as such. Passing package checks is not gameplay proof.
+## Ownership and recovery
 
-## Next functional increment
+- Startup is passive even when autonomy is enabled. An explicit start is required; an explicit stop is persisted.
+- One worker per plugin instance; core connection ownership also uses a per-account data-directory lease.
+- Server/account identity determines the ledger directory, not the backend version.
+- Journal the request before dispatch. Unknown delivery or pending state from an unclean exit blocks a fresh run.
+- Confirm generic-core disconnect before clearing pending executions; keep uncertain mutations blocked.
+- Numen disconnect has different semantics and must not reuse this cleanup assumption.
+- Model and game errors end the session; no automatic restart or replay loop.
+- Neither accepted actions nor terminal execution receipts imply that a user goal is complete.
 
-First complete the independent source/build boundary and define versioned neutral
-contracts for event scheduling, tool barriers, cancellation and turn boundaries.
-Preserve useful behavior verified in the user's fork through these contracts;
-do not copy Cortico Core, Persona, provider, Memory or deployment assumptions.
-The generic MCP interface currently drops some of the required metadata.
-Then implement one game controller with goal, current-fact and task ledgers;
-retain raw evidence with bounded query access and replace frequently changing facts
-at the request tail. Preserve useful long-running actions and explicit stop.
+## Compatibility and remaining acceptance
 
-N.E.K.O Main provides user goals and character communication. Its public plugin
-model gateway is an inference API, not Main's persona/history or an autonomous loop.
-The game controller requires an explicit character-task context and experience
-handoff. Speech playback must not be the clock for game actions.
+Minecraft Java protocol is fixed at 1.21.1; authentication uses Mineflayer's offline/Microsoft modes.
+No local server launcher, observer/player launcher, legacy speech discovery, provider key or GPU choice is added.
+Built-in viewer/console is disabled because upstream assets target 1.20.6. An external viewer URL is informational;
+real frame freshness and binding to this body's identity still require live verification.
 
-The [source comparison and proposed architecture](research/neko-integration-architecture.md)
-records these boundaries, the [Cortico host study](research/cortico-host-architecture.md)
-traces the scheduling contract, and the [Minecraft study](research/mineflayer-protocol-and-harness.md)
-covers protocol, remote-server and viewer behavior. Acceptance requires offline
-contract tests plus separately authorized gameplay compared with the existing
-Cortico setup; no equivalence is claimed yet.
+The optional My Agent World adapter in the same commit requires its native SDK/world-adapter closure and
+original body ledger. It is not wired into this generic plugin. See
+[the source evaluation and server-author handoff](research/agent-mc-world-04-integration.md).
+A vanilla protocol version string cannot satisfy a custom NeoForge handshake or native registry.
 
-The [fork delta and migration boundary](research/fork-improvements-and-decoupling-boundary.md)
-records which user changes belong in the execution core or host controller, and
-the [package audit](research/agent-mc-world-decoupling-audit.md) identifies remaining
-build, public-entry and optional-service coupling. Provenance and license notices
-remain intact; a source attribution is not an active runtime dependency.
+Before release, separately verify a configured server login, movement/collection/crafting, failures, explicit stop,
+connection loss, long-running survival and the chosen viewer's actual data/frames. Desktop speech, Main persona
+context and experience handoff require explicit public contracts, not imports of Cortico or private N.E.K.O APIs.
+Historical studies in `docs/research` describe the prior 0.3 baseline; the 0.4 evaluation supersedes those build gaps.
