@@ -97,6 +97,81 @@ def test_bounded_read_round_can_continue_without_unrelated_world_change(plugin_m
     assert len(controller.groups) == 1
 
 
+def test_native_scout_is_advertised_and_defaults_to_append(plugin_module, tmp_path, run_async):
+    async def decide(*_):
+        response = choose()
+        response["tool_calls"][0]["function"]["name"] = "mc_scout"
+        return response
+
+    module, bridge, controller = setup(plugin_module, tmp_path, decide)
+    bridge.tools.append({"name": "mc_scout", "inputSchema": {"type": "object"}})
+    original_call = bridge.call
+
+    async def call(name, args, **kwargs):
+        if name == "mc_scout":
+            bridge.calls.append((name, args, kwargs))
+            return {"structuredContent": bridge.result}
+        return await original_call(name, args, **kwargs)
+
+    bridge.call = call
+    tools = module.model_tools(bridge.tools)
+    assert any(tool["function"]["name"] == "mc_scout" for tool in tools)
+    run_async(controller.turn_once("observe the world", "prefix", tools))
+    submitted = next(args for name, args, _ in bridge.calls if name == "mc_scout")
+    assert submitted["queue"] == "append"
+    assert controller.pending[("task", "body-1")]["terminal"] is False
+    recorded = json.loads((tmp_path / "decisions.jsonl").read_text())
+    assert recorded["response"]["tool_calls"][0]["function"]["name"] == "mc_scout"
+
+
+def test_rejected_inference_keeps_body_and_latest_receipt_then_recovers(plugin_module, tmp_path, run_async):
+    planner = importlib.import_module(plugin_module.__name__ + ".autonomy.planner")
+    attempts = []
+
+    async def decide(messages, _):
+        attempts.append(messages)
+        if len(attempts) == 1:
+            raise planner.PlannerResponseError({"choice": {"finish_reason": "length", "message": choose()}})
+        assert "previous model response" in messages[-1]["content"]
+        assert "collect does not support at" in json.dumps(messages)
+        return choose()
+
+    module, bridge, controller = setup(plugin_module, tmp_path, decide)
+    controller.persist(stopped=False)
+    controller.groups = [[{"role": "assistant", "content": None, "tool_calls": choose()["tool_calls"]},
+                          {"role": "tool", "tool_call_id": "call-1", "content": "collect does not support at"}]]
+    tools = module.model_tools(bridge.tools)
+    run_async(controller.turn_once("survive", "prefix", tools))
+    assert controller.continuation_needed and controller.planner_failures == 1
+    assert controller.planner_retry_at > module.time.monotonic()
+    assert not bridge.closed and not any(name == "mc_do" for name, *_ in bridge.calls)
+    assert not json.loads(controller.state_path.read_text())["stopped"]
+    run_async(controller.turn_once("survive", "prefix", tools))
+    assert controller.planner_failures == 0 and controller.planner_notice is None
+    assert len([name for name, *_ in bridge.calls if name == "mc_do"]) == 1
+    records = [json.loads(line) for line in (tmp_path / "decisions.jsonl").read_text().splitlines()]
+    assert records[0]["dispatched"] is False and records[0]["rejected"]["choice"]["finish_reason"] == "length"
+    assert records[1]["response"] == choose()
+
+
+def test_incomplete_inference_recovery_is_bounded(plugin_module, tmp_path, run_async):
+    planner = importlib.import_module(plugin_module.__name__ + ".autonomy.planner")
+
+    async def decide(*_):
+        raise planner.PlannerResponseError({"choice": {"finish_reason": "length"}})
+
+    module, bridge, controller = setup(plugin_module, tmp_path, decide)
+    controller.persist(stopped=False)
+    tools = module.model_tools(bridge.tools)
+    for _ in range(2):
+        run_async(controller.turn_once("survive", "prefix", tools))
+    with pytest.raises(planner.PlannerResponseError):
+        run_async(controller.turn_once("survive", "prefix", tools))
+    assert controller.planner_failures == 3 and controller.inflight_request is None
+    assert not any(name == "mc_do" for name, *_ in bridge.calls)
+    assert [args["action"] for name, args, _ in bridge.calls if name == "mc_protocol"].count("end_turn") == 3
+
+
 def test_running_actions_do_not_cause_idle_or_snapshot_replanning(plugin_module, tmp_path, run_async, monkeypatch):
     decisions, polls, stopped = [], [], False
 
@@ -282,6 +357,32 @@ def test_context_tail_replaces_facts_and_budgets_all_fields(plugin_module):
     assert not json.loads(other[-1]["content"])["current_facts"]
     with pytest.raises(ValueError, match="context_budget_exceeded"):
         context.assemble("stable", tools * 5, "survive", facts, [], [], context_tokens=8000, reserved_output=1024)
+
+
+def test_standing_goal_report_is_rejected_without_stopping_or_writing_game(plugin_module, tmp_path, run_async):
+    module, bridge, controller = setup(plugin_module, tmp_path, None)
+    result, compact = run_async(controller.dispatch("goal_report", {
+        "outcome": "reported_done", "evidence": "I feel safe now"}, "report-standing"))
+    assert result["failed"] and result["execution"] is None
+    assert "standing goal continues" in compact
+    assert bridge.calls == [] and controller.inflight_request is None
+    assert not (tmp_path / "host-state.json").exists()
+
+
+def test_large_stable_prefix_keeps_latest_tool_error(plugin_module):
+    context = importlib.import_module(plugin_module.__name__ + ".autonomy.context")
+    prefix = "p" * 22000
+    latest = [{"role": "assistant", "content": None, "tool_calls": choose()["tool_calls"]},
+              {"role": "tool", "tool_call_id": "call-1", "content": "Invalid arguments: skills maxItems is 4"}]
+    _, base = context.assemble(prefix, [], "survive", {"parts": []}, [], [],
+                               context_tokens=32768, reserved_output=1024)
+    assert base["total"] > 32768 * 0.65
+    facts = {"parts": [{"key": "health", "text": "20", "original": "log:h"}]}
+    messages, budget = context.assemble(prefix, [], "survive", facts, [], [latest],
+                                       context_tokens=32768, reserved_output=1024)
+    assert messages[2:4] == latest
+    assert json.loads(messages[-1]["content"])["current_facts"] == facts["parts"]
+    assert budget["total"] <= 32768
 
 
 def test_worker_is_single_owner_and_cleans_up_before_stop_returns(plugin_module, tmp_path):

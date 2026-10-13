@@ -132,6 +132,28 @@ def test_http_adapter_is_explicit_no_retry_and_hides_error_body(plugin_module, r
     run_async(exercise())
 
 
+def test_truncated_response_is_rejected_before_partial_tool_dispatch(plugin_module, run_async):
+    planner_module, *_ = modules(plugin_module)
+    choice = {"finish_reason": "length", "message": choose()}
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        return httpx.Response(200, json={"choices": [choice]})
+
+    async def exercise():
+        config = planner_module.HttpPlannerConfig("http://model.test/v1", "chosen")
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+            planner = planner_module.HttpPlanner(config, 512, 30, client=client)
+            with pytest.raises(planner_module.PlannerResponseError) as caught:
+                await planner.decide([], [])
+            assert caught.value.diagnostic == {"choice": choice}
+            assert str(caught.value) == "brain_response_invalid_or_incomplete"
+        assert len(requests) == 1  # Recovery belongs to the event-aware controller.
+
+    run_async(exercise())
+
+
 @pytest.mark.parametrize("change", [{"base_url": "https://user:secret@model.test/v1"}, {"model": ""},
                                     {"base_url": "http://model.test/v1?key=secret"}, {"api_key": "secret"}])
 def test_provider_configuration_rejects_implicit_or_embedded_secrets(plugin_module, change):

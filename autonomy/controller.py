@@ -10,11 +10,12 @@ from pathlib import Path
 
 from .bridge import json_content, outcome, text_content
 from .context import assemble, encode
+from .planner import PlannerResponseError
 
 PROTOCOL = "agent-mc/v1"
 READ_PROTOCOL = {"task", "facts", "archive", "archive_runs"}
 HIDDEN_TOOLS = {"mc_connection", "mc_events", "mc_trace", "mc_metrics", "mc_visual"}
-DIRECT_TOOLS = {"mc_help", "mc_do", "mc_script", "mc_artifact", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape"}
+DIRECT_TOOLS = {"mc_help", "mc_do", "mc_scout", "mc_script", "mc_artifact", "mc_protocol", "mc_bag", "mc_queue", "mc_blocked", "mc_stop", "mc_escape"}
 
 
 def fact_fingerprint(facts):
@@ -129,6 +130,9 @@ class Controller:
         self.preempted = False
         self.deferred_wake = False
         self.continuation_needed = False
+        self.planner_failures = 0
+        self.planner_retry_at = 0.0
+        self.planner_notice = None
         self.state_path = data / "host-state.json"
 
     def persist(self, **changes):
@@ -237,6 +241,13 @@ class Controller:
             await asyncio.gather(task, return_exceptions=True)
 
     async def dispatch(self, name, arguments, request_id):
+        if name == "goal_report" and not self.active_goal:
+            # A report about the standing goal is a local planning error, not a
+            # failed game connection or an uncertain mutation. Preserve the reply
+            # so the next decision can correct it without disconnecting the body.
+            result = {"protocol": PROTOCOL, "failed": True, "execution": None,
+                      "text": "No submitted goal is active. The standing goal continues; goal_report cannot finish it. Choose useful next work, or reply without a tool call to wait for a change."}
+            return result, await self.archive_receipt(request_id, name, result)
         if name == "goal_report" and (not self.active_goal or self.current_work() or arguments.get("outcome") not in {"reported_done", "blocked"}
                 or not isinstance(arguments.get("evidence"), str) or not 1 <= len(arguments["evidence"]) <= 1200):
             raise ValueError("goal_report_requires_active_goal_no_pending_actions_and_evidence")
@@ -353,11 +364,32 @@ class Controller:
                 consumed = tuple(self.recent)
                 self.deferred_wake = False
                 messages, budget = assemble(prefix, tools, goal, facts, self.recent, self.groups,
-                                            context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens)
+                                            context_tokens=self.settings.context_tokens, reserved_output=self.settings.max_output_tokens,
+                                            planner_notice=self.planner_notice)
                 self.publish(context=budget)
-                response = await self.decide_with_events(messages, tools)
+                try:
+                    response = await self.decide_with_events(messages, tools)
+                except PlannerResponseError as error:
+                    with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
+                        output.write(encode({"turnId": self.turn, "rejected": error.diagnostic, "dispatched": False}) + "\n")
+                    self.planner_failures += 1
+                    self.planner_notice = "The previous model response was invalid or incomplete. No tool from it was dispatched. Return one concise, complete tool call or a short reply; split large plans into small batches."
+                    self.publish(planner_error=str(error), planner_failures=self.planner_failures)
+                    if self.planner_failures >= 3:
+                        raise
+                    self.planner_retry_at = time.monotonic() + min(60, self.settings.min_decision_seconds * 2 ** (self.planner_failures - 1))
+                    self.continuation_needed = True
+                    return
                 if self.stop_requested() or response is None:
                     return
+                self.planner_failures = 0
+                self.planner_retry_at = 0.0
+                self.planner_notice = None
+                self.publish(planner_error=None, planner_failures=0)
+                # Retain the exact model result before validation, including rejected
+                # calls. Runtime diagnostics must not require replaying a game action.
+                with (self.data / "decisions.jsonl").open("a", encoding="utf-8") as output:
+                    output.write(encode({"turnId": self.turn, "response": response}) + "\n")
                 # Events arriving during inference belong to the next request.
                 consumed_ids = {id(event) for event in consumed}
                 self.recent = [event for event in self.recent if id(event) not in consumed_ids]
@@ -463,7 +495,8 @@ class Controller:
                 if self.decide and not self.current_work() and elapsed >= self.settings.idle_decision_seconds:
                     # Poll state without a model request when nothing has changed.
                     wake |= fact_fingerprint(await self.protocol("facts")) != self.last_facts
-                if (self.decide and wake and (not self.current_work() or urgent) and elapsed >= self.settings.min_decision_seconds):
+                if (self.decide and wake and (not self.current_work() or urgent) and elapsed >= self.settings.min_decision_seconds
+                        and time.monotonic() >= self.planner_retry_at):
                     current_goal = ("Submitted goal: " + self.active_goal["goal"] if self.active_goal
                                     else "Standing goal: " + goal + "\nContinue this goal; goal_report is unavailable without a submitted goal.")
                     if self.feedback_pending:

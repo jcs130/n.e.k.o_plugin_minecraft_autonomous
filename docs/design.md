@@ -35,7 +35,7 @@ No fresh user message is required to continue the standing goal or an accepted s
 Native actions continue themselves; terminal receipts and relevant events wake the planner.
 Unchanged snapshots do not cause empty model requests. `max_decisions=0` removes the session's
 decision-count limit; request timeouts, context and per-turn rounds remain bounded. Explicit stop,
-connection/model errors and uncertain action outcomes still end the session.
+connection errors, exhausted model recovery and uncertain action outcomes still end the session.
 
 SQLite is a durable goal/command inbox with UUID deduplication and delivery receipts, not a second
 body queue. It holds up to 64 outstanding ordinary commands; stop remains admissible when full.
@@ -85,6 +85,14 @@ new natural-language goals require a planner; queue-only mode reports them as bl
 Requests keep stable rules and curated schemas first, complete assistant/tool pairs next and current
 facts/events last. Fresh facts replace old snapshots. Long schemas and originals remain queryable on
 demand. The byte budget is conservative; real tokenizer and prefix-cache hit rates have not been measured.
+Space reserved for fresh state is calculated after the fixed prefix. The latest complete tool exchange
+is retained if it fits, so a rejected call remains visible to the next decision. Incomplete HTTP model
+responses are privately journaled and never dispatched; the event loop permits two delayed recovery
+attempts, stopping after three consecutive failures. This does not retry uncertain native actions.
+
+The optional frontend exposes public LLM tools for bounded state/fact pages, natural-language intent
+and explicit stop. These tools use the existing command mailbox; they do not create another planning,
+speech or physical action loop. Automatic game-event narration still needs separate acceptance.
 
 The pinned core is `minecraft-ai-friend@7889ce261a2309d94400b739c6198468d8271d83`, with the reviewed
 standalone cleanup patch and headless receipt in `backend/source.json`. This change does not upgrade
@@ -108,4 +116,6 @@ disconnected MCP check starts only its network-denied child, without connect or 
 
 Before publishing, verify a configured server login, movement/collection/crafting, feedback during a long
 action, explicit stop, connection loss, long-running survival, Neko presentation and actual viewer binding.
-The user's previous stop remains in force; development checks do not constitute live-game acceptance.
+The old unattended stack remains stopped. The user subsequently authorized a separate vanilla test
+server and runtime; actual observations and remaining limits are recorded in the
+[dated live-acceptance report](vanilla-live-acceptance-2026-10-13.md).

@@ -12,11 +12,12 @@ from .autonomy.mailbox import Mailbox, observation
 from .autonomy.runner import run_session
 from .backend.install import verify_runtime
 from .neko_planner import NekoPlanner
+from .neko_tools import NekoAutonomyTools
 from .worker import Worker
 
 
 @neko_plugin
-class MinecraftAutonomousPlugin(NekoPluginBase):
+class MinecraftAutonomousPlugin(NekoAutonomyTools, NekoPluginBase):
     def __init__(self, ctx):
         super().__init__(ctx)
         self._control_lock = threading.RLock()

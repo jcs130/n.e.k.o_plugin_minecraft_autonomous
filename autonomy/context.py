@@ -6,7 +6,10 @@ RULES = """You are an autonomous Minecraft player. Pursue the user's goal throug
 Minecraft Java protocol is 1.21.1. Discover needed commands with mc_help; do not assume server mods or permissions.
 Tool schemas retain parameter constraints. Use mc_tool_help(name,path) for full descriptions and defaults.
 Advanced capabilities use mc_invoke(name,arguments) after reading that tool's schema; the backend validates it.
+Only call functions advertised in this request. Other tool names in core guides are capabilities to route through mc_invoke.
 Keep a useful running action. Acceptance, validation and terminal completion do not prove goal success.
+For ordinary vanilla crafting, prefer skill:craft with the exact item and count. Custom grids are for intentional
+recipes; read the resulting item and inventory rather than assuming that a completed grid made the desired item.
 mc_do/mc_scout default to queue:append, preserving all queued work. Use afterCheckpoint for a safe insertion;
 now explicitly interrupts current work. Do not replace the queue. Read mc_queue to narrate actual progress.
 For an active submitted goal, use goal_report only after native work ends. Include observed evidence or why blocked;
@@ -25,7 +28,7 @@ def encode(value) -> str:
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
-def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output):
+def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, reserved_output, planner_notice=None):
     """UTF-8 bytes are a conservative bound, not a model-specific tokenizer.
 
     Account for the entire messages/tools JSON plus an explicit framing reserve.
@@ -36,6 +39,8 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
     history = list(groups)
     tail = {"current_facts": [], "omitted_facts": [], "events": [],
             "originals": "mc_protocol(protocol=agent-mc/v1,action=facts/archive); mc_original(handle=original,offset=0,limit=1000)"}
+    if planner_notice:
+        tail["planner_notice"] = planner_notice
     if events:
         tail["recent_events_archive"] = {"run": events[0].get("run"), "after": max(0, events[0].get("cursor", 1) - 1)}
 
@@ -45,8 +50,17 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
     def cost():
         return len(encode({"messages": messages(), "tools": tools}).encode("utf-8")) + reserved_output + 1024
 
-    # Keep space for fresh state; retaining a full old transcript must not crowd it out.
-    while history and cost() > context_tokens * 0.65:
+    # Reserve fresh-state space from what remains after the fixed prefix, not from
+    # the entire context window. A large valid prefix must not evict every tool
+    # result, otherwise the planner repeats a rejected call without seeing why.
+    saved_history, history = history, []
+    base_cost = cost()
+    history = saved_history
+    fact_reserve = min(context_tokens * 0.35, max(0, (context_tokens - base_cost) // 2))
+    while len(history) > 1 and cost() > context_tokens - fact_reserve:
+        history.pop(0)
+    # Keep the latest complete exchange whenever it fits; facts can be paged.
+    while history and cost() > context_tokens:
         history.pop(0)
     if cost() > context_tokens:
         raise ValueError("context_budget_exceeded: stable rules, goal, tool schemas and output reserve do not fit")

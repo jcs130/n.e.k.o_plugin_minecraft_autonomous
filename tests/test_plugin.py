@@ -89,3 +89,40 @@ def test_natural_feedback_entry_does_not_call_model_game_or_voice(plugin_instanc
     assert run_async(plugin_instance.feedback(goal="别挖了，回家", mode="replace", request_id=request_id)) == result
     receipt = run_async(plugin_instance.task_receipt(request_id=request_id))
     assert receipt.value["command"]["delivery"] == "queued"
+
+
+def test_main_brain_intent_uses_same_mailbox_and_public_sdk(plugin_instance, run_async, monkeypatch, tmp_path):
+    import uuid
+
+    from plugin.sdk.plugin.llm_tool import collect_llm_tool_methods
+
+    async def config(**_):
+        return {"runtime": {"mode": "external", "data_directory": str(tmp_path / "runtime")},
+                "autonomy": {"enabled": True}, "server": {"host": "example.test", "username": "Alice"}}
+
+    monkeypatch.setattr(plugin_instance.config, "dump", config)
+    names = {meta.name for meta, _ in collect_llm_tool_methods(plugin_instance)}
+    assert names == {"minecraft_autonomy_status", "minecraft_autonomy_intent", "minecraft_autonomy_stop"}
+    request = str(uuid.uuid4())
+    response = run_async(plugin_instance.minecraft_autonomy_intent("collect wood", "insert", request))
+    assert response["delivery"] == "queued"
+    assert run_async(plugin_instance.minecraft_autonomy_intent("collect wood", "insert", request)) == response
+    snapshot = run_async(plugin_instance.minecraft_autonomy_status(request_id=request))
+    assert snapshot["phase"] == "not_observed"
+    assert snapshot["command"]["delivery"] == "queued"
+    assert snapshot["command"]["planner_report"]["verified"] is False
+    assert plugin_instance._worker is None
+
+
+def test_main_brain_status_pages_full_fact_without_repeating_it(plugin_instance, run_async, monkeypatch):
+    async def status(**_):
+        return Ok({"observation": {"phase": "running", "source": "last_observed_snapshot",
+                   "facts": {"parts": [{"key": "gear", "text": "木板" * 1400, "original": "log:gear"}]}}})
+
+    monkeypatch.setattr(plugin_instance, "status", status)
+    summary = run_async(plugin_instance.minecraft_autonomy_status())
+    assert len(summary["facts"][0]["text"]) == 240 and summary["facts"][0]["has_more"]
+    page = run_async(plugin_instance.minecraft_autonomy_status(fact_key="gear", offset=1200))
+    assert page["text"] == ("木板" * 1400)[1200:2400]
+    assert page["has_more"] and page["next_offset"] == 2400
+    assert page["source"] == "last_observed_snapshot"

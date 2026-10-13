@@ -15,6 +15,14 @@ class Planner(Protocol):
     async def aclose(self) -> None: ...
 
 
+class PlannerResponseError(ValueError):
+    """Rejected inference, before any tool from this response can be dispatched."""
+
+    def __init__(self, diagnostic):
+        super().__init__("brain_response_invalid_or_incomplete")
+        self.diagnostic = diagnostic
+
+
 def decision(message: dict) -> dict:
     """Reject malformed provider output before the controller can dispatch it."""
     if not isinstance(message, dict) or not isinstance(message.get("content"), (str, type(None))):
@@ -90,13 +98,16 @@ class HttpPlanner:
             raise RuntimeError(f"brain_http_error_{error.response.status_code}") from None
         except httpx.HTTPError:
             raise RuntimeError("brain_transport_error") from None
+        choice = None
         try:
             choice = response.json()["choices"][0]
             if not isinstance(choice, dict) or choice.get("finish_reason") not in {"stop", "tool_calls"}:
                 raise ValueError("brain_response_incomplete")
             return decision(choice["message"])
         except (ValueError, TypeError, KeyError, IndexError):
-            raise ValueError("brain_response_invalid_or_incomplete") from None
+            # Keep only model output, never request headers, prompts or HTTP error
+            # bodies. The controller journals this privately before bounded retry.
+            raise PlannerResponseError({"choice": choice}) from None
 
     async def aclose(self) -> None:
         await self.client.aclose()

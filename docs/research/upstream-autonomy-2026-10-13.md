@@ -71,6 +71,21 @@ flowchart LR
 
 独立 CLI 应能在完全未安装 N.E.K.O SDK 的环境中导入、检查配置、使用假模型和假游戏完成自主循环测试。正式连接和自主启动仍须显式启用；当前用户的停止状态继续有效。主脑变更不应隐式回退到另一个模型端点，也不应并行产生第二套游戏动作循环。
 
+## 2026-10-13 启动前复核
+
+通过远端 fetch 再次核对：main 已到 `d6f81cb7e7bfabf550186696e0143101a1cadaf2`，
+实验分支仍为 `7983039affd041e0d803f5764c514625e233279d`。main 相对上次 `7c0bdc5`
+新增有界坐标俯视捕获与标记锚点区分：`block` 使用方块中心，`position` 保留精确坐标。
+其作用范围是已加载场景的视觉捕获，不能据此声称未知区块或身体画面已绑定。
+本轮原版服实跑继续使用 `backend/source.json` 中已校验的 headless 核心；没有整体合入
+这些视觉更新。来源：[俯视捕获](https://github.com/jcs130/minecraft-ai-friend/commit/2c75921)、
+[锚点修正](https://github.com/jcs130/minecraft-ai-friend/commit/d6f81cb7e7bfabf550186696e0143101a1cadaf2)。
+
+14:16 再次 fetch 确认 main 为 `40eb7eea951e5569a68864feb8febfa48052c996`。
+相对 `d6f81cb` 的六文件差异增加 `attention.regions`（1–32 个任务区域）、明确的边界与
+对应 detail 视图，元数据升级为 `mc-overview/v3`。它仍是视觉捕获的独立更新，不改变当前
+已校验的执行核心 pin。来源：[区域与细节对齐](https://github.com/jcs130/minecraft-ai-friend/commit/40eb7eea951e5569a68864feb8febfa48052c996)。
+
 ## 可直接转发给上游的文本
 
 ```text
