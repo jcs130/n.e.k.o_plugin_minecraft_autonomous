@@ -2,7 +2,7 @@
 
 import json
 
-from .observations import spatial_text
+from .observations import fact_preview, spatial_text
 
 RULES = """You are an autonomous Minecraft player. Pursue the user's goal through observed world changes.
 Minecraft Java protocol is 1.21.1. Discover needed commands with mc_help; do not assume server mods or permissions.
@@ -48,8 +48,6 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
         tail["planner_notice"] = planner_notice
     if fast_focus:
         tail["fast_focus"] = fast_focus
-    if tool_failure:
-        tail["tool_failure"] = tool_failure
     if events:
         tail["recent_events_archive"] = {"run": events[0].get("run"), "after": max(0, events[0].get("cursor", 1) - 1)}
 
@@ -63,11 +61,37 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
     # the entire context window. A large valid prefix must not evict every tool
     # result, otherwise the planner repeats a rejected call without seeing why.
     saved_history, history = history, []
+    stable_cost = cost()
+    if tool_failure:
+        # Failure diagnostics are dynamic evidence, not part of the immutable
+        # prompt. A rejected large plan must not make the next request unbuildable.
+        allowance = min(1200, max(0, (context_tokens - stable_cost) // 4))
+        tail["tool_failure"] = tool_failure
+        if cost() - stable_cost > allowance:
+            tail["tool_failure"] = {key: tool_failure[key] for key in ("tool", "error", "next_step") if key in tool_failure}
+            tail["tool_failure"]["abridged"] = True
+        while cost() - stable_cost > allowance and allowance >= 300:
+            text = encode(tail["tool_failure"])
+            tail["tool_failure"] = fact_preview(text, max(100, len(text.encode("utf-8")) // 2))
+        if cost() - stable_cost > allowance:
+            tail["tool_failure"] = "Previous call failed; consult its receipt and tool documentation before acting."
+            if cost() > context_tokens:
+                del tail["tool_failure"]
     base_cost = cost()
     history = saved_history
     fact_reserve = min(context_tokens * 0.35, max(0, (context_tokens - base_cost) // 2))
+    has_terminal_fact = any(p.get("key") == "lastTask" and p.get("text") for p in facts.get("parts", []))
+    if has_terminal_fact:
+        fact_reserve = min(context_tokens * 0.35, max(0, (context_tokens - base_cost) * 0.8))
     while len(history) > 1 and cost() > context_tokens - fact_reserve:
         history.pop(0)
+    if history and has_terminal_fact and cost() > context_tokens - fact_reserve:
+        calls = history[-1][0].get("tool_calls") or []
+        if calls and all(call.get("function", {}).get("name") == "mc_scout" for call in calls):
+            # A queued scout's terminal fact can replace its old acceptance.
+            # Synchronous bag/queue results are current evidence, not acceptances;
+            # dropping them would give the planner the same request repeatedly.
+            history.clear()
     # Keep the latest complete exchange whenever it fits; facts can be paged.
     while history and cost() > context_tokens:
         history.pop(0)
@@ -80,6 +104,13 @@ def assemble(prefix, tools, goal, facts, events, groups, *, context_tokens, rese
         if key == "lastTask":
             fact = {**fact, "text": spatial_text(fact.get("text", ""))}
         tail["current_facts"].append(fact)
+        if cost() > context_tokens and key == "lastTask" and fact.get("original"):
+            # Completed scout results are often the only new world evidence.
+            # Never silently omit them and leave only the old acceptance message.
+            excess = cost() - context_tokens
+            allowance = min(2400, len(fact.get("text", "").encode("utf-8")) - excess - 80)
+            if allowance >= 700:
+                tail["current_facts"][-1] = {**fact, "text": fact_preview(fact["text"], allowance), "abridged": True}
         if cost() > context_tokens:
             tail["current_facts"].pop()
             tail["omitted_facts"].append({"key": key, "original": fact.get("original")})

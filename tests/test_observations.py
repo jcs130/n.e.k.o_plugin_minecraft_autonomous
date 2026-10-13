@@ -38,3 +38,57 @@ def test_malformed_or_differently_ordered_observation_is_preserved(plugin_module
     for text in ('{"source":"client-loaded-world","kind":"voxels"',
                  '{"source":"client-loaded-world","kind":"voxels","order":"unknown"}'):
         assert module.spatial_text(text) == text
+
+
+def test_large_terminal_task_remains_visible_when_full_result_does_not_fit(plugin_module):
+    context = importlib.import_module(plugin_module.__name__ + ".autonomy.context")
+    _, base = context.assemble("stable", [], "survive", {"parts": []}, [], [], context_tokens=32768, reserved_output=1024)
+    text = "[最近一单] completed\n" + "观测几何" * 5000 + "\ncoal_ore at (-4,63,12)"
+    facts = {"parts": [{"key": "lastTask", "text": text, "original": "log:terminal"}]}
+    messages, budget = context.assemble("stable", [], "survive", facts, [], [], context_tokens=base["total"] + 2600, reserved_output=1024)
+    task = json.loads(messages[-1]["content"])["current_facts"][0]
+    assert task["abridged"] and task["original"] == "log:terminal"
+    assert "completed" in task["text"] and "coal_ore at (-4,63,12)" in task["text"]
+    assert "abridged" in task["text"] and budget["total"] <= base["total"] + 2600
+
+
+def test_large_validation_failure_cannot_overflow_an_otherwise_valid_context(plugin_module):
+    context = importlib.import_module(plugin_module.__name__ + ".autonomy.context")
+    failure = {"tool": "mc_do", "error": "voxel request exceeds 512 cells: " + "参数" * 2000,
+               "arguments": "steps" * 1000, "next_step": "Use a smaller observed area", "parameter_help": {"x": "x" * 8000}}
+    facts = {"parts": [{"key": "body", "text": "health 10/20", "original": "log:h"}]}
+    messages, budget = context.assemble("p" * 25000, [], "survive", facts, [], [],
+                                      context_tokens=32768, reserved_output=2048, tool_failure=failure)
+    tail = json.loads(messages[-1]["content"])
+    assert tail["tool_failure"] and tail["current_facts"] == facts["parts"]
+    assert budget["total"] <= 32768
+    assert len(failure["arguments"]) == 5000
+
+
+def test_completed_observation_takes_priority_over_old_read_acceptance(plugin_module):
+    context = importlib.import_module(plugin_module.__name__ + ".autonomy.context")
+    history = [[{"role": "assistant", "content": None, "tool_calls": [{"id": "q", "type": "function",
+        "function": {"name": "mc_scout", "arguments": "{}"}}]},
+        {"role": "tool", "tool_call_id": "q", "content": "accepted " + "x" * 1600}]]
+    facts = {"parts": [{"key": "body", "text": "healthy", "original": "log:health"},
+                       {"key": "lastTask", "text": "completed: " + "rays " * 350 + "oak_log at 4,64,9", "original": "log:rays"}]}
+    _, base = context.assemble("stable", [], "survive", {"parts": []}, [], [], context_tokens=32768, reserved_output=1024)
+    messages, budget = context.assemble("stable", [], "survive", facts, [], history,
+                                       context_tokens=base["total"] + 2700, reserved_output=1024)
+    assert len(messages) == 3 and len(history[0]) == 2
+    assert "oak_log at 4,64,9" in messages[-1]["content"]
+    assert budget["total"] <= base["total"] + 2700
+
+
+def test_current_inventory_receipt_is_not_replaced_by_an_older_scout_fact(plugin_module):
+    context = importlib.import_module(plugin_module.__name__ + ".autonomy.context")
+    receipt = "CURRENT INVENTORY: wooden_pickaxe x1, stick x6 " + "inventory " * 40
+    history = [[{"role": "assistant", "content": None, "tool_calls": [{"id": "bag", "type": "function",
+        "function": {"name": "mc_bag", "arguments": "{}"}}]},
+        {"role": "tool", "tool_call_id": "bag", "content": receipt}]]
+    facts = {"parts": [{"key": "lastTask", "text": "older scout completed " + "geometry " * 300, "original": "log:old-scout"}]}
+    _, base = context.assemble("stable", [], "survive", {"parts": []}, [], [], context_tokens=32768, reserved_output=1024)
+    messages, budget = context.assemble("stable", [], "survive", facts, [], history,
+                                       context_tokens=base["total"] + 2700, reserved_output=1024)
+    assert any(message.get("role") == "tool" and message.get("content") == receipt for message in messages)
+    assert budget["total"] <= base["total"] + 2700

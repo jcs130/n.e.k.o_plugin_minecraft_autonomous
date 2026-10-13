@@ -349,7 +349,7 @@ def test_progressive_tool_docs_preserve_constraints(plugin_module):
     tool = module.model_tools([original])[0]["function"]
     assert tool["parameters"]["required"] == ["steps"]
     assert tool["parameters"]["properties"]["steps"] == {"type": "array", "minItems": 1}
-    assert tool["parameters"]["properties"]["description"] == {"type": "string"}
+    assert tool["parameters"]["properties"]["description"] == {"type": "string", "description": "This is a real parameter"}
     details = module.tool_help([original], {"name": "mc_do", "path": "/inputSchema/properties/steps"})
     assert json.loads(details["text"]) == original["inputSchema"]["properties"]["steps"]
     assert original["description"] == "长说明" * 800
@@ -368,6 +368,45 @@ def test_compact_schema_keeps_coordinate_semantics_without_long_manuals(plugin_m
     step = compact["properties"]["steps"]
     assert "description" not in step
     assert step["items"]["oneOf"][0]["properties"] == {"bounds": bounds, "rays": rays}
+
+
+def test_action_and_observation_tools_keep_distinct_semantics(plugin_module):
+    module = importlib.import_module(plugin_module.__name__ + ".autonomy.controller")
+    props = {"skill": {"type": "string", "enum": ["probe", "observe"]},
+             "block": {"type": "string", "description": "用于 collect"}}
+    catalog = [{"name": name, "inputSchema": {"properties": {"steps": {"items": {"properties": props}}}}} for name in ["mc_do", "mc_scout"]]
+    tools = {t["function"]["name"]: t["function"] for t in module.model_tools(catalog)}
+    assert "Execute real" in tools["mc_do"]["description"]
+    assert "Read-only" in tools["mc_scout"]["description"]
+    assert tools["mc_scout"]["parameters"]["properties"]["queue"] == {"enum": ["append", "afterCheckpoint", "now"]}
+    assert tools["mc_do"]["parameters"]["properties"]["steps"]["items"]["properties"]["block"] == props["block"]
+    failure = module.failure_context(catalog, "mc_scout", {"steps": [{"skill": "craft"}, {"skill": "collect"}]}, {"text": "Invalid arguments"})
+    assert "collect, craft belongs to mc_do" in failure["next_step"]
+
+
+def test_forbidden_queue_policy_is_rejected_locally_then_planner_can_correct(plugin_module, tmp_path, run_async):
+    seen = []
+
+    async def decide(messages, _):
+        seen.append(messages)
+        response = choose()
+        if len(seen) == 1:
+            response["tool_calls"][0]["function"] = {"name": "mc_scout", "arguments": '{"steps":[],"queue":"replace"}'}
+        else:
+            assert "queue" in messages[-1]["content"] and "append" in messages[-1]["content"]
+        return response
+
+    module, bridge, controller = setup(plugin_module, tmp_path, decide)
+    bridge.tools.append({"name": "mc_scout", "inputSchema": {"type": "object"}})
+    controller.persist(stopped=False)
+    run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
+    assert not any(name == "mc_scout" for name, _, _ in bridge.calls)
+    actual = [(name, args) for name, args, _ in bridge.calls if name == "mc_do"]
+    assert actual == [("mc_do", {"steps": [], "queue": "append"})]
+    records = [json.loads(line) for line in (tmp_path / "receipts.jsonl").read_text().splitlines()]
+    assert records[0]["result"]["failed"] and records[0]["result"]["origin"] == "controller_validation"
+    assert records[0]["result"]["execution"] is None
+    assert controller.pending[("task", "body-1")]["terminal"] is False
 
 
 def test_advanced_router_cannot_invoke_host_connection(plugin_module, tmp_path, run_async):
@@ -487,6 +526,19 @@ def test_large_stable_prefix_keeps_latest_tool_error(plugin_module):
     assert messages[2:4] == latest
     assert json.loads(messages[-1]["content"])["current_facts"] == facts["parts"]
     assert budget["total"] <= 32768
+
+
+def test_repeated_rejection_restores_exact_error_after_an_unrelated_success(plugin_module, tmp_path, run_async):
+    async def decide(*_):
+        return choose()
+    module, bridge, controller = setup(plugin_module, tmp_path, decide)
+    args = {"steps": [], "queue": "append"}
+    original = {"tool": "mc_do", "error": "voxels volume 2890 exceeds 512 cells"}
+    controller.rejected_calls[json.dumps(["mc_do", args], sort_keys=True, ensure_ascii=False)] = original
+    run_async(controller.turn_once("survive", "prefix", module.model_tools(bridge.tools)))
+    assert controller.tool_failure == original
+    assert not any(name == "mc_do" for name, _, _ in bridge.calls)
+    assert controller.continuation_needed
 
 
 def test_worker_is_single_owner_and_cleans_up_before_stop_returns(plugin_module, tmp_path):

@@ -39,16 +39,18 @@ def spatial_summary(value):
         result["entities"] = value.get("entities", [])[:6]
     elif value.get("kind") == "rays" and isinstance(value.get("rays"), list):
         result["rays"] = []
-        for ray in value["rays"][:12]:
+        for ray in value["rays"][:4]:
             terrain = ray.get("terrain") or {}
             item = {k: ray[k] for k in ("pitchDeg", "yawDeg", "range", "first") if k in ray}
             item["terrain"] = {k: terrain[k] for k in ("kind", "cell", "distance") if k in terrain}
             if terrain.get("material"):
                 item["terrain"]["name"] = terrain["material"].get("name")
             if ray.get("entity"):
-                item["entity"] = ray["entity"]
+                hit = ray["entity"]
+                entity = hit.get("entity", {})
+                item["entity"] = {"id": entity.get("id"), "name": entity.get("name"), "distance": hit.get("distance")}
             result["rays"].append(item)
-        result["rays_omitted"] = max(0, len(value["rays"]) - 12)
+        result["rays_omitted"] = max(0, len(value["rays"]) - 4)
     else:
         return None
     return result
@@ -70,3 +72,16 @@ def spatial_text(text):
             cursor = match.start() + length
     output.append(text[cursor:])
     return "".join(output)
+
+
+def fact_preview(text, byte_limit):
+    """Keep both ends of a large fact; its original handle remains authoritative."""
+    raw = text.encode("utf-8")
+    if len(raw) <= byte_limit:
+        return text
+    marker = "\n[abridged; query this fact's original for full evidence]\n"
+    remaining = byte_limit - len(marker.encode("utf-8"))
+    if remaining <= 0:
+        return ""
+    head = remaining // 3
+    return raw[:head].decode("utf-8", errors="ignore") + marker + raw[-(remaining - head):].decode("utf-8", errors="ignore")

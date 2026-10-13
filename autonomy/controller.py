@@ -41,7 +41,7 @@ def model_tools(catalogue):
             for key, item in value.items():
                 # Short parameter semantics (units, coordinate order, volume
                 # limits) are needed to use a schema, not optional long manuals.
-                if key == "description" and isinstance(item, str) and len(item) <= 240 and numeric_field(value):
+                if key == "description" and isinstance(item, str) and len(item) <= 240 and (numeric_field(value) or len(item) <= 120):
                     result[key] = item
                     continue
                 if key in {"description", "title", "examples", "$comment", "default"}:
@@ -62,9 +62,14 @@ def model_tools(catalogue):
         schema = structural(tool["inputSchema"])
         if tool["name"] == "mc_protocol":
             schema["properties"]["action"] = {"enum": sorted(READ_PROTOCOL)}
-        if tool["name"] == "mc_do":
+        if tool["name"] in {"mc_do", "mc_scout"}:
             schema.setdefault("properties", {})["queue"] = {"enum": ["append", "afterCheckpoint", "now"]}
-        tools.append({"type": "function", "function": {"name": tool["name"], "description": tool.get("description", "")[:450], "parameters": schema}})
+        description = tool.get("description", "")[:450]
+        if tool["name"] == "mc_do":
+            description = "Execute real Minecraft actions: movement, collect, craft, eat, attack, build, etc. Steps run in order on the native body queue. Use mc_help for the selected skill's parameters. Default queue is append; afterCheckpoint inserts safely, now interrupts. A returned task ID means accepted, not completed."
+        elif tool["name"] == "mc_scout":
+            description = "Read-only observations or dry-run trials. Only the skills in steps.skill.enum are allowed. Does not collect, craft, eat, move the player or build anything. Use mc_do for real actions."
+        tools.append({"type": "function", "function": {"name": tool["name"], "description": description, "parameters": schema}})
     if advanced:
         tools.append({"type": "function", "function": {"name": "mc_invoke",
                       "description": "Invoke an advanced Minecraft tool. First read its exact schema using mc_tool_help. The backend validates all arguments and returns the original execution receipt.",
@@ -139,8 +144,11 @@ def failure_context(catalogue, name, arguments, result):
     notice = {"tool": name, "arguments": encode(arguments)[:1200], "error": str(result.get("text", ""))[:700],
               "next_step": "Do not repeat rejected arguments. Read mc_help for the selected skill and mc_tool_help for the tool schema; then correct the call or choose another useful action.",
               "parameter_help": {}, "original_receipts": "receipts.jsonl"}
-    if name == "mc_scout" and isinstance(steps, list) and any(isinstance(step, dict) and step.get("skill") == "find" for step in steps):
-        notice["next_step"] += " find belongs to mc_do, not mc_scout."
+    if name == "mc_scout" and isinstance(steps, list):
+        allowed = properties.get("steps", {}).get("items", {}).get("properties", {}).get("skill", {}).get("enum", [])
+        rejected = sorted({step["skill"] for step in steps if isinstance(step, dict) and isinstance(step.get("skill"), str) and step["skill"] not in allowed})
+        if rejected:
+            notice["next_step"] += " " + ", ".join(rejected) + " belongs to mc_do, not mc_scout. Use mc_do with the documented skill fields for real actions."
     if isinstance(steps, list) and any(isinstance(step, dict) and step.get("skill") == "observe" and step.get("mode") == "voxels" for step in steps):
         notice["next_step"] += " For voxels, omit bounds for the native default or use a small relative box such as [-2,-1,-2,2,3,2] (125 cells). Do not read the entire neighborhood to perform a simple known action."
     for key, spec in fields:
@@ -182,7 +190,7 @@ class Controller:
         self.planner_retry_at = 0.0
         self.planner_notice = None
         self.tool_failure = None
-        self.rejected_calls = set()
+        self.rejected_calls = {}
         self.state_path = data / "host-state.json"
         self.fast_policy = fast_policy or FastPolicy(settings.fast)
         self.frame = None
@@ -509,25 +517,33 @@ class Controller:
                     tags = next((t.get("_meta", {}).get(PROTOCOL, {}).get("tags", []) for t in self.bridge.tools if t["name"] == name), [])
                     if name != "mc_do" and {"act", "write", "speak"}.intersection(tags):
                         raise ValueError("Pending feedback must submit its body plan through mc_do")
+                queue_error = None
                 if name in {"mc_do", "mc_scout"}:
                     if arguments.get("queue", "append") not in {"append", "afterCheckpoint", "now"}:
-                        raise ValueError("Queue replacement is not available in the autonomous controller")
-                    arguments = {**arguments, "queue": arguments.get("queue", "append")}
-                    if name == "mc_do" and self.active_goal and self.active_goal.get("mode") == "insert":
-                        arguments["queue"] = "afterCheckpoint"
-                    elif name == "mc_do" and self.feedback_pending:
-                        arguments["queue"] = "append"
+                        queue_error = {"failed": True, "execution": None, "origin": "controller_validation",
+                            "text": "Invalid arguments: queue must be append, afterCheckpoint or now. Replacement is unavailable; no Minecraft action was dispatched. Correct the policy explicitly."}
+                    else:
+                        arguments = {**arguments, "queue": arguments.get("queue", "append")}
+                        if name == "mc_do" and self.active_goal and self.active_goal.get("mode") == "insert":
+                            arguments["queue"] = "afterCheckpoint"
+                        elif name == "mc_do" and self.feedback_pending:
+                            arguments["queue"] = "append"
                 request_id = str(uuid.uuid4())
                 rejected_key = json.dumps([name, arguments], sort_keys=True, ensure_ascii=False)
                 if rejected_key in self.rejected_calls:
                     # Only known pre-dispatch schema rejections enter this set.
                     # No action is replayed or silently rewritten on the user's behalf.
                     self.planner_notice = "The exact same call already failed argument validation. It was NOT dispatched again. Consult mc_help/mc_tool_help and change the invalid parameters."
+                    self.tool_failure = self.rejected_calls[rejected_key]
                     self.planner_retry_at = time.monotonic() + max(30, self.settings.min_decision_seconds)
                     self.continuation_needed = True
                     self.publish(planner_error="repeated_invalid_tool_call", rejected_tool=name)
                     return
-                result, compact = await self.dispatch(name, arguments, request_id)
+                if queue_error:
+                    result = queue_error
+                    compact = await self.archive_receipt(request_id, name, result)
+                else:
+                    result, compact = await self.dispatch(name, arguments, request_id)
                 if result.get("failed"):
                     self.tool_failure = failure_context(self.bridge.tools, name, arguments, result)
                     failure = str(result.get("text", ""))
@@ -537,7 +553,7 @@ class Controller:
                     if not result.get("execution") and (failure.startswith("Invalid arguments:") or parse_rejected):
                         if len(self.rejected_calls) >= 16:
                             self.rejected_calls.clear()
-                        self.rejected_calls.add(rejected_key)
+                        self.rejected_calls[rejected_key] = self.tool_failure
                 elif result.get("execution"):
                     self.tool_failure = None
                 self.groups.append([{"role": "assistant", "content": response.get("content"), "tool_calls": calls},
