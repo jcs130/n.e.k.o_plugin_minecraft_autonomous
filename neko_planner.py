@@ -3,12 +3,11 @@
 import json
 import time
 
+from agent_mc_autonomy.fast import CRITERIA, QUESTION
+from agent_mc_autonomy.perception import has_images, text_only
+from agent_mc_autonomy.planner import PlannerResponseError, decision
 from openai import APIConnectionError, APIStatusError
 from plugin.sdk.plugin import TransportError
-
-from .autonomy.fast import CRITERIA, QUESTION
-from .autonomy.perception import has_images, text_only
-from .autonomy.planner import PlannerResponseError, decision
 
 
 def error_code(error):

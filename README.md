@@ -1,9 +1,9 @@
 # Minecraft Autonomous · 我的世界自主生存
 
-Minecraft 自主框架，以及面向 [N.E.K.O](https://github.com/Project-N-E-K-O/N.E.K.O) 的接入插件。
+Minecraft 自主框架的薄适配插件，面向 [N.E.K.O](https://github.com/Project-N-E-K-O/N.E.K.O) 的接入插件。
 Neko 提供高层目标、策略、角色演出与语音；独立框架细化规划并驱动原生执行队列。
 没有用户新消息时继续推进目标；新反馈可以在检查点插入，或明确替换当前行为。
-框架有独立入口，不安装、不启动 Neko 也能运行。
+完整框架已归入 [minecraft-ai-friend/packages/agent-mc-autonomy](https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-autonomy)，不安装、不启动 Neko 也能运行。本插件按固定提交依赖它；不再保存控制器、调度器或上下文策略的副本。
 可配置其他人的兼容服务器，不要求在本机开服。
 Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minecraft-ai-friend` 项目。
 
@@ -17,8 +17,9 @@ Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minec
 | SDK 入口 | `plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin` |
 | 环境 | Python 3.11+；Node 22+；N.E.K.O 为可选前端 |
 | 游戏协议 | **Java 1.21.1（767）**，拒绝 `auto` 和其他版本 |
+| 自主框架 | `agent-mc-autonomy`，固定来源 `minecraft-ai-friend@8a4597d` |
 | 执行核心 | `agent-mc-world@0.4.0`，来源提交 `7889ce261a2309d94400b739c6198468d8271d83` |
-| 构建 | 固定源码 + 本仓库的解耦补丁，派生的 `neko-headless` |
+| 构建 | 固定源码 + 主框架维护的兼容构建补丁，派生的 `neko-headless` |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT，归档保留其许可证和来源 |
 
 ## 架构与版本选择
@@ -38,7 +39,7 @@ Neko 主脑、低层规划模型和 Minecraft 执行器是三个职责。Neko �
 SQLite 只保存目标和跨进程指令投递、去重及回执；正在执行哪一步、待执行动作和抢占规则
 以 **原生 `mc_queue` / `mc_do` / task 事件**为准，不再复制一个身体执行器。
 
-本次上游核对至主分支 `6a1612f`，新增实际照片留存、登录就绪与实时读数等修复；
+本次上游核对至主分支 `034bf38`，新增实际照片留存、登录就绪与实时读数等修复；
 实验分支 `7983039` 的有限模型试玩宿主仍绑定具体服务器和模型。本次保留已验证的 headless 核心，
 结论和可转发给上游的文本见 [上游更新核查](docs/research/upstream-autonomy-2026-10-13.md)。
 
@@ -49,7 +50,7 @@ SQLite 只保存目标和跨进程指令投递、去重及回执；正在执行�
 密钥只填写环境变量名 `api_key_env`，不写进配置。独立模式只需要 Python 依赖，不需要 Neko SDK：
 
 ```powershell
-python -m pip install 'mcp==2.1.1' 'httpx>=0.27,<1'
+python -m pip install .  # 安装包含固定版本自主框架的声明依赖
 python standalone.py check --config config.local.toml
 # 自行配置 autonomy.enabled=true 后才可显式启动。
 python standalone.py run --config config.local.toml --goal '自主生存，合理收集资源并维护安全住所'
@@ -67,7 +68,21 @@ Neko 可读取 `status` 的原生队列、事实、当前目标和采样时间�
 不另建语音模型循环，也不会把工具结果发到游戏公屏。现场已收到官方线上语音的音频交付、
 桌面开始播放和结束播放回执。
 
-在配置页开启 `presentation.enabled` 后，每 10 秒只读一次快照，生命、物品或目标等有变化时
+在配置页开启 `heartbeat.enabled`，让 **Neko 主脑持续参与自主生存**。框架根据运行状态生成复盘，插件每 10 秒转交待处理请求；
+身体、物品、口粮、任务结果或目标有变化时合并唤醒（默认最短 60 秒），
+没有新聊天或新变化时默认 180 秒复核。消息带上当下有用事实和本次 review ID，
+详细证据含当前目标、队列、最近任务结果与物资状态持续时间；不会反复拼接完整日志。
+主脑调用 `minecraft_autonomy_review` 明确选择继续当前工作或安全插入一个阶段目标，
+再简短解说打算。`inspect` 可以补读本轮证据，完整事实仍可分页查询。
+独立规划器继续掌管细化回合、动作屏障和原生执行，正常长动作不因心跳被取消。
+
+心跳默认关闭，仅作用于已经显式开始的游戏，`heartbeat.target` 指定角色。
+停止、过期观测和旧会话不能派单；新用户意图使旧 review 失效。
+未收到主脑回执最多重试一次同一 ID，再退避五分钟；未完成的主脑阶段目标不重复插入。
+配置页显示通知与主脑回执两种状态，不把发送通知等同于作出决策。
+启用决策心跳时，自动解说合并到主脑决策中；关闭 Neko 不影响独立框架继续工作。
+
+如果只需要解说，可开启 `presentation.enabled`：每 10 秒只读一次快照，生命、物品或目标等有变化时
 才发出解说通知，默认至少间隔 90 秒。`presentation.target` 可指定角色，留空使用宿主当前角色。
 默认关闭自动解说；“解说当前游戏状态”按钮可手动提交新鲜状态。旧快照不播报，
 状态未变不反复提醒，通知受理也不等于播放完成。
@@ -121,7 +136,7 @@ python backend/install.py --destination ./local/backend-04 --archive ../agent-mc
 python backend/check_disconnected.py --directory ./local/backend-04
 ```
 
-安装器检查 `backend/source.json` 中的归档 SHA256、版本、源提交和编译文件清单，
+安装器检查 `agent_mc_autonomy/core_distribution/source.json`（来自固定版本框架依赖） 中的归档 SHA256、版本、源提交和编译文件清单，
 以及解耦补丁摘要；没有应用补丁的旧构建会被拒绝。
 使用固定 npm lockfile 和 `--ignore-scripts`。构建工具链差异导致哈希不符时会拒绝安装，
 需要重新核查构建产物，不能直接跳过校验。已准备运行目录不等于已登录游戏。
@@ -172,7 +187,7 @@ Neko 主对话的完整角色记忆、语音情绪和长期经验不会自动注
 | Neko `decision` 用途槽 | 文本＋工具调用；绑定通过 Neko 模型 API 页面完成。未绑定时保留原生连接、队列与规则反射，暂停自然语言规划，每 60 秒后才允许重试 |
 | Neko `vision` 用途槽 | 可与 decision 绑定同一个多模态模型；只有收到新鲜的核心 PNG 才使用。未绑定、能力不符、接口错误或无效输出时退回 decision 的文字事实 |
 | `fast.mode="rules"` | 默认规则，无快模型请求；紧急状态和原生待执行工作优先 |
-| `fast.mode="neko"` | 使用可选 `fast` 聊天模型槽生成结构化选择；2 秒未返回、格式不符或置信不足则按规则处理 |
+| `fast.mode="host"` | 使用可选 `fast` 聊天模型槽生成结构化选择；2 秒未返回、格式不符或置信不足则按规则处理 |
 | `fast.mode="system_one"` | 显式配置远程 Jev 或本地兼容 Decider 的完整端点、模型和密钥环境变量名；不要求每个人本地部署 |
 
 快选择目前只在 survival / inspect / work / wait 中提供**规划关注点**，不接管底层身体控制。
@@ -240,3 +255,9 @@ sustained survival and full browser rendering remain unverified.
 
 Minecraft Java 1.21.1 の独立自律フレームワークです。N.E.K.O は目標・方針・解説・音声を担当します。
 原版での基本動作、解説の再生通知、同一プレイヤーの観戦データを確認済みです。長期生存と完全な描画は未検証です。
+
+## 框架与适配层归属（2026-10-13）
+
+自主控制器、任务邮箱、稳定前缀/动态事实、事件与定期复盘、多模态/快决策端口、工作线程和可选观战装配只在 MC friend 主仓库维护。Neko 仅提供公开 SDK 模型槽、主脑通知与工具回传、配置面板、角色和官方语音绑定。`autonomy/` 与 `worker.py` 只留兼容导入，`standalone.py` 只留固定后端校验入口；新集成直接使用 `agent_mc_autonomy`。
+
+框架生成决策请求，Neko 定时器只转交待处理请求。主脑 inspect 后选择 continue 或 insert；插入仍交给框架原生检查点，用户的新反馈使旧决策失效。没有接入 Neko 时，显式配置的独立规划模型继续游戏。Cortico/其他宿主可以接相同的 Planner、ReviewPort 和 Mailbox，尚未声称已有这些宿主的完成适配或实测。

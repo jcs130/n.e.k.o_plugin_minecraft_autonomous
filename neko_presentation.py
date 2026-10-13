@@ -6,9 +6,10 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 
+from agent_mc_autonomy.configuration import Settings, _boolean, _integer, _text
 from plugin.sdk.plugin import Ok, plugin_entry, timer_interval, ui
 
-from .autonomy.configuration import Settings, _boolean, _integer, _text
+from .neko_heartbeat import HeartbeatSettings
 from .neko_tools import unwrap
 
 
@@ -87,6 +88,8 @@ class NekoPresentation:
 
     async def _present_game(self, manual=False):
         raw = await self.config.dump()
+        if not manual and HeartbeatSettings.parse(raw).enabled:
+            return Ok({"submitted": False, "reason": "decision_heartbeat_owns_narration"})
         config = PresentationSettings.parse(raw)
         settings = Settings.parse(raw)
         if not manual and not config.enabled:

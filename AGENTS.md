@@ -1,6 +1,6 @@
 # Repository instructions
 
-- This repository provides independent Minecraft autonomy and an optional N.E.K.O frontend, with a generic 1.21.1 controller.
+- This repository is a thin N.E.K.O adapter for the canonical autonomous Minecraft framework in minecraft-ai-friend/packages/agent-mc-autonomy. Game logic, review policy and native queue coordination must be changed and tested there, then consumed here as a pinned dependency. Never restore local implementation copies.
   Offline tests do not prove live gameplay, native-server support or viewer/body binding.
 - Use Python 3.11+ and the public `plugin.sdk.plugin` API. Do not modify the host SDK.
 - Keep plugin ID `minecraft_autonomous` and manifest/project versions consistent.
@@ -16,7 +16,7 @@
 - Do not connect to games, start services, call models or send messages during tests.
   Use temporary storage and the real SDK from `NEKO_ROOT` or the CI host checkout.
 - Keep automatic startup and autonomy disabled by default. Preserve explicit stop.
-- Keep `autonomy/` importable without a host SDK. N.E.K.O supplies high-level intent and
+- Keep `autonomy/` as a compatibility namespace only, with no gameplay implementation. N.E.K.O supplies high-level intent and
   narration/voice; the optional planner refines actions, and the native executor owns
   the real work queue. External frontend shutdown must not stop the standalone runtime.
 - Natural-language goals and feedback use the durable command mailbox. Preserve request

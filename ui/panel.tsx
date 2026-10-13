@@ -75,6 +75,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         {state.viewer_url && !state.viewer_body_binding_verified && <Alert tone="warning" message="已保存页面地址；画面与当前 1.21.1 角色的绑定尚未核验。" />}
       </Stack></Card>
       <Card title="当前工作与用户反馈"><Stack gap={12}>
+        <ActionButton action={action("review_game")} />
         <ActionButton action={action("present_status")} />
         <Text>当前目标：{runtime.current_goal?.goal || runtime.standing_goal || "尚无目标"}</Text>
         <DataTable data={runtime.pending || []} columns={[{key:"id",label:"原生任务"},{key:"phase",label:"执行状态"}]} emptyText="没有待结算动作" />
@@ -90,7 +91,13 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <ActionButton action={action("panel_stop")} />
         </Inline>
         {requestId && <Text>请求 ID：{requestId}。确认不明时保持相同内容重试。</Text>}
-        <Text>受理、原生动作完成、规划器报告和实际目标达成是不同状态。解说读取观测，不重新派发动作。</Text>
+        <Text>受理、原生动作完成、规划器报告和实际目标达成是不同状态。主脑决定阶段目标，独立框架继续规划和执行；正常工作无需重新派发。</Text>
+      </Stack></Card>
+      <Card title="Neko 主脑决策心跳"><Stack gap={10}>
+        <StatusBadge label={state.heartbeat?.enabled ? "已启用" : "未启用"} tone={state.heartbeat?.enabled ? "success" : "default"} />
+        <Text>没有新聊天也会根据新鲜的身体、口粮、物品、任务结果和当前目标复盘。主脑选择继续或插入阶段目标，再由 Neko 解说；正常长动作继续执行。</Text>
+        <Text>变化合并后限频唤醒；定期复核带上实际进展。等待主脑回执时不重复派单，用户新反馈优先。通知受理不等于主脑决策或语音播放完成。</Text>
+        <JsonView data={state.heartbeat || {enabled:false}} />
       </Stack></Card>
       <Card title="模型与感知"><Stack gap={10}>
         <Text>{external ? "当前由独立运行配置决定模型；本插件的模型槽不覆盖外部进程。" : "在 Neko 的模型 API 页面配置模型，并在本插件模型绑定中选择用途。凭据由宿主保管。"}</Text>
@@ -122,11 +129,16 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           </Grid>
           <Switch checked={draft.autonomy.enabled} label="允许显式启动自主游玩" onChange={v=>change("autonomy","enabled",v)} />
           <Switch checked={draft.viewer.auto_open !== false} label="进入游戏后自动打开观战界面" onChange={v=>change("viewer","auto_open",v)} />
+          <Switch checked={draft.heartbeat?.enabled === true} label="让 Neko 主脑持续参与自主生存决策" onChange={v=>change("heartbeat","enabled",v)} />
+          {field("heartbeat","target","主脑角色（留空跟随当前角色）")}
+          {field("heartbeat","min_interval_seconds","变化唤醒最小间隔（秒）","number")}
+          {field("heartbeat","review_interval_seconds","无新变化时复核间隔（秒）","number")}
+          <Text>启用决策心跳后，自动解说合并到主脑决策中。此设置不启动游戏；关闭只停止主脑自动复盘，独立框架继续运行。</Text>
           <Switch checked={draft.presentation?.enabled === true} label="让 Neko 解说重要游戏变化" onChange={v=>change("presentation","enabled",v)} />
           {field("presentation","target","解说角色（留空跟随 Neko 当前角色）")}
           {field("presentation","min_interval_seconds","解说最小间隔（秒）","number")}
           <Switch checked={draft.perception.enabled} label="接收核心真实图像（无图像或模型时文字回退）" onChange={v=>change("perception","enabled",v)} />
-          <Field label="快决策方式"><Select value={draft.fast.mode} options={[{value:"rules",label:"规则（默认）"},{value:"neko",label:"Neko fast 模型槽"},{value:"system_one",label:"System One：远程 Jev / 本地 Decider"}]} onChange={v=>change("fast","mode",v)} /></Field>
+          <Field label="快决策方式"><Select value={draft.fast.mode} options={[{value:"rules",label:"规则（默认）"},{value:"host",label:"Neko fast 模型槽"},{value:"system_one",label:"System One：远程 Jev / 本地 Decider"}]} onChange={v=>change("fast","mode",v)} /></Field>
           {draft.fast.mode === "system_one" && <Grid cols={2}>
             {field("fast","endpoint","完整 System One 端点")}{field("fast","model","模型名")}
             {field("fast","api_key_env","API Key 所在环境变量名（不填密钥）")}

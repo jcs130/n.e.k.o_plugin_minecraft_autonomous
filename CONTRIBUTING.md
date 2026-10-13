@@ -1,6 +1,6 @@
 # Contributing
 
-当前增量在标准仓库上接入独立 Agent MC World；版本和来源见 `backend/source.json`。
+当前增量在标准仓库上接入独立 Agent MC World；版本和来源见 `agent_mc_autonomy/core_distribution/source.json`（来自固定版本框架依赖）。
 执行接口的离线验证与完整自治行为分别验收，接口差异见 `docs/research/agent-mc-world-04-integration.md`。
 
 ## 开发环境
@@ -22,8 +22,9 @@ uv run --project "$env:NEKO_ROOT" neko-plugin check --release --market-release .
 ```
 
 也可使用已配置开发环境的 Python 直接执行 `python -m pytest tests -q`。
+先用 `neko-plugin sync .` 安装固定版本的自主框架依赖。游戏逻辑的测试在 MC friend 主仓库运行，本仓库只检验适配层。
 本地测试通过 `NEKO_ROOT` 找到真实 SDK；官方 CI 将插件挂载到宿主源码树后验证。
-`tests/standalone_probe.py` 在隔离 Python 进程中禁止宿主导入、网络和游戏进程，
+主仓库 `packages/agent-mc-autonomy/tests/standalone_probe.py` 在隔离 Python 进程中禁止宿主导入、网络和游戏进程，
 用假模型与假执行器检验自主循环和纯原生队列模式。端到端演出/语音仍须另行实测。
 观战页的 Node 测试只检查展示数据与 URL 校验，不请求宿主、游戏或模型。
 界面改动还需在实际 Neko 管理器的两个面板验收：配置保存、隐藏后停止读取、

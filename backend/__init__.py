@@ -1,1 +1,1 @@
-"""Pinned independent execution dependency and explicit installation tools."""
+"""Compatibility entry points for canonical body distribution tooling."""

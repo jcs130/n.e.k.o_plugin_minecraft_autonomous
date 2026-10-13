@@ -5,22 +5,23 @@ import json
 import threading
 import uuid
 
+from agent_mc_autonomy.configuration import Settings
+from agent_mc_autonomy.mailbox import Mailbox, observation
+from agent_mc_autonomy.runner import run_session
+from agent_mc_autonomy.viewer import viewer_observation
+from agent_mc_autonomy.worker import Worker
 from plugin.sdk.plugin import Err, NekoPluginBase, Ok, TransportError, lifecycle, neko_plugin, plugin_entry
 
-from .autonomy.configuration import Settings
-from .autonomy.mailbox import Mailbox, observation
-from .autonomy.runner import run_session
-from .autonomy.viewer import viewer_observation
 from .backend.install import verify_runtime
 from .dashboard import Dashboard
+from .neko_heartbeat import NekoHeartbeat
 from .neko_planner import NekoPlanner
 from .neko_presentation import NekoPresentation
 from .neko_tools import NekoAutonomyTools
-from .worker import Worker
 
 
 @neko_plugin
-class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoPresentation, NekoPluginBase):
+class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoHeartbeat, NekoPresentation, NekoPluginBase):
     def __init__(self, ctx):
         super().__init__(ctx)
         self._control_lock = threading.RLock()

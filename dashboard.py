@@ -4,11 +4,12 @@ import json
 import uuid
 from dataclasses import asdict
 
+from agent_mc_autonomy.configuration import Settings
+from agent_mc_autonomy.viewer import viewer_observation
 from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
 
-from .autonomy.configuration import Settings
-from .autonomy.viewer import viewer_observation
 from .model_check import check_model
+from .neko_heartbeat import HeartbeatSettings, review_port
 from .neko_presentation import PresentationSettings
 from .neko_tools import unwrap
 
@@ -20,6 +21,7 @@ EDITABLE = {
     "viewer": {"url", "auto_open", "renderer_directory", "catalog_file", "listen_port"},
     "perception": {"enabled"},
     "presentation": {"enabled", "target", "min_interval_seconds"},
+    "heartbeat": {"enabled", "target", "min_interval_seconds", "review_interval_seconds"},
     "fast": {"mode", "endpoint", "model", "api_key_env", "min_confidence"},
 }
 
@@ -110,7 +112,14 @@ class Dashboard:
             state["facts"] = [{"key": str(p.get("key", ""))[:80], "text": str(p.get("text", ""))[:900],
                                "has_more": len(str(p.get("text", ""))) > 900} for p in snapshot.get("facts", {}).get("parts", [])[:24]]
             state["pending"] = [{k: p.get(k) for k in ("kind", "id", "phase", "terminal")} for p in snapshot.get("pending", [])[:16]]
-            return {"settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw))}, "runtime": state, "audit": audit_sample(directory),
+            heartbeat = HeartbeatSettings.parse(raw)
+            review_state = review_port(self, settings).state()
+            review = review_state.get("review", {})
+            heartbeat_state = {"enabled": heartbeat.enabled, "last_decision": review_state.get("last_decision"),
+                               "submitted_at": review_state.get("submitted_at"), "retry_after": review_state.get("retry_after"),
+                               "review": {key: review.get(key) for key in ("id", "trigger", "attempts", "result")}}
+            return {"settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
+                                 "heartbeat": asdict(heartbeat)}, "heartbeat": heartbeat_state, "runtime": state, "audit": audit_sample(directory),
                     "model_slots": ["decision", "vision", "fast"], **viewer_observation(settings, snapshot)}
         except (OSError, ValueError, KeyError):
             return {"error": "configuration_or_observation_unavailable"}
@@ -130,10 +139,13 @@ class Dashboard:
             merged = {**original, **{key: {**original.get(key, {}), **value} for key, value in settings.items()}}
             Settings.parse(merged)
             PresentationSettings.parse(merged)
+            HeartbeatSettings.parse(merged)
             with self._control_lock:
-                if set(settings) - {"viewer", "presentation"} and self._worker and self._worker.snapshot().get("worker_alive"):
+                if set(settings) - {"viewer", "presentation", "heartbeat"} and self._worker and self._worker.snapshot().get("worker_alive"):
                     return Err({"code": "settings_runtime_active", "message": "运行参数须先显式停止嵌入式运行再保存；观战地址可单独保存，模型槽绑定可在宿主修改。"})
             await self.config.update(settings)
+            if "heartbeat" in settings:
+                review_port(self, Settings.parse(merged)).configure(HeartbeatSettings.parse(merged).policy())
             return Ok({"saved": True, "running_session_changed": False, "applies": "next_explicit_start_or_observer_read"})
         except (ValueError, TypeError):
             return Err({"code": "invalid_settings", "message": "配置不合法。请检查服务器、路径、预算及快决策端点；远程 System One 要求 HTTPS。"})

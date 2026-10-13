@@ -47,6 +47,12 @@ enabled = false # Optional meaningful game-event narration through Neko's offici
 target = "" # Empty: host-selected role; otherwise a configured Neko character name.
 min_interval_seconds = 90 # Unchanged observations never trigger model calls.
 
+[heartbeat]
+enabled = false # Explicitly enable Neko main-character strategic reviews of an already running game.
+target = "" # Empty: current Neko character. Independent runtime does not require Neko.
+min_interval_seconds = 60 # Material changes are coalesced; this is not a fixed model-call interval.
+review_interval_seconds = 180 # Fallback strategic review with fresh facts, even without user messages.
+
 [fast]
 mode = "rules" # rules | neko (public fast slot) | system_one (Jev/Decider protocol)
 endpoint = "" # Explicit full endpoint, e.g. https://api.typesafe.ai/v1/systemone

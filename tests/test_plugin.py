@@ -102,7 +102,7 @@ def test_main_brain_intent_uses_same_mailbox_and_public_sdk(plugin_instance, run
 
     monkeypatch.setattr(plugin_instance.config, "dump", config)
     names = {meta.name for meta, _ in collect_llm_tool_methods(plugin_instance)}
-    assert names == {"minecraft_autonomy_status", "minecraft_autonomy_intent", "minecraft_autonomy_stop"}
+    assert names == {"minecraft_autonomy_status", "minecraft_autonomy_intent", "minecraft_autonomy_stop", "minecraft_autonomy_review"}
     request = str(uuid.uuid4())
     response = run_async(plugin_instance.minecraft_autonomy_intent("collect wood", "insert", request))
     assert response["delivery"] == "queued"

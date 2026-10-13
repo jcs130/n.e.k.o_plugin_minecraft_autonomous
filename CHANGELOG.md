@@ -2,6 +2,10 @@
 
 ## 0.5.0 — Unreleased
 
+- Move the complete autonomous runtime and strategic review lifecycle into minecraft-ai-friend/packages/agent-mc-autonomy. Consume one pinned dependency; remove gameplay/viewer assembly copies from the Neko adapter.
+
+- Add opt-in main-character strategic heartbeats with useful fresh facts, material/terminal changes, periodic review and a public inspect/continue/safe-insert decision tool. Preserve independent execution and official host speech.
+- Persist review IDs and acknowledgements, bound retries, suppress duplicate in-flight goals and fence stale reviews against new user intent in the same mailbox transaction. Expose heartbeat settings/results in the existing Neko panel.
 - Declare separate Neko configuration/control and observation panels through public UI APIs, with a legacy static UI entry.
 - Add real bounded runtime statistics, health/food/position observations, native queue, latency chart and decision/receipt details. Stale reads and failed runs remain visible.
 - Embed a configured modern viewer only after an explicit click, with separate-window and unload controls. No viewer deployment, second account or player-binding claim is implied.

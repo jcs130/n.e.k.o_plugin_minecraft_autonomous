@@ -2,7 +2,7 @@
 
 ## Responsibilities
 
-Version 0.3.0 separates three responsibilities:
+The current architecture separates three responsibilities:
 
 1. **N.E.K.O main brain:** high-level goals, strategy, user feedback and character presentation,
    including narration, voice and emotion. These stay in Neko's main conversation flow.
@@ -21,8 +21,7 @@ flowchart TD
   Q <--> G[One Minecraft Java 1.21.1 body]
 ```
 
-`autonomy/` has no host SDK imports. `standalone.py` and the optional Neko frontend use the same
-runner/controller. `HttpPlanner` uses an explicit endpoint and model; `NekoPlanner` can supply
+`agent-mc-autonomy` in minecraft-ai-friend owns the runner/controller, context, goals and review lifecycle. This plugin installs a pinned dependency; its `autonomy/` namespace and `standalone.py` only provide compatibility forwarding. `HttpPlanner` uses an explicit endpoint and model; `NekoPlanner` can supply
 inference through the public `decision` slot in embedded mode. That slot does not automatically
 include Neko's main persona, memory, speech or main-conversation context.
 
@@ -95,8 +94,30 @@ and explicit stop. These tools use the existing command mailbox; they do not cre
 speech or physical action loop. Automatic game-event narration still needs separate acceptance.
 
 The pinned core is `minecraft-ai-friend@7889ce261a2309d94400b739c6198468d8271d83`, with the reviewed
-standalone cleanup patch and headless receipt in `backend/source.json`. This change does not upgrade
+standalone cleanup patch and headless receipt in `agent_mc_autonomy/core_distribution/source.json`（来自固定版本框架依赖）. This change does not upgrade
 that core or add Cortico runtime dependencies. See the [upstream audit](research/upstream-autonomy-2026-10-13.md).
+
+## Main-character decision heartbeat
+
+`neko_heartbeat.py` belongs only to the Neko adapter. It claims a framework-produced envelope and
+delivers that bounded review notification to the actual character session via public
+`push_message(ai_behavior="respond")`. This is distinct from binding a generic model
+to the independent planner's `decision` slot. Neither route imports the other host.
+
+The framework owns scheduling: fresh material changes and non-observation task results trigger coalesced reviews;
+a slower periodic review includes the latest goal, queue, failures and the duration
+of unchanged material facts. A death/failure observation can supersede an ordinary
+review, but never directly cancels body work. The public notification API is not
+claimed to reproduce another host's token/tool interruption semantics.
+
+The main brain acknowledges `continue` or selects `insert` with a concrete stage goal.
+`inspect` exposes bounded evidence without another model call in the plugin. One
+durable review ID maps to one command UUID. An atomic mailbox intent-revision
+precondition prevents an old review from overriding a newly queued user goal/stop.
+Only the independent controller manages native `begin_turn`, barriers and `end_turn`.
+Main-character acknowledgement, mailbox acceptance, task completion and voice playback
+remain separate observations. User feedback and explicit replacement keep their existing
+public intent entry. Defaults remain passive until enabled and the game is explicitly run.
 
 Minecraft Java protocol is fixed at 1.21.1, with explicit offline/Microsoft authentication and remote
 server configuration. No server launcher, extra player, model/GPU discovery or voice discovery is added.
@@ -141,3 +162,9 @@ action, explicit stop, connection loss, long-running survival, Neko presentation
 The old unattended stack remains stopped. The user subsequently authorized a separate vanilla test
 server and runtime; actual observations and remaining limits are recorded in the
 [dated live-acceptance report](vanilla-live-acceptance-2026-10-13.md).
+
+## Canonical source ownership
+
+The implementation and offline gameplay-policy tests live in minecraft-ai-friend/packages/agent-mc-autonomy. Neko owns no review triggering, material-change selection, retry policy or body queue. Its timer calls ReviewPort.offer and transports an envelope into the actual character session; the public tool calls ReviewPort.decide. Runtime publication alone calls observe. SQLite reviews reconcile a lost review commit against the durable goal mailbox. Optional review storage failure does not stop gameplay. The old plugin-side policy draft was never deployed.
+
+The sibling agent-mc-world stays a model-free body; this explicit, optional orchestration package supplies the independent HTTP planner and host-neutral ports. A direct model needs no persona SDK. Rendering stays in mc-visual-console, and voice stays in the selected host. Closing an external adapter does not shut down this standalone runtime.
