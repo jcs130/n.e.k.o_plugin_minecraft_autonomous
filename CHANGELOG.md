@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.8 — Unreleased
+
+- Consume autonomy 0.1.22, preserving complete native action/scout parameter structure while omitting repeated manuals and retaining coordinate/angle units.
+- Preserve existing model, game, queue and explicit stop policies. Schema/context verification remains separate from real survival acceptance.
+
 ## 0.5.7 — Unreleased
 
 - Consume autonomy 0.1.21 for explicit goal provenance, paged original parent goals and complete rejected-call history.
