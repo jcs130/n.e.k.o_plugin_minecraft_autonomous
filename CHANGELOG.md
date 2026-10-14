@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.17 — Unreleased
+
+- Consume autonomy 0.1.32: a newly queued observation ends the planning turn even while feedback awaits its first body plan. Wait for the actual native result before deciding again, without consuming feedback queue policy or interrupting unrelated native work.
+
 ## 0.5.16 — Unreleased
 
 - Consume autonomy 0.1.31: keep a rejected body plan across intervening failed observations, cached retries and corrected reads. A read error cannot overwrite the action error that still needs correction.
