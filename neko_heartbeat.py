@@ -46,7 +46,7 @@ def is_stopped(plugin):
         return False
 
 
-def heartbeat_text(review):
+def heartbeat_text(review, commentary=None):
     # The host's general notification preview is 200 tokens. A full objective
     # before the facts hid inventory, the idle queue and repeated-read evidence.
     # Transport a small cue; the existing inspection tool reads framework facts.
@@ -57,12 +57,16 @@ def heartbeat_text(review):
     evidence = review["evidence"]
     facts = evidence["facts"]
     user = evidence.get("current_user_goal") or {}
-    intent = ("当前用户目标:" + brief(user["goal"], 70) if user.get("goal") else
-              "长期目标:" + brief(evidence.get("standing_goal", ""), 70))
+    intent = ("当前用户目标:" + brief(user["goal"], 50) if user.get("goal") else
+              "长期目标:" + brief(evidence.get("standing_goal", ""), 50))
     readings = "；".join(brief(facts.get(key, ""), size) for key, size in (
-        ("queue", 70), ("body", 70), ("foodReserve", 55)))
+        ("queue", 55), ("body", 50), ("foodReserve", 40)))
     reads = sum(evidence.get("read_activity", {}).values())
-    return ("Minecraft复盘 " + review["id"] + "。调用工具前不说话。先用minecraft_autonomy_review的inspect核对，"
+    speech = ("本轮只用工具确认策略，不出声。" if commentary and not commentary["allowed"] else
+              "解说只说一个新重点≤30字，不念背包或读取过程。")
+    if review.get("attempts", 0) > 1:
+        speech = "本轮重试确认，只调用工具，不重复解说。"
+    return ("Minecraft复盘 " + review["id"] + "。" + speech + "调用工具前不说话。先用minecraft_autonomy_review的inspect核对，"
             "再continue/insert/revise；表达遵循返回的commentary，只说新重点。" + intent + "；" + readings + f"；连续查询{reads}次。")
 
 
@@ -132,7 +136,7 @@ class NekoHeartbeat:
             path, state, note = commentary_plan(self, settings, config.target, event, port.now(),
                 PresentationSettings.parse(raw).min_interval_seconds, review_id=review["id"])
         result = self.push_message(visibility=[], ai_behavior="respond",
-            parts=[{"type": "text", "text": heartbeat_text(review)}], source="minecraft_autonomous",
+            parts=[{"type": "text", "text": heartbeat_text(review, note)}], source="minecraft_autonomous",
             target_lanlan=config.target or None, coalesce_key="minecraft_review_" + settings.identity,
             metadata={"heartbeat_id": review["id"], "sampled_at": review["evidence"]["sampled_at"], "expires_in_s": 90})
         accepted = result.get("submitted") is True

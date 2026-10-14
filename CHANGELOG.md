@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.14 — Unreleased
+
+- Put the current speaking policy and 30-character highlight limit directly at the front of the small notification preview. Tool-result-only instructions were insufficient when the main brain spoke without inspecting; same-review retries explicitly request tool confirmation without repeating narration.
+
 ## 0.5.13 — Unreleased
 
 - Consume autonomy 0.1.28 for fresh commentary signals, preserving full facts for strategic decisions while ignoring inventory counts, durability and read-only task churn.
