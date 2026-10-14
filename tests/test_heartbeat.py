@@ -51,7 +51,8 @@ def test_frontend_only_transports_framework_reviews(plugin_instance, run_async, 
     review_id = result["heartbeat_id"]
     acknowledged = run_async(plugin_instance.minecraft_autonomy_review(review_id, "continue", "继续当前工作"))
     assert acknowledged["acknowledged"] and not acknowledged["dispatched"]
-    assert port.state()["review"]["result"] == acknowledged
+    assert {k: acknowledged[k] for k in port.state()["review"]["result"]} == port.state()["review"]["result"]
+    assert acknowledged["commentary"]["allowed"]
 
 
 def test_review_tool_routes_once_to_framework_mailbox(plugin_instance, run_async, monkeypatch):
@@ -81,6 +82,28 @@ def test_long_review_uses_small_inspection_cue_without_losing_framework_evidence
     assert "工作台1个" in detail["facts"]["gear"]
     assert detail["read_activity"] == snapshot["read_activity"]
     assert not port.state()["review"].get("result")
+
+
+def test_routine_reviews_keep_strategy_but_do_not_require_spoken_readouts(plugin_instance, run_async, monkeypatch):
+    port, snapshot, push = setup(plugin_instance, monkeypatch)
+    port.observe(snapshot)
+    first = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
+    run_async(plugin_instance.minecraft_autonomy_review(first, "continue", "正常工作"))
+    port.now = lambda: 10180
+    snapshot["updated_at"] = datetime.fromtimestamp(10180, timezone.utc).isoformat()
+    (port.directory / "status.json").write_text(json.dumps(snapshot), encoding="utf-8")
+    port.observe(snapshot)
+    review_id = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
+    cue = push.call_args.kwargs["parts"][0]["text"]
+    assert "调用工具前不说话" in cue
+    detail = run_async(plugin_instance.minecraft_autonomy_review(review_id, "inspect"))
+    assert not detail["commentary"]["allowed"]
+    assert "木镐1把" in detail["facts"]["gear"]
+    result = run_async(plugin_instance.minecraft_autonomy_review(review_id, "continue", "继续采集"))
+    assert result["acknowledged"] and not result["dispatched"]
+    assert not result["commentary"]["allowed"]
+    assert "现在可简短说明" not in result["reply"]
+    assert "背包清单" in result["commentary"]["instruction"]
 
 
 def test_review_lineage_pages_are_forwarded_without_plugin_policy(plugin_instance, run_async, monkeypatch):

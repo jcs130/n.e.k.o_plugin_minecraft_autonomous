@@ -1,14 +1,13 @@
 """Optional Neko narration of observed changes; never drives the Minecraft body."""
 
-import hashlib
-import json
 import time
 from dataclasses import dataclass
-from datetime import datetime
 
+from agent_mc_autonomy.commentary import commentary_observation
 from agent_mc_autonomy.configuration import Settings, _boolean, _integer, _text
 from plugin.sdk.plugin import Ok, plugin_entry, timer_interval, ui
 
+from .neko_commentary import SPEAK, commentary_plan, load_commentary, save_commentary
 from .neko_heartbeat import HeartbeatSettings
 from .neko_tools import unwrap
 
@@ -32,34 +31,7 @@ class PresentationSettings:
 
 
 def presentation_event(status, now):
-    """Only fresh snapshots, with a small signature excluding clocks and motion."""
-    snapshot = status.get("observation", status)
-    try:
-        sampled = datetime.fromisoformat(snapshot["updated_at"]).timestamp()
-    except (KeyError, TypeError, ValueError):
-        return None
-    if not 0 <= now - sampled <= 30:
-        return None
-    connected = snapshot.get("game_connected") is True
-    if not connected and snapshot.get("phase") not in {"failed", "stopped"}:
-        return None
-    facts = {p["key"]: str(p.get("text", "")) for p in snapshot.get("facts", {}).get("parts", [])}
-    if connected and not any(facts.get(key) for key in ("body", "gear", "queue")):
-        # The connection callback can precede the first native observation.
-        # Wait for evidence instead of consuming the narration interval on blanks.
-        return None
-    # Facts are Chinese descriptions produced by the core, never planner success claims.
-    changes = {key: facts.get(key, "")[:600] for key in ("body", "gear", "foodReserve", "life")}
-    signature = json.dumps({"connected": connected, "phase": snapshot.get("phase"),
-                            "facts": changes, "goal": snapshot.get("current_goal"),
-                            "error": snapshot.get("error")}, ensure_ascii=False, sort_keys=True)
-    payload = {"sampled_at": snapshot["updated_at"], "connected": connected,
-               "phase": snapshot.get("phase"), "error": snapshot.get("error"),
-               "facts": {**changes, "place": facts.get("place", "")[:220],
-                         "queue": facts.get("queue", "")[:400]},
-               "viewer_url": status.get("viewer_url", ""),
-               "viewer_binding_verified": status.get("viewer_body_binding_verified", False)}
-    return hashlib.sha256(signature.encode()).hexdigest(), payload
+    return commentary_observation(status, now)
 
 
 def narration_text(payload):
@@ -69,9 +41,9 @@ def narration_text(payload):
         raw = text.encode("utf-8")
         return text if len(raw) <= size else raw[:size - 3].decode("utf-8", errors="ignore") + "…"
     state = "已连接" if payload["connected"] else "已断开：" + str(payload["phase"])
-    readings = "；".join(brief(facts.get(key, ""), size) for key, size in (("body", 120), ("gear", 180), ("queue", 90)))
-    return ("请 {LANLAN_NAME} 向 {MASTER_NAME} 直接说一句当前游戏情况，无需再查询或派任务。"
-            "下面是30秒内观测数据，受理不等于完成：" + state + "；" + readings)
+    readings = "；".join(brief(facts.get(key, ""), size) for key, size in (("body", 65), ("queue", 90)))
+    return ("请 {LANLAN_NAME} 向 {MASTER_NAME} 说一个游戏新重点，无需查询或派任务。"
+            + SPEAK + "新鲜证据仅供理解：" + state + "；" + readings)
 
 
 class NekoPresentation:
@@ -99,30 +71,21 @@ class NekoPresentation:
         event = presentation_event(status, now)
         if event is None:
             return Ok({"submitted": False, "reason": "no_fresh_observation"})
-        signature, payload = event
-        # One state per server/account/role, kept outside the independent runtime.
-        identity = hashlib.sha256((settings.identity + config.target).encode()).hexdigest()[:24]
-        path = self.data_path("presentation", identity + ".json")
         with self._control_lock:
-            try:
-                previous = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                previous = {}
-            if not manual and signature == previous.get("signature"):
-                return Ok({"submitted": False, "reason": "unchanged"})
-            interval = 30 if manual else config.min_interval_seconds
-            if now < previous.get("retry_after", 0) or now - previous.get("submitted_at", 0) < interval:
-                return Ok({"submitted": False, "reason": "rate_limited"})
+            path, state, note = commentary_plan(self, settings, config.target, event, now,
+                                               config.min_interval_seconds, manual=manual)
+            if not note["allowed"]:
+                return Ok({"submitted": False, "reason": note["reason"]})
+            payload = event["payload"]
             text = narration_text(payload)
             result = self.push_message(visibility=[], ai_behavior="respond",
                 parts=[{"type": "text", "text": text}], source="minecraft_autonomous",
-                target_lanlan=config.target or None, coalesce_key="minecraft_progress_" + identity,
-                metadata={"event_signature": signature, "sampled_at": payload["sampled_at"], "expires_in_s": 30})
+                target_lanlan=config.target or None, coalesce_key="minecraft_progress_" + path.stem,
+                metadata={"event_signature": event["signature"], "sampled_at": payload["sampled_at"], "expires_in_s": 30})
             accepted = result.get("submitted") is True
-            saved = {"signature": signature, "submitted_at": now, "playback_verified": False} if accepted else {
-                **previous, "retry_after": now + 30}
-            path.parent.mkdir(parents=True, exist_ok=True)
-            temporary = path.with_suffix(".tmp")
-            temporary.write_text(json.dumps(saved), encoding="utf-8")
-            temporary.replace(path)
+            if accepted:
+                save_commentary(path, {**state, "submitted_at": now, "retry_after": 0, "playback_verified": False})
+            else:
+                # Keep the previous baseline: a rejected event is still retryable.
+                save_commentary(path, {**load_commentary(path), "retry_after": now + 30})
         return Ok({"submitted": accepted, "reason": result.get("reason"), "playback_verified": False})

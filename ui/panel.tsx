@@ -111,7 +111,8 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <Text>独立框架重新启动后，需要显式恢复 Neko 反馈。下次正常心跳按原配置继续；此操作不启动游戏、不追加任务。</Text>
           <ActionButton action={action("resume_observation")} />
         </Stack>}
-        <Text>没有新聊天也会根据新鲜的身体、口粮、物品、任务结果和当前目标复盘。主脑选择继续或插入阶段目标，再由 Neko 解说；正常长动作继续执行。</Text>
+        <Text>没有新聊天也会根据新鲜的身体、口粮、物品、任务结果和当前目标复盘。主脑选择继续或插入阶段目标；正常长动作继续执行。</Text>
+        <Text>解说只抓一个新重点，说1—2句自然反应。普通背包数量、工具耐久和读取现场不逐条播报；新危险、明显恢复或重要进展可开口。下方解说间隔也作用于决策心跳，突发危险可及时提醒。直接聊天正常回应。</Text>
         <Text>变化合并后限频唤醒；定期复核带上实际进展。等待主脑回执时不重复派单，用户新反馈优先。通知受理不等于主脑决策或语音播放完成。</Text>
         <JsonView data={state.heartbeat || {enabled:false}} />
       </Stack></Card>
@@ -156,7 +157,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <Text>启用决策心跳后，自动解说合并到主脑决策中。此设置不启动游戏；关闭只停止主脑自动复盘，独立框架继续运行。</Text>
           <Switch checked={draft.presentation?.enabled === true} label="让 Neko 解说重要游戏变化" onChange={v=>change("presentation","enabled",v)} />
           {field("presentation","target","解说角色（留空跟随 Neko 当前角色）")}
-          {field("presentation","min_interval_seconds","解说最小间隔（秒）","number")}
+          {field("presentation","min_interval_seconds","普通解说最小间隔（秒，含决策心跳）","number")}
           <Switch checked={draft.perception.enabled} label="接收核心真实图像（无图像或模型时文字回退）" onChange={v=>change("perception","enabled",v)} />
           <Accordion title="模型 API 接入"><Stack gap={10}>
             <Field label="动作规划使用的模型"><Select value={draft.planner?.route || "host"} options={[{value:"host",label:"使用 Neko 模型绑定（默认）"},{value:"direct",label:"单独配置模型服务"}]} onChange={v=>change("planner","route",v)} /></Field>

@@ -1,12 +1,12 @@
 [project]
 name = "minecraft_autonomous"
-version = "0.5.12"
+version = "0.5.13"
 description = "Thin N.E.K.O adapter for the host-neutral Minecraft autonomy framework"
 requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"
 dependencies = [
-  "agent-mc-autonomy @ git+https://github.com/jcs130/minecraft-ai-friend.git@4806f7e009002aa04776a8d5ca1905554b406c88#subdirectory=packages/agent-mc-autonomy",
+  "agent-mc-autonomy @ git+https://github.com/jcs130/minecraft-ai-friend.git@64f0b1a3155c3456a00637cc912789f0df7f0186#subdirectory=packages/agent-mc-autonomy",
   "mcp==2.1.1", "httpx>=0.27,<1", "openai>=1,<3"
 ]
 

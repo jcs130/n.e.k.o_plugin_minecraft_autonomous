@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.13 — Unreleased
+
+- Consume autonomy 0.1.28 for fresh commentary signals, preserving full facts for strategic decisions while ignoring inventory counts, durability and read-only task churn.
+- Share ordinary commentary timing with strategic heartbeats; allow a new critical-health/death warning without repeating the same warning. Ask for one natural highlight in 1–2 short sentences instead of inventory/inspection readouts.
+- Keep official host voice and normal user conversation. Speaking opportunities, strategic acknowledgement, native completion and actual playback remain separate; the public SDK does not enforce silent tool-only output.
+
 ## 0.5.8 — Unreleased
 
 - Consume autonomy 0.1.22, preserving complete native action/scout parameter structure while omitting repeated manuals and retaining coordinate/angle units.

@@ -45,7 +45,7 @@ enabled = true # Only actual core PNG artifacts. Bind optional vision slot in Ne
 [presentation]
 enabled = false # Optional meaningful game-event narration through Neko's official voice path.
 target = "" # Empty: host-selected role; otherwise a configured Neko character name.
-min_interval_seconds = 90 # Unchanged observations never trigger model calls.
+min_interval_seconds = 90 # Ordinary commentary, including strategic reviews; urgent danger may bypass once.
 
 [heartbeat]
 enabled = false # Explicitly enable Neko main-character strategic reviews of an already running game.

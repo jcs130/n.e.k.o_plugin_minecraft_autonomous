@@ -10,7 +10,7 @@ def unwrap(result):
 class NekoAutonomyTools:
     @llm_tool(
         name="minecraft_autonomy_status",
-        description="读取独立 Minecraft 框架的最近状态供高层决策与中文解说。先核对采样时间，不把受理或模型报告说成成功。可按 fact_key 和 offset 分页读取完整事实，或用 request_id 查意图回执；此工具不连接游戏、不调用规划模型。",
+        description="读取独立 Minecraft 框架的最近状态供内部高层决策。读数不是朗读稿，不播报背包清单或查询过程；用户主动提问时简洁回答重点。先核对采样时间，不把受理或模型报告说成成功。可按 fact_key 和 offset 分页读取完整事实，或用 request_id 查意图回执；此工具不连接游戏、不调用规划模型。",
         parameters={"type": "object", "properties": {
             "fact_key": {"type": "string"}, "offset": {"type": "integer", "minimum": 0},
             "request_id": {"type": "string"}}, "additionalProperties": False},
