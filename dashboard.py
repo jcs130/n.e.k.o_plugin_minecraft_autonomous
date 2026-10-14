@@ -5,9 +5,11 @@ import uuid
 from dataclasses import asdict
 
 from agent_mc_autonomy.configuration import Settings
+from agent_mc_autonomy.model_config import HttpPlannerConfig, planner_settings
 from agent_mc_autonomy.viewer import viewer_observation
 from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
 
+from .direct_planner import public_planner
 from .model_check import check_model
 from .neko_heartbeat import HeartbeatSettings, review_port
 from .neko_presentation import PresentationSettings
@@ -24,6 +26,7 @@ EDITABLE = {
     "heartbeat": {"enabled", "target", "min_interval_seconds", "review_interval_seconds"},
     "fast": {"mode", "endpoint", "model", "api_key_env", "min_confidence"},
     "memory": {"mode", "endpoint", "model", "api_key_env", "timeout_ms", "provider", "library_id", "project_id", "scope_id", "search_mode"},
+    "planner": {"route", *HttpPlannerConfig.__dataclass_fields__},
 }
 
 
@@ -89,6 +92,30 @@ def audit_sample(directory):
 
 
 class Dashboard:
+    @ui.action(label="检查直连模型", tone="default")
+    @plugin_entry(id="check_direct_model", name="检查显式配置的模型服务", kind="service", timeout=45,
+                  description="按已保存配置显式调用一次无游戏动作的工具测试；会使用模型额度。",
+                  input_schema={"type": "object", "properties": {"catalog": {"type": "boolean"}, "planner": {"type": "object"}}})
+    async def check_direct_model(self, catalog: bool = False, planner: dict | None = None, **_):
+        from agent_mc_autonomy.model_admin import check_model as direct_check
+        from agent_mc_autonomy.model_admin import list_models
+        try:
+            raw = await self.config.dump()
+            settings = Settings.parse(raw)
+            if settings.runtime_mode == "external":
+                return Err({"code": "external_runtime_use_standalone_config"})
+            if planner is not None:
+                if not catalog or not isinstance(planner, dict) or planner.get("route") != "direct":
+                    raise ValueError("draft_catalog_only")
+                config = HttpPlannerConfig.parse({k: v for k, v in planner.items() if k != "route"}, require_model=False)
+            else:
+                config = planner_settings(raw.get("planner", {}))
+            if config is None:
+                return Err({"code": "direct_model_not_selected"})
+            return Ok(await (list_models(config) if catalog else direct_check(config, max_output_tokens=settings.max_output_tokens)))
+        except (RuntimeError, ValueError):
+            return Err({"code": "direct_model_check_failed", "message": "未通过检查。请检查密钥、OAuth 登录、模型权限和参数；游戏未启动。"})
+
     @ui.action(label="检查模型接口", tone="default")
     @plugin_entry(id="check_model", name="检查已绑定模型", kind="service", timeout=30,
                   description="显式调用 Neko 模型槽做一次中性结构化测试。图像模式使用合成色块，不连接游戏，不发送聊天。",
@@ -121,7 +148,7 @@ class Dashboard:
                                "submitted_at": review_state.get("submitted_at"), "retry_after": review_state.get("retry_after"),
                                "review": {key: review.get(key) for key in ("id", "trigger", "attempts", "result")}}
             return {"settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
-                                 "heartbeat": asdict(heartbeat)}, "heartbeat": heartbeat_state, "runtime": state, "audit": audit_sample(directory),
+                                 "heartbeat": asdict(heartbeat), "planner": public_planner(raw.get("planner", {}))}, "heartbeat": heartbeat_state, "runtime": state, "audit": audit_sample(directory),
                     "model_slots": ["decision", "vision", "fast"], **viewer_observation(settings, snapshot)}
         except (OSError, ValueError, KeyError):
             return {"error": "configuration_or_observation_unavailable"}
@@ -139,7 +166,10 @@ class Dashboard:
                     raise ValueError("unknown_settings_field")
             original = await self.config.dump()
             merged = {**original, **{key: {**original.get(key, {}), **value} for key, value in settings.items()}}
-            Settings.parse(merged)
+            parsed = Settings.parse(merged)
+            direct = planner_settings(merged.get("planner", {}))
+            if direct:
+                direct.validate_budget(parsed.max_output_tokens)
             PresentationSettings.parse(merged)
             HeartbeatSettings.parse(merged)
             with self._control_lock:

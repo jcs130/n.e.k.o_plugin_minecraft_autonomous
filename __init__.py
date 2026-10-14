@@ -14,8 +14,8 @@ from plugin.sdk.plugin import Err, NekoPluginBase, Ok, TransportError, lifecycle
 
 from .backend.install import verify_runtime
 from .dashboard import Dashboard
+from .direct_planner import create_planner
 from .neko_heartbeat import NekoHeartbeat
-from .neko_planner import NekoPlanner
 from .neko_presentation import NekoPresentation
 from .neko_tools import NekoAutonomyTools
 
@@ -93,7 +93,8 @@ class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoHeartbeat, Nek
         try:
             if not isinstance(goal, str) or not goal.strip() or len(goal) > 4000:
                 raise ValueError("invalid_goal: goal must contain 1..4000 characters")
-            settings = Settings.parse(await self.config.dump())
+            planner_raw = await self.config.dump()
+            settings = Settings.parse(planner_raw)
             if settings.runtime_mode == "external":
                 return Err({"code": "external_runtime", "message": "此入口只观察和投递任务。请显式启动 standalone.py run；Neko 不接管外部运行进程。"})
             if not settings.enabled:
@@ -103,8 +104,14 @@ class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoHeartbeat, Nek
             data_root = settings.data_root(self.data_path())
             data = data_root / "sessions" / settings.identity / "host"
 
+            from agent_mc_autonomy.model_config import planner_settings
+            selected = planner_settings(planner_raw.get("planner", {}))
+            if selected:
+                selected.key()
+                selected.validate_budget(settings.max_output_tokens)
+
             async def play(goal, publish, stopped):
-                await run_session(settings, entry, data_root, NekoPlanner(self.ctx.models, settings.max_output_tokens),
+                await run_session(settings, entry, data_root, create_planner(planner_raw, self.ctx.models, settings),
                                   goal, publish, stopped)
 
             with self._control_lock:

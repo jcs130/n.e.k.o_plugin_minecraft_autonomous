@@ -9,6 +9,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const { state, actions } = props
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<any>(null)
+  const [parametersText, setParametersText] = useState("{}")
   const [goal, setGoal] = useState("")
   const [mode, setMode] = useState("append")
   const [requestId, setRequestId] = useState("")
@@ -28,7 +29,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       const reply = await props.api.call(action(id)?.id || id, args, { userInitiated: true })
       const result = reply?.result ?? reply
       if (result?.is_error || result?.error || result?.success === false) throw new Error(result?.error?.message || "请求未成功，请检查回执。")
-      if (id === "check_model") setModelCheck(result)
+      if (id === "check_model" || id === "check_direct_model") setModelCheck(result)
       setNotice("请求已受理，请核对更新后的状态和回执。")
       await props.api.refresh()
       return true
@@ -40,6 +41,15 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const change = (section: string, key: string, value: any) => setDraft({ ...draft, [section]: { ...draft[section], [key]: value } })
   const field = (section: string, key: string, label: string, type = "text") =>
     <Field label={label}><Input type={type} value={draft?.[section]?.[key] ?? ""} onChange={v => change(section, key, type === "number" ? Number(v) : v)} /></Field>
+  const authField = (key: string, label: string) => <Field label={label}><Input value={draft?.planner?.auth?.[key] || ""}
+    onChange={v=>change("planner","auth",{...draft.planner.auth,[key]:v})} /></Field>
+  const saveDraft = async () => {
+    try {
+      const parameters = JSON.parse(parametersText)
+      if (!parameters || Array.isArray(parameters) || typeof parameters !== "object") throw new Error()
+      if (await call("save_settings",{settings:{...draft,planner:{...draft.planner,parameters}}})) setEditing(false)
+    } catch { setFailure(true); setNotice("模型参数须为有效的 JSON 对象，请检查格式。") }
+  }
 
   return <Page title="Minecraft 自主游玩" subtitle="Java 1.21.1 · 原生任务队列 · Neko 高层目标与演出">
     <Stack gap={18}>
@@ -100,7 +110,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <JsonView data={state.heartbeat || {enabled:false}} />
       </Stack></Card>
       <Card title="模型与感知"><Stack gap={10}>
-        <Text>{external ? "当前由独立运行配置决定模型；本插件的模型槽不覆盖外部进程。" : "在 Neko 的模型 API 页面配置模型，并在本插件模型绑定中选择用途。凭据由宿主保管。"}</Text>
+        <Text>{external ? "当前由独立运行配置决定模型；本插件设置不覆盖外部进程。" : settings.planner?.route === "direct" ? "动作规划使用下方配置的模型服务。Neko 继续负责目标、人格和解说。" : "在 Neko 的模型 API 页面配置模型，并在本插件模型绑定中选择用途。凭据由宿主保管。"}</Text>
         <DataTable data={[
           {slot:"decision",purpose:"动作规划",fallback:"未配置时保留原生队列与规则反射，自然语言规划暂停"},
           {slot:"vision",purpose:"文字＋真实核心 PNG 图像，可与 decision 绑定同一个多模态模型",fallback:"未配置、不支持或失败时使用 decision 的文字事实"},
@@ -111,13 +121,17 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>下面的手动检查会调用 Neko 已绑定模型；图像检查使用合成色块，不代表真实游戏画面验收。外部运行的模型不受此检查影响。</Text>
         <Inline><Button disabled={busy} onClick={async()=>{await call("check_model",{mode:"text"})}}>检查文字与工具调用</Button>
           <Button disabled={busy} onClick={async()=>{await call("check_model",{mode:"vision"})}}>检查图像与回退</Button></Inline>
+        {!external && settings.planner?.route === "direct" && <Inline>
+          <Button disabled={busy} onClick={async()=>{await call("check_direct_model",{catalog:true})}}>读取直连服务的模型列表</Button>
+          <Button disabled={busy} onClick={async()=>{await call("check_direct_model",{catalog:false})}}>测试直连模型（使用一次额度）</Button>
+        </Inline>}
         {modelCheck && <JsonView data={modelCheck} />}
         <Text>此 headless 后端可读取背包地图图像；现代 3D 画面还需匹配的观战适配。没有真实图像时按文字运行。</Text>
         <Accordion title="上下文预算与最近图像"><JsonView data={{context:runtime.context,perception:runtime.perception}} /></Accordion>
       </Stack></Card>
       <Card title="插件设置"><Stack gap={12}>
         <Text>保存不会启动或重启游戏。嵌入式运行参数须先显式停止再修改，观战地址可在上方单独保存。外部模式下，这些设置只改变 Neko 观察入口；独立运行的模型与策略请同步到 standalone 配置。</Text>
-        {!editing && <Button onClick={() => { setDraft(JSON.parse(JSON.stringify(settings))); setEditing(true) }}>编辑设置</Button>}
+        {!editing && <Button onClick={() => { setDraft(JSON.parse(JSON.stringify(settings))); setParametersText(JSON.stringify(settings.planner?.parameters || {},null,2)); setEditing(true) }}>编辑设置</Button>}
         {editing && draft && <Stack gap={12}>
           <Grid cols={2}>
             {field("server","host","服务器地址")}{field("server","port","端口","number")}
@@ -138,6 +152,44 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           {field("presentation","target","解说角色（留空跟随 Neko 当前角色）")}
           {field("presentation","min_interval_seconds","解说最小间隔（秒）","number")}
           <Switch checked={draft.perception.enabled} label="接收核心真实图像（无图像或模型时文字回退）" onChange={v=>change("perception","enabled",v)} />
+          <Accordion title="模型 API 接入"><Stack gap={10}>
+            <Field label="动作规划使用的模型"><Select value={draft.planner?.route || "host"} options={[{value:"host",label:"使用 Neko 模型绑定（默认）"},{value:"direct",label:"单独配置模型服务"}]} onChange={v=>change("planner","route",v)} /></Field>
+            {draft.planner?.route === "direct" && <Stack gap={10}>
+              <Field label="模型厂商"><Select value={draft.planner.provider} options={[
+                {value:"openai-compatible",label:"自建 / 其他兼容服务"},{value:"qwen",label:"阿里云百炼 / 通义千问"},
+                {value:"deepseek",label:"DeepSeek"},{value:"kimi",label:"Kimi / 月之暗面"},{value:"glm",label:"智谱 GLM"},
+                {value:"doubao",label:"火山方舟 / 豆包"},{value:"siliconflow",label:"硅基流动"},
+                {value:"openai",label:"OpenAI"},{value:"anthropic",label:"Anthropic Claude"},{value:"google",label:"Google Gemini"}
+              ]} onChange={v=>{setDraft({...draft,planner:{...draft.planner,provider:v,protocol:"",base_url:"",api_key_env:"",parameters:{},auth:{...draft.planner.auth,mode:"api_key"}}});setParametersText("{}")}} /></Field>
+              <Grid cols={2}>
+                {field("planner","model","模型 ID（按服务商账户填写）")}{field("planner","base_url","API 根地址（预设可留空；自建必填）")}
+                <Field label="接口协议"><Select value={draft.planner.protocol || ""} options={[{value:"",label:"厂商默认"},{value:"chat",label:"OpenAI Chat 兼容"},{value:"responses",label:"OpenAI Responses"},{value:"anthropic",label:"Claude Messages"},{value:"gemini",label:"Google Gemini"}]} onChange={v=>change("planner","protocol",v)} /></Field>
+                <Field label="认证方式"><Select value={draft.planner.auth?.mode || "api_key"} options={[
+                  {value:"api_key",label:"API Key"},{value:"bearer",label:"外部管理的 Bearer / OAuth 令牌"},
+                  {value:"oauth",label:"OpenAI / Google 官方 OAuth"},{value:"google_adc",label:"Google 应用默认凭据（ADC）"},{value:"none",label:"无认证（自建服务）"}
+                ]} onChange={v=>change("planner","auth",{...draft.planner.auth,mode:v})} /></Field>
+                {field("planner","api_key_env","密钥或令牌的环境变量名（不填密钥）")}
+                {authField("quota_project","Google 配额项目（按账户要求填写）")}
+              </Grid>
+              {!external && <Button disabled={busy} onClick={async()=>{
+                try { await call("check_direct_model",{catalog:true,planner:{...draft.planner,parameters:JSON.parse(parametersText)}}) }
+                catch { setFailure(true);setNotice("请先修正模型参数 JSON。") }
+              }}>读取此服务的模型列表（不调用模型）</Button>}
+              {draft.planner.auth?.mode === "oauth" && <Stack gap={8}>
+                {authField("credential_id","本机授权记录名称")}{authField("client_id","Google OAuth Client ID；OpenAI 初次注册可留空")}
+                {authField("client_secret_env","Google Client Secret 环境变量名")}
+                <Text>先在运行机器安装共享框架的 auth 可选组件，再以相同配置执行 auth-login。登录在该机器的浏览器完成，令牌保存到系统凭据库。OpenAI OAuth 需启用流式 Responses；Google 需配置自己的 OAuth 项目。这里不会读取其他应用的登录。</Text>
+              </Stack>}
+              <Switch checked={draft.planner.stream} label="流式接收（完整校验后执行工具）" onChange={v=>change("planner","stream",v)} />
+              <Switch checked={draft.planner.image_input} label="所选模型支持图像输入" onChange={v=>change("planner","image_input",v)} />
+              <Field label="Chat 接口的输出长度字段"><Select value={draft.planner.output_parameter} options={["max_tokens","max_completion_tokens"]} onChange={v=>change("planner","output_parameter",v)} /></Field>
+              <Field label="模型参数（JSON，按所选协议填写）"><Textarea value={parametersText} onChange={setParametersText} /></Field>
+              <Text>采样参数可省略，保留模型默认值。Chat 支持 temperature、top_p、reasoning_effort 和厂商 thinking / enable_thinking；Responses 使用 reasoning、text；Claude 使用 thinking、output_config；Gemini 使用 thinkingConfig、topP、topK。输出上限和超时在“调用预算”设置。参数支持取决于具体模型，服务拒绝时会显示失败。</Text>
+              <Grid cols={2}>{field("planner","organization","OpenAI Organization（可选）")}{field("planner","project","OpenAI Project（可选）")}
+                {field("planner","anthropic_beta","Claude Beta 标头（可选）")}</Grid>
+              <Text>百炼可使用自己的业务空间和地域地址。国产厂商预设不会代选模型、切换区域或偷偷回退到另一家服务。</Text>
+            </Stack>}
+          </Stack></Accordion>
           <Field label="快决策方式"><Select value={draft.fast.mode} options={[{value:"rules",label:"规则（默认）"},{value:"host",label:"Neko fast 模型槽"},{value:"system_one",label:"System One：远程 Jev / 本地 Decider"}]} onChange={v=>change("fast","mode",v)} /></Field>
           {draft.fast.mode === "system_one" && <Grid cols={2}>
             {field("fast","endpoint","完整 System One 端点")}{field("fast","model","模型名")}
@@ -166,8 +218,9 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <Accordion title="调用预算"><Grid cols={2}>
             {field("autonomy","context_tokens","上下文窗口","number")}{field("autonomy","max_output_tokens","输出预算","number")}
             {field("autonomy","min_decision_seconds","最小决策间隔（秒）","number")}{field("autonomy","max_decisions","最大轮次，0 为持续运行","number")}
+            {field("autonomy","model_timeout_seconds","单次模型总超时（秒）","number")}{field("autonomy","max_tool_rounds","每轮最多连续工具回合","number")}
           </Grid></Accordion>
-          <Inline><Button disabled={busy} tone="primary" onClick={async()=>{if(await call("save_settings",{settings:draft}))setEditing(false)}}>保存设置</Button>
+          <Inline><Button disabled={busy} tone="primary" onClick={saveDraft}>保存设置</Button>
             <Button onClick={()=>{setEditing(false)}}>取消编辑</Button></Inline>
         </Stack>}
       </Stack></Card>

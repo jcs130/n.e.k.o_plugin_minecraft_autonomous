@@ -7,7 +7,7 @@ Neko 提供高层目标、策略、角色演出与语音；独立框架细化规
 可配置其他人的兼容服务器，不要求在本机开服。
 Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minecraft-ai-friend` 项目。
 
-**0.5.1 开发版：复用共享核心的背包恢复、战术和游戏记忆。此次升级验证的是离线接口与打包，尚未在 N.E.K.O 重新开始游戏。此前版本已验证原版 1.21.1 的登录、采集合成、反馈与解说播放；长期生存和复杂目标可靠性仍待验收。**
+**0.5.2 开发版：在共享框架接入国产厂商、OpenAI、Claude、Google 的模型协议、参数和可选 OAuth。此次升级验证的是离线接口与打包，尚未使用真实云账号或在 N.E.K.O 重新开始游戏。此前版本已验证原版 1.21.1 的登录、采集合成、反馈与解说播放；长期生存和复杂目标可靠性仍待验收。**
 默认关闭自主游玩，必须显式执行独立 `run` 或内嵌 `start`。本次没有启动游戏、修改现役服务或发布 Release/Market。
 实际结果及失败记录见 [原版服验收](docs/vanilla-live-acceptance-2026-10-13.md)。
 
@@ -17,12 +17,16 @@ Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minec
 | SDK 入口 | `plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin` |
 | 环境 | Python 3.11+；Node 22+；N.E.K.O 为可选前端 |
 | 游戏协议 | **Java 1.21.1（767）**，拒绝 `auto` 和其他版本 |
-| 自主框架 | `agent-mc-autonomy@0.1.15`，固定来源 `minecraft-ai-friend@a13e93a150a775de18deefed7f69ad7b7d114981` |
+| 自主框架 | `agent-mc-autonomy@0.1.16`，固定来源 `minecraft-ai-friend@9227a48c6a6ea4aeb1cd9acd767f99ace4505aef` |
 | 执行核心 | `agent-mc-world@0.4.0`，来源提交 `5dea9f0ebb794cf6d59ca3742e3b4765002ea77d` |
 | 构建 | 固定源码，直接运行核心官方 `build:engine`；无插件专用补丁或第二份编译实现 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT，归档保留其许可证和来源 |
 
 ## 架构与版本选择
+
+动作规划默认使用 Neko 的模型绑定；也可在「模型 API 接入」中单独选择通义千问、DeepSeek、Kimi、智谱、豆包、硅基流动、OpenAI、Claude、Gemini 或兼容服务。厂商预设不代选模型。原生协议、思考内容回传、流式接收和参数校验均在共享 `agent-mc-autonomy`，插件只提供配置与模型入口。模型访问不进入 Minecraft 身体执行核心。
+
+支持 API Key、外部管理的 Bearer 令牌、OpenAI / Google 官方 OAuth 及 Google ADC。OAuth 可选依赖需单独安装，在运行机器执行 `auth-login`，使用系统凭据库保存授权。Claude 支持 API Key 或外部有效 Bearer，不冒称通用 Claude 订阅账号登录。配置、参数、授权命令和厂商限制见 [共享模型接入文档](https://github.com/jcs130/minecraft-ai-friend/blob/main/packages/agent-mc-autonomy/docs/model-providers.md)。读取模型列表不会推理；显式测试模型会消耗一次调用额度。
 
 游戏记忆在核心的 `mc_memory` 中统一实现，可按需搜索摘要、读取原文、保存方法与失败证据。默认不需要模型；`[memory]` 可选择向量模型、Mem0、阿里云百炼、PowerContext 或通用 HTTP 桥接。配置面板提供相同选项，密钥只填写环境变量名。服务异常时回退本地检索，历史记忆始终要求现场复核。
 

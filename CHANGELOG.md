@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.2 — Unreleased
+
+- Consume shared agent-mc-autonomy 0.1.16 for native Chat/Responses, Claude and Gemini model APIs; add explicit domestic provider presets, streaming and protocol-specific parameters.
+- Add optional official OpenAI/Google OAuth, OS credential storage and refresh in the shared framework. Default Neko model binding is unchanged; no host account files are reused.
+- Add direct model settings, explicit catalog/tool checks and pre-start validation to the hosted panel. Provider implementation stays out of the Neko adapter and Minecraft body.
+- Offline protocol, authentication and hosted-form checks do not prove cloud account access or live gameplay. No release/Market publication or running agent reload.
+
 ## 0.5.1 — Unreleased
 
 - Consume the canonical shared core through agent-mc-autonomy 0.1.15: inventory recovery, generic tactics and scoped game memory, with no plugin-specific core patch/compiler.
