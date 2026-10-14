@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.19 — Unreleased
+
+- Consume autonomy 0.1.35: expose bounded public native queue and actual action/terminal history to the configured shared viewer. Full arguments, private planner context and raw errors remain local.
+- Keep inventory, crafting, trading, survival, terrain and operation rendering in mc-visual-console; the plugin remains a thin host adapter. The independently pinned native 0.4.0 body is unchanged.
+
 ## 0.5.18 — Unreleased
 
 - Consume autonomy 0.1.34: inject bounded public goal, tool/skill and real receipt state into the explicitly configured native viewer. Private planner context and configuration stay out of the viewer projection.
