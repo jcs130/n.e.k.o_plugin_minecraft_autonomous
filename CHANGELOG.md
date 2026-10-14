@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.20 — Unreleased
+
+- Consume autonomy 0.1.36 so manually inserted native tasks appear in the same public timeline as planner tasks. Queue entries reuse their public skill summary, and each rejection keeps one sanitized diagnostic row.
+
 ## 0.5.19 — Unreleased
 
 - Consume autonomy 0.1.35: expose bounded public native queue and actual action/terminal history to the configured shared viewer. Full arguments, private planner context and raw errors remain local.
