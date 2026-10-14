@@ -1,7 +1,7 @@
 [plugin]
 id = "minecraft_autonomous"
 name = "Minecraft Autonomous / 我的世界自主生存 / マインクラフト自律サバイバル"
-version = "0.5.9"
+version = "0.5.10"
 type = "plugin"
 entry = "plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin"
 description = "独立规划框架驱动 Minecraft Java 1.21.1 原生队列；N.E.K.O 提供目标、反馈与解说入口。支持远程服务器。开发版，已验证原版服基础采集合成，长期生存与观战仍待验收。"
