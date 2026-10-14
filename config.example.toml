@@ -72,3 +72,4 @@ library_id = "" # Optional Bailian memory library.
 project_id = "agent-mc"
 scope_id = "" # Existing operator-selected PowerContext Scope; never auto-created.
 search_mode = "text" # PowerContext: text | vector | hybrid.
+learning_enabled = false # Optional PowerContext / HTTP game evidence and reviewed experience workflows.

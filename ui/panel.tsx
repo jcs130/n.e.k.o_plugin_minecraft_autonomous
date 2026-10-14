@@ -38,7 +38,9 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       return false
     } finally { setBusy(false) }
   }
-  const change = (section: string, key: string, value: any) => setDraft({ ...draft, [section]: { ...draft[section], [key]: value } })
+  const change = (section: string, key: string, value: any) => setDraft({ ...draft, [section]: { ...draft[section], [key]: value,
+    ...(section === "memory" && ((key === "mode" && value !== "remote") || (key === "provider" && !["powercontext","http"].includes(value))) ? {learning_enabled:false} : {}),
+  } })
   const field = (section: string, key: string, label: string, type = "text") =>
     <Field label={label}><Input type={type} value={draft?.[section]?.[key] ?? ""} onChange={v => change(section, key, type === "number" ? Number(v) : v)} /></Field>
   const authField = (key: string, label: string) => <Field label={label}><Input value={draft?.planner?.auth?.[key] || ""}
@@ -212,8 +214,12 @@ export default function Panel(props: PluginSurfaceProps<any>) {
                 {field("memory","scope_id","已有的 Scope ID")}
                 <Field label="PowerContext 检索方式"><Select value={draft.memory.search_mode} options={[{value:"text",label:"全文搜索"},{value:"vector",label:"向量搜索"},{value:"hybrid",label:"混合搜索"}]} onChange={v=>change("memory","search_mode",v)} /></Field>
               </Grid>}
+              {["powercontext","http"].includes(draft.memory.provider) && <Stack gap={6}>
+                <Field label="服务端经验整理"><Switch checked={draft.memory.learning_enabled === true} onChange={v=>change("memory","learning_enabled",v)} /></Field>
+                <Text>使用该角色游戏专用的记忆范围。开启后可以提交任务证据、整理待审核经验并按需召回；候选需在记忆服务中人工审核，生成技能不会自动安装。</Text>
+              </Stack>}
             </Stack>}
-            <Text>外部服务只增强本机游戏笔记的检索。换电脑时要迁移本地笔记；历史库存和地点仍须现场复核。</Text>
+            <Text>基础检索只增强本机游戏笔记；经验整理可召回专用范围内的历史经验。换电脑时要迁移本地笔记与提交回执；历史库存和地点仍须现场复核。</Text>
           </Stack></Accordion>
           <Accordion title="调用预算"><Grid cols={2}>
             {field("autonomy","context_tokens","上下文窗口","number")}{field("autonomy","max_output_tokens","输出预算","number")}

@@ -7,7 +7,7 @@ Neko 提供高层目标、策略、角色演出与语音；独立框架细化规
 可配置其他人的兼容服务器，不要求在本机开服。
 Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minecraft-ai-friend` 项目。
 
-**0.5.2 开发版：在共享框架接入国产厂商、OpenAI、Claude、Google 的模型协议、参数和可选 OAuth。此次升级验证的是离线接口与打包，尚未使用真实云账号或在 N.E.K.O 重新开始游戏。此前版本已验证原版 1.21.1 的登录、采集合成、反馈与解说播放；长期生存和复杂目标可靠性仍待验收。**
+**0.5.3 开发版：共享核心增加 PowerContext 1.3 与通用 HTTP 经验整理接口，保留多厂商模型、参数和可选 OAuth。此次升级通过契约、配置页和独立打包验证，尚未连接家庭记忆服务或在 N.E.K.O 重新开始游戏。此前版本已验证原版 1.21.1 的登录、采集合成、反馈与解说播放；长期生存和复杂目标可靠性仍待验收。**
 默认关闭自主游玩，必须显式执行独立 `run` 或内嵌 `start`。本次没有启动游戏、修改现役服务或发布 Release/Market。
 实际结果及失败记录见 [原版服验收](docs/vanilla-live-acceptance-2026-10-13.md)。
 
@@ -17,8 +17,8 @@ Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minec
 | SDK 入口 | `plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin` |
 | 环境 | Python 3.11+；Node 22+；N.E.K.O 为可选前端 |
 | 游戏协议 | **Java 1.21.1（767）**，拒绝 `auto` 和其他版本 |
-| 自主框架 | `agent-mc-autonomy@0.1.16`，固定来源 `minecraft-ai-friend@9227a48c6a6ea4aeb1cd9acd767f99ace4505aef` |
-| 执行核心 | `agent-mc-world@0.4.0`，来源提交 `5dea9f0ebb794cf6d59ca3742e3b4765002ea77d` |
+| 自主框架 | `agent-mc-autonomy@0.1.17`，固定来源 `minecraft-ai-friend@7895b648882e416ffb8765c2fde4a5ffa9550ebd` |
+| 执行核心 | `agent-mc-world@0.4.0`，来源提交 `01e999189db2eb305be5a7dc7e899de8f44c84c0` |
 | 构建 | 固定源码，直接运行核心官方 `build:engine`；无插件专用补丁或第二份编译实现 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT，归档保留其许可证和来源 |
 
@@ -30,7 +30,7 @@ Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minec
 
 游戏记忆在核心的 `mc_memory` 中统一实现，可按需搜索摘要、读取原文、保存方法与失败证据。默认不需要模型；`[memory]` 可选择向量模型、Mem0、阿里云百炼、PowerContext 或通用 HTTP 桥接。配置面板提供相同选项，密钥只填写环境变量名。服务异常时回退本地检索，历史记忆始终要求现场复核。
 
-外部记忆服务用于检索本机游戏笔记，不会导入个人聊天记忆；换电脑需迁移本地笔记。PowerContext 需要填写已有 Scope ID。具体地址与接口边界见共享核心的 [游戏记忆文档](https://github.com/jcs130/minecraft-ai-friend/blob/main/packages/agent-mc-world/docs/game-memory.md)。本地检查未连接真实云账号或家庭记忆服务。
+基础外部检索只匹配本机游戏笔记。可选 `learning_enabled` 接入 PowerContext 1.3 的任务证据、Experience/Skill 候选、Dream 整理与限量历史召回，也可通过通用 HTTP 桥接接入其他服务。PowerContext 需要该服务器、账号和角色专用的已有 Scope；候选在记忆服务中人工审核，插件不会自动批准、安装技能或训练权重。换电脑需迁移本地笔记与提交回执。具体地址与接口边界见共享核心的 [游戏记忆文档](https://github.com/jcs130/minecraft-ai-friend/blob/main/packages/agent-mc-world/docs/game-memory.md)。本地检查未连接真实云账号或家庭记忆服务。
 
 ```text
 N.E.K.O 主脑：目标 / 新反馈 / 解说 / 语音 / 表演
@@ -47,7 +47,7 @@ Neko 主脑、低层规划模型和 Minecraft 执行器是三个职责。Neko �
 SQLite 只保存目标和跨进程指令投递、去重及回执；正在执行哪一步、待执行动作和抢占规则
 以 **原生 `mc_queue` / `mc_do` / task 事件**为准，不再复制一个身体执行器。
 
-本次上游核对至主分支 `034bf38`，新增实际照片留存、登录就绪与实时读数等修复；
+2026-10-13 的历史上游核对至主分支 `034bf38`，新增实际照片留存、登录就绪与实时读数等修复；
 实验分支 `7983039` 的有限模型试玩宿主仍绑定具体服务器和模型。本次保留已验证的 headless 核心，
 结论和可转发给上游的文本见 [上游更新核查](docs/research/upstream-autonomy-2026-10-13.md)。
 
@@ -137,7 +137,7 @@ python standalone.py status --config config.local.toml
 
 ```powershell
 git clone https://github.com/jcs130/minecraft-ai-friend.git ../minecraft-ai-friend
-git -C ../minecraft-ai-friend fetch origin 5dea9f0ebb794cf6d59ca3742e3b4765002ea77d
+git -C ../minecraft-ai-friend fetch origin 01e999189db2eb305be5a7dc7e899de8f44c84c0
 # 构建需要 pnpm 11.5.0；destination 必须为空。
 python backend/build.py --checkout ../minecraft-ai-friend --destination ../agent-mc-world-neko-build
 python backend/install.py --destination ./local/backend-04 --archive ../agent-mc-world-neko-build/agent-mc-world-0.4.0.tgz

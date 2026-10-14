@@ -25,7 +25,7 @@ EDITABLE = {
     "presentation": {"enabled", "target", "min_interval_seconds"},
     "heartbeat": {"enabled", "target", "min_interval_seconds", "review_interval_seconds"},
     "fast": {"mode", "endpoint", "model", "api_key_env", "min_confidence"},
-    "memory": {"mode", "endpoint", "model", "api_key_env", "timeout_ms", "provider", "library_id", "project_id", "scope_id", "search_mode"},
+    "memory": {"mode", "endpoint", "model", "api_key_env", "timeout_ms", "provider", "library_id", "project_id", "scope_id", "search_mode", "learning_enabled"},
     "planner": {"route", *HttpPlannerConfig.__dataclass_fields__},
 }
 
