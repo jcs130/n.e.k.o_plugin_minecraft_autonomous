@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.18 — Unreleased
+
+- Consume autonomy 0.1.34: inject bounded public goal, tool/skill and real receipt state into the explicitly configured native viewer. Private planner context and configuration stay out of the viewer projection.
+- Use the shared viewer's same-body path/trail/input and observed hand-motion integration. Rendering remains in `mc-visual-console`; no duplicate renderer or body queue is added to the plugin.
+- Pass the shared Mineflayer window projection for original inventory/crafting layouts, actual cursor stacks, slot-click playback and received furnace progress.
+- Preserve the separately verified native backend pin and service ownership; unrelated concurrent native-core source updates are not silently deployed.
+
 ## 0.5.17 — Unreleased
 
 - Consume autonomy 0.1.32: a newly queued observation ends the planning turn even while feedback awaits its first body plan. Wait for the actual native result before deciding again, without consuming feedback queue policy or interrupting unrelated native work.
