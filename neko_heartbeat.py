@@ -66,7 +66,7 @@ def heartbeat_text(review, commentary=None):
               "解说只说一个新重点≤30字，不念背包或读取过程。")
     if review.get("attempts", 0) > 1:
         speech = "本轮重试确认，只调用工具，不重复解说。"
-    return ("Minecraft复盘 " + review["id"] + "。" + speech + "调用工具前不说话。先用minecraft_autonomy_review的inspect核对，"
+    return ("Minecraft复盘 " + review["id"] + "。" + speech + "本次无新用户指令，不用minecraft_autonomy_intent重发旧目标。调用工具前不说话。先用minecraft_autonomy_review的inspect核对，"
             "再continue/insert/revise；表达遵循返回的commentary，只说新重点。" + intent + "；" + readings + f"；连续查询{reads}次。")
 
 

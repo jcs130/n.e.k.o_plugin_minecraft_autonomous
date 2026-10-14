@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.15 — Unreleased
+
+- Consume autonomy 0.1.29: queued observations retain rejected body-plan evidence, including after history eviction, and rejected batches explain that earlier steps did not run.
+- Clarify the Neko transport: autonomous heartbeat strategy uses the existing review/inspect/revise port; the separate intent tool relays new user goals and must not replay stale stages or entity IDs. This wording does not guarantee model compliance.
+- Pin the checked independent core with distinct live-chicken search receipts, preserving food item labels and native retry guards.
+
 ## 0.5.14 — Unreleased
 
 - Put the current speaking policy and 30-character highlight limit directly at the front of the small notification preview. Tool-result-only instructions were insufficient when the main brain spoke without inspecting; same-review retries explicitly request tool confirmation without repeating narration.

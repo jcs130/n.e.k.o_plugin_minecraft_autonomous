@@ -57,7 +57,7 @@ class NekoAutonomyTools:
 
     @llm_tool(
         name="minecraft_autonomy_intent",
-        description="向独立 Minecraft 规划框架投递自然语言高层目标。append 排队；insert 在安全检查点插入后恢复；replace 明确停止旧动作改做新目标。只在用户提出新目标或需要改变高层策略时用，解说不投递任务，常规状态不打断当前动作。必须提供 UUID request_id；确认不明时查询或复用同一个 ID，不能生成新 ID 重放。",
+        description="仅转达用户本轮明确提出的新游戏目标。append 排队；insert 在安全检查点插入后恢复；replace 明确停止旧动作改做新目标。自主心跳中的高层策略必须用minecraft_autonomy_review，先inspect再continue/insert/revise；不要通过此工具重发旧目标或过期实体编号。解说不投递任务。必须提供 UUID request_id；确认不明时查询或复用同一个 ID，不能生成新 ID 重放。",
         parameters={"type": "object", "properties": {
             "goal": {"type": "string", "minLength": 1, "maxLength": 4000},
             "mode": {"enum": ["append", "insert", "replace"]},
