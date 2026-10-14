@@ -23,6 +23,7 @@ EDITABLE = {
     "presentation": {"enabled", "target", "min_interval_seconds"},
     "heartbeat": {"enabled", "target", "min_interval_seconds", "review_interval_seconds"},
     "fast": {"mode", "endpoint", "model", "api_key_env", "min_confidence"},
+    "memory": {"mode", "endpoint", "model", "api_key_env", "timeout_ms", "provider", "library_id", "project_id", "scope_id", "search_mode"},
 }
 
 
@@ -37,6 +38,7 @@ def public_config(settings):
                    "listen_port": settings.viewer_listen_port},
         "perception": {"enabled": settings.vision_enabled},
         "fast": asdict(settings.fast),
+        "memory": asdict(settings.memory),
     }
 
 

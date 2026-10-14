@@ -1,10 +1,10 @@
 # Body distribution compatibility
 
-The canonical build, hash verification, dependency manifest and reviewed patch set now live in
+The canonical build entry, hash verification and dependency manifest live in
 minecraft-ai-friend/packages/agent-mc-autonomy/src/agent_mc_autonomy/core_distribution.
 This directory only forwards the existing build.py, install.py and check_disconnected.py commands.
-The plugin dependency pins the actual implementation. The body remains pinned to 7889ce2 until
-its separately tested upgrade; moving source ownership does not replace a running body.
+The plugin dependency pins the actual implementation. The body uses the canonical 5dea9f0 build.
+Changing the pin does not replace a running body; install explicitly into a new directory.
 
-The old nekoBuild/neko-headless receipt names are preserved as a file format compatibility detail,
-not a dependency on a Neko runtime. LICENSE-Agent-MC-World.txt preserves the body source license.
+Canonical build/type receipt hashes and the archive hash are verified during installation.
+No Neko runtime is needed for this check. LICENSE-Agent-MC-World.txt preserves the body source license.

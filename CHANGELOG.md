@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 — Unreleased
+
+- Consume the canonical shared core through agent-mc-autonomy 0.1.15: inventory recovery, generic tactics and scoped game memory, with no plugin-specific core patch/compiler.
+- Expose local keyword, optional embedding and external Mem0/Bailian/PowerContext/HTTP memory configuration in the existing settings panel. Provider logic, evidence and revisions remain in agent-mc-world.
+- Default to local retrieval; forward only the configured memory key environment variable. External failures preserve local notes and report degraded retrieval. No game, model or service starts during checks.
+- Pin the archive and build/type receipts, preserve old world identities and permission channels, and validate the disconnected Python-to-MCP channel. Source checks do not establish live gameplay or cloud connectivity.
+
 ## 0.5.0 — Unreleased
 
 - Move the complete autonomous runtime and strategic review lifecycle into minecraft-ai-friend/packages/agent-mc-autonomy. Consume one pinned dependency; remove gameplay/viewer assembly copies from the Neko adapter.

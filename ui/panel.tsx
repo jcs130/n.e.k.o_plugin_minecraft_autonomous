@@ -144,6 +144,25 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             {field("fast","api_key_env","API Key 所在环境变量名（不填密钥）")}
             {field("fast","min_confidence","最低置信度 0–1","number")}
           </Grid>}
+          <Accordion title="游戏记忆"><Stack gap={10}>
+            <Text>记录游戏中的地点、方法与经验，按服务器和角色隔离。默认本地保存，不需要模型；开启外部检索后会发送游戏笔记和查询，服务不可用时回退本地搜索。</Text>
+            <Field label="检索方式"><Select value={draft.memory?.mode || "local"} options={[{value:"local",label:"本地关键词（默认）"},{value:"vector",label:"本地记忆 + 向量模型"},{value:"remote",label:"外挂记忆服务"}]} onChange={v=>change("memory","mode",v)} /></Field>
+            {(draft.memory?.mode || "local") !== "local" && <Grid cols={2}>
+              {field("memory","endpoint",draft.memory?.mode === "vector" ? "完整 embeddings 地址" : "记忆服务根地址")}
+              {field("memory","api_key_env","密钥所在环境变量名称")}
+              {field("memory","timeout_ms","等待上限（毫秒）","number")}
+              {draft.memory?.mode === "vector" && field("memory","model","向量模型名")}
+            </Grid>}
+            {draft.memory?.mode === "remote" && <Stack gap={8}>
+              <Field label="服务类型"><Select value={draft.memory.provider} options={[{value:"mem0-platform",label:"Mem0 云端"},{value:"mem0-oss",label:"Mem0 自建"},{value:"bailian",label:"阿里云百炼"},{value:"powercontext",label:"PowerContext"},{value:"http",label:"通用 HTTP 桥接"}]} onChange={v=>change("memory","provider",v)} /></Field>
+              {draft.memory.provider === "bailian" && <Grid cols={2}>{field("memory","library_id","记忆库 ID（可选）")}{field("memory","project_id","项目 ID")}</Grid>}
+              {draft.memory.provider === "powercontext" && <Grid cols={2}>
+                {field("memory","scope_id","已有的 Scope ID")}
+                <Field label="PowerContext 检索方式"><Select value={draft.memory.search_mode} options={[{value:"text",label:"全文搜索"},{value:"vector",label:"向量搜索"},{value:"hybrid",label:"混合搜索"}]} onChange={v=>change("memory","search_mode",v)} /></Field>
+              </Grid>}
+            </Stack>}
+            <Text>外部服务只增强本机游戏笔记的检索。换电脑时要迁移本地笔记；历史库存和地点仍须现场复核。</Text>
+          </Stack></Accordion>
           <Accordion title="调用预算"><Grid cols={2}>
             {field("autonomy","context_tokens","上下文窗口","number")}{field("autonomy","max_output_tokens","输出预算","number")}
             {field("autonomy","min_decision_seconds","最小决策间隔（秒）","number")}{field("autonomy","max_decisions","最大轮次，0 为持续运行","number")}

@@ -138,6 +138,23 @@ def test_settings_save_validates_without_starting_or_copying_provider_keys(plugi
     assert plugin_instance._worker is None
 
 
+def test_memory_settings_use_shared_config_without_starting_or_exposing_secrets(plugin_instance, plugin_module, run_async, monkeypatch):
+    update = AsyncMock(return_value={})
+    monkeypatch.setattr(plugin_instance.config, "update", update)
+    monkeypatch.setenv("GAME_MEMORY_KEY", "private-memory-fixture")
+    patch = {"memory": {"mode": "remote", "provider": "powercontext", "endpoint": "https://memory.example.org",
+                        "api_key_env": "GAME_MEMORY_KEY", "scope_id": "existing-game-scope"}}
+    result = run_async(plugin_instance.save_settings(patch))
+    assert isinstance(result, Ok) and result.value["running_session_changed"] is False
+    update.assert_awaited_once_with(patch)
+    dashboard = module(plugin_module, "dashboard")
+    state = dashboard.public_config(plugin_module.Settings.parse(patch))
+    assert state["memory"]["scope_id"] == "existing-game-scope"
+    assert "private-memory-fixture" not in json.dumps(state)
+    assert isinstance(run_async(plugin_instance.save_settings({"memory": {"api_key": "secret"}})), Err)
+    assert plugin_instance._worker is None
+
+
 def test_explicit_model_diagnostic_uses_same_gateway_and_never_dispatches(plugin_instance, plugin_module, run_async):
     check = module(plugin_module, "model_check")
     create = AsyncMock(return_value=SimpleNamespace(choices=[SimpleNamespace(finish_reason="tool_calls",

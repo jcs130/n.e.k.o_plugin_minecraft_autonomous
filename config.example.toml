@@ -59,3 +59,16 @@ endpoint = "" # Explicit full endpoint, e.g. https://api.typesafe.ai/v1/systemon
 model = "" # e.g. jev-latest; local services use their own model name.
 api_key_env = "" # Environment VARIABLE NAME only, never a secret value.
 min_confidence = 0.75
+
+# Retrieval is implemented by agent-mc-world, shared with other Agent frameworks.
+[memory]
+mode = "local" # local | vector | remote
+endpoint = "" # Full embeddings URL in vector mode; memory API base URL in remote mode.
+model = "" # Required only in vector mode.
+api_key_env = "" # Environment variable NAME; never put the secret in this file.
+timeout_ms = 3000
+provider = "http" # http | mem0-oss | mem0-platform | bailian | powercontext
+library_id = "" # Optional Bailian memory library.
+project_id = "agent-mc"
+scope_id = "" # Existing operator-selected PowerContext Scope; never auto-created.
+search_mode = "text" # PowerContext: text | vector | hybrid.

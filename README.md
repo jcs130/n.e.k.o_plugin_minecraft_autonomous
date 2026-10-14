@@ -7,8 +7,8 @@ Neko 提供高层目标、策略、角色演出与语音；独立框架细化规
 可配置其他人的兼容服务器，不要求在本机开服。
 Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minecraft-ai-friend` 项目。
 
-**0.5.0 开发版：已在原版 1.21.1 测试服验证登录、采集、合成、Neko 反馈投递及游戏解说的桌面播放回执。同角色观战的数据链路已验证；长期生存、完整浏览器场景与复杂目标可靠性仍待验收。**
-默认关闭自主游玩，必须显式执行独立 `run` 或内嵌 `start`。本次按用户指令启动新的测试栈，旧无人值守保持停用，没有发布 Release/Market。
+**0.5.1 开发版：复用共享核心的背包恢复、战术和游戏记忆。此次升级验证的是离线接口与打包，尚未在 N.E.K.O 重新开始游戏。此前版本已验证原版 1.21.1 的登录、采集合成、反馈与解说播放；长期生存和复杂目标可靠性仍待验收。**
+默认关闭自主游玩，必须显式执行独立 `run` 或内嵌 `start`。本次没有启动游戏、修改现役服务或发布 Release/Market。
 实际结果及失败记录见 [原版服验收](docs/vanilla-live-acceptance-2026-10-13.md)。
 
 | 项目 | 内容 |
@@ -17,12 +17,16 @@ Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minec
 | SDK 入口 | `plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin` |
 | 环境 | Python 3.11+；Node 22+；N.E.K.O 为可选前端 |
 | 游戏协议 | **Java 1.21.1（767）**，拒绝 `auto` 和其他版本 |
-| 自主框架 | `agent-mc-autonomy`，固定来源 `minecraft-ai-friend@8a4597d` |
-| 执行核心 | `agent-mc-world@0.4.0`，来源提交 `7889ce261a2309d94400b739c6198468d8271d83` |
-| 构建 | 固定源码 + 主框架维护的兼容构建补丁，派生的 `neko-headless` |
+| 自主框架 | `agent-mc-autonomy@0.1.15`，固定来源 `minecraft-ai-friend@a13e93a150a775de18deefed7f69ad7b7d114981` |
+| 执行核心 | `agent-mc-world@0.4.0`，来源提交 `5dea9f0ebb794cf6d59ca3742e3b4765002ea77d` |
+| 构建 | 固定源码，直接运行核心官方 `build:engine`；无插件专用补丁或第二份编译实现 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT，归档保留其许可证和来源 |
 
 ## 架构与版本选择
+
+游戏记忆在核心的 `mc_memory` 中统一实现，可按需搜索摘要、读取原文、保存方法与失败证据。默认不需要模型；`[memory]` 可选择向量模型、Mem0、阿里云百炼、PowerContext 或通用 HTTP 桥接。配置面板提供相同选项，密钥只填写环境变量名。服务异常时回退本地检索，历史记忆始终要求现场复核。
+
+外部记忆服务用于检索本机游戏笔记，不会导入个人聊天记忆；换电脑需迁移本地笔记。PowerContext 需要填写已有 Scope ID。具体地址与接口边界见共享核心的 [游戏记忆文档](https://github.com/jcs130/minecraft-ai-friend/blob/main/packages/agent-mc-world/docs/game-memory.md)。本地检查未连接真实云账号或家庭记忆服务。
 
 ```text
 N.E.K.O 主脑：目标 / 新反馈 / 解说 / 语音 / 表演
@@ -129,7 +133,7 @@ python standalone.py status --config config.local.toml
 
 ```powershell
 git clone https://github.com/jcs130/minecraft-ai-friend.git ../minecraft-ai-friend
-git -C ../minecraft-ai-friend fetch origin 7889ce261a2309d94400b739c6198468d8271d83
+git -C ../minecraft-ai-friend fetch origin 5dea9f0ebb794cf6d59ca3742e3b4765002ea77d
 # 构建需要 pnpm 11.5.0；destination 必须为空。
 python backend/build.py --checkout ../minecraft-ai-friend --destination ../agent-mc-world-neko-build
 python backend/install.py --destination ./local/backend-04 --archive ../agent-mc-world-neko-build/agent-mc-world-0.4.0.tgz

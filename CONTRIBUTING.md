@@ -13,6 +13,9 @@
 
 在本插件仓库根目录验证：
 
+克隆或隔离验证时，插件目录名使用 `minecraft_autonomous`，与插件 ID、入口和正式安装布局一致。
+GitHub 仓库名包含点号；直接把该名字作为 Python 包目录运行测试会导致相对导入失败。
+
 ```powershell
 $env:NEKO_ROOT = '/path/to/N.E.K.O'
 uv run --project "$env:NEKO_ROOT" python -m pytest tests -q
@@ -58,8 +61,9 @@ python backend/install.py --destination ./local/backend-04 --archive /path/to/ag
 python backend/check_disconnected.py --directory ./local/backend-04
 ```
 
-安装器校验派生 headless 归档 SHA256 和编译文件清单，并通过 `npm ci --ignore-scripts --omit=dev` 装配依赖；
-第二条命令仅核实断开状态、工具发现及错误回执，不证明已登录或可自主游玩。
+安装器校验官方 `build:engine` 归档 SHA256、固定构建凭据和源码/运行文件/类型清单，
+并通过 `npm ci --ignore-scripts --omit=dev` 装配依赖，可用 `--offline` 限定已有缓存。
+第二条命令核实断开状态、工具发现、记忆读写与重开恢复，以及错误回执，不证明已登录或可自主游玩。
 
 普通源码推送只触发 Verify。后端未完成现场验收前，不创建发布 tag、不手动触发 Release、
 不调用 `neko-plugin publish`，也不将开发基础作为可玩的插件提交 Market。
