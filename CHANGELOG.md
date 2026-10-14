@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.22 — Unreleased
+
+- Consume autonomy 0.1.38 and the hash-checked independent 0.4.3 body: reject damaging dry navigation drops, brake predicted cliff falls with real physics, and remove the lower-goal deep-fall exemption. The thin adapter owns no movement policy.
+- Preserve source/build/deployment evidence separately; this does not claim sustained survival or publish a Market release.
+
 ## 0.5.20 — Unreleased
 
 - Consume autonomy 0.1.36 so manually inserted native tasks appear in the same public timeline as planner tasks. Queue entries reuse their public skill summary, and each rejection keeps one sanitized diagnostic row.

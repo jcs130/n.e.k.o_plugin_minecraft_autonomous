@@ -28,7 +28,7 @@
   public types are independent of Cortico. Optional host adapters depend on neutral
   contracts and the core; do not import Core/Persona/provider/Memory implementations.
   Preserve useful behavior from the user's fork through explicit contracts and tests.
-- Use the pinned independent 0.4.0 headless core and its checked build receipt.
+- Use the pinned independent 0.4.3 headless core and its checked build receipt.
   Do not replace it with the historical 0.3 distribution. Legacy speech discovery, server
   policies and additional model endpoints must be explicit optional integrations.
 - Before committing, run pytest, Ruff and the official release/Market-structure check
