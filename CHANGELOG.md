@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.23 — Unreleased
+
+- Consume autonomy 0.1.39 and checked core 0.4.4: keep concise native action parameter meanings, return a legal bounded voxel retry, and expose repeated read-only activity to the optional planner. Game decisions and body execution remain in the independent framework.
+- Preserve the deployed fall safeguards, explicit stops and unknown-dispatch protection. Offline validation does not establish sustained survival.
+
 ## 0.5.22 — Unreleased
 
 - Consume autonomy 0.1.38 and the hash-checked independent 0.4.3 body: reject damaging dry navigation drops, brake predicted cliff falls with real physics, and remove the lower-goal deep-fall exemption. The thin adapter owns no movement policy.
