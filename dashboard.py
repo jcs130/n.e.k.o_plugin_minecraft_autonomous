@@ -11,7 +11,7 @@ from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
 
 from .direct_planner import public_planner
 from .model_check import check_model
-from .neko_heartbeat import HeartbeatSettings, review_port
+from .neko_heartbeat import HeartbeatSettings, is_stopped, review_port
 from .neko_presentation import PresentationSettings
 from .neko_tools import unwrap
 
@@ -144,7 +144,7 @@ class Dashboard:
             heartbeat = HeartbeatSettings.parse(raw)
             review_state = review_port(self, settings).state()
             review = review_state.get("review", {})
-            heartbeat_state = {"enabled": heartbeat.enabled, "last_decision": review_state.get("last_decision"),
+            heartbeat_state = {"enabled": heartbeat.enabled, "explicit_stop": is_stopped(self), "last_decision": review_state.get("last_decision"),
                                "submitted_at": review_state.get("submitted_at"), "retry_after": review_state.get("retry_after"),
                                "review": {key: review.get(key) for key in ("id", "trigger", "attempts", "result")}}
             return {"settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
@@ -175,7 +175,17 @@ class Dashboard:
             with self._control_lock:
                 if set(settings) - {"viewer", "presentation", "heartbeat"} and self._worker and self._worker.snapshot().get("worker_alive"):
                     return Err({"code": "settings_runtime_active", "message": "运行参数须先显式停止嵌入式运行再保存；观战地址可单独保存，模型槽绑定可在宿主修改。"})
-            await self.config.update(settings)
+                fence = bool(set(settings) & {"server", "runtime", "autonomy", "heartbeat"})
+                if fence:
+                    self._generation += 1
+                    self._configuration_writes += 1
+            try:
+                await self.config.update(settings)
+            finally:
+                if fence:
+                    with self._control_lock:
+                        self._generation += 1
+                        self._configuration_writes -= 1
             if "heartbeat" in settings:
                 review_port(self, Settings.parse(merged)).configure(HeartbeatSettings.parse(merged).policy())
             return Ok({"saved": True, "running_session_changed": False, "applies": "next_explicit_start_or_observer_read"})

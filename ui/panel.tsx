@@ -106,7 +106,11 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>受理、原生动作完成、规划器报告和实际目标达成是不同状态。主脑决定阶段目标，独立框架继续规划和执行；正常工作无需重新派发。</Text>
       </Stack></Card>
       <Card title="Neko 主脑决策心跳"><Stack gap={10}>
-        <StatusBadge label={state.heartbeat?.enabled ? "已启用" : "未启用"} tone={state.heartbeat?.enabled ? "success" : "default"} />
+        <StatusBadge label={state.heartbeat?.explicit_stop ? "已停止" : state.heartbeat?.enabled ? "已启用" : "未启用"} tone={state.heartbeat?.enabled && !state.heartbeat?.explicit_stop ? "success" : "default"} />
+        {external && state.heartbeat?.explicit_stop && <Stack gap={8}>
+          <Text>独立框架重新启动后，需要显式恢复 Neko 反馈。下次正常心跳按原配置继续；此操作不启动游戏、不追加任务。</Text>
+          <ActionButton action={action("resume_observation")} />
+        </Stack>}
         <Text>没有新聊天也会根据新鲜的身体、口粮、物品、任务结果和当前目标复盘。主脑选择继续或插入阶段目标，再由 Neko 解说；正常长动作继续执行。</Text>
         <Text>变化合并后限频唤醒；定期复核带上实际进展。等待主脑回执时不重复派单，用户新反馈优先。通知受理不等于主脑决策或语音播放完成。</Text>
         <JsonView data={state.heartbeat || {enabled:false}} />

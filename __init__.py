@@ -26,6 +26,7 @@ class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoHeartbeat, Nek
         super().__init__(ctx)
         self._control_lock = threading.RLock()
         self._generation = 0
+        self._configuration_writes = 0
         self._worker = None
 
     def _operator_state(self, stopped):

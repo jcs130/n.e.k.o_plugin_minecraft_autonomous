@@ -1,10 +1,15 @@
+import asyncio
 import importlib
 import json
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
+import pytest
+from agent_mc_autonomy.ownership import session_lease
 from agent_mc_autonomy.review import ReviewPort
+from plugin.sdk.plugin import Err
 
 
 def setup(plugin, monkeypatch):
@@ -103,6 +108,103 @@ def test_stop_blocks_transport_and_tool(plugin_instance, run_async, monkeypatch)
     plugin_instance._operator_state(True)
     assert run_async(plugin_instance.game_decision_heartbeat()).value["reason"] == "explicit_stop"
     assert run_async(plugin_instance.minecraft_autonomy_review(port.state()["review"]["id"], "continue", "等候"))["error"] == "disabled_or_stopped"
+    assert not push.called
+
+
+def external_setup(plugin, monkeypatch):
+    port, snapshot, push = setup(plugin, monkeypatch)
+    plugin.config.dump.return_value["runtime"] = {"mode": "external", "data_directory": str(port.directory.parents[2])}
+    plugin._operator_state(True)
+    return port, snapshot, push
+
+
+def test_explicit_resume_only_restores_host_participation(plugin_instance, run_async, monkeypatch):
+    port, snapshot, push = external_setup(plugin_instance, monkeypatch)
+    port.observe(snapshot)
+    before = port.state()
+    with session_lease(port.directory):
+        for _ in range(2):
+            result = run_async(plugin_instance.resume_observation()).value
+            assert result["observer_resumed"] and not result["game_started"] and not result["task_dispatched"]
+            assert not result["submitted"] and not result["main_brain_acknowledged"] and not result["playback_verified"]
+    assert port.state() == before and not port.mailbox.ready() and not push.called
+    assert plugin_instance._worker is None
+    assert not json.loads(plugin_instance.data_path("operator.json").read_text())["explicit_stop"]
+    assert run_async(plugin_instance.game_decision_heartbeat()).value["submitted"]
+
+
+@pytest.mark.parametrize("fault", ["missing_lease", "other_account", "stale", "future", "failed", "disconnected", "disabled", "heartbeat_disabled", "embedded"])
+def test_resume_rejects_inactive_or_disabled_runtime(plugin_instance, run_async, monkeypatch, fault):
+    port, snapshot, push = external_setup(plugin_instance, monkeypatch)
+    raw = plugin_instance.config.dump.return_value
+    if fault in {"stale", "future"}:
+        snapshot["updated_at"] = datetime.fromtimestamp(9900 if fault == "stale" else 10100, timezone.utc).isoformat()
+    elif fault == "failed":
+        snapshot["phase"] = "failed"
+    elif fault == "disconnected":
+        snapshot["game_connected"] = False
+    elif fault == "disabled":
+        raw["autonomy"]["enabled"] = False
+    elif fault == "heartbeat_disabled":
+        raw["heartbeat"]["enabled"] = False
+    elif fault == "embedded":
+        raw["runtime"]["mode"] = "embedded"
+    (port.directory / "status.json").write_text(json.dumps(snapshot), encoding="utf-8")
+    lease = nullcontext() if fault == "missing_lease" else session_lease(port.directory / "other" if fault == "other_account" else port.directory)
+    with lease:
+        assert isinstance(run_async(plugin_instance.resume_observation()), Err)
+    assert json.loads(plugin_instance.data_path("operator.json").read_text())["explicit_stop"]
+    assert not push.called and plugin_instance._worker is None and not port.mailbox.ready()
+
+
+def test_stop_wins_over_inflight_observer_resume(plugin_instance, run_async, monkeypatch):
+    port, _, push = external_setup(plugin_instance, monkeypatch)
+    raw = plugin_instance.config.dump.return_value
+    async def exercise():
+        entered, release = asyncio.Event(), asyncio.Event()
+        async def delayed(**_):
+            entered.set()
+            await release.wait()
+            return raw
+        monkeypatch.setattr(plugin_instance.config, "dump", delayed)
+        with session_lease(port.directory):
+            resuming = asyncio.create_task(plugin_instance.resume_observation())
+            await entered.wait()
+            stopping = asyncio.create_task(plugin_instance.stop())
+            await asyncio.sleep(0)
+            release.set()
+            result = await resuming
+            await stopping
+            assert isinstance(result, Err) and result.error["code"] == "resume_cancelled"
+    run_async(exercise())
+    assert json.loads(plugin_instance.data_path("operator.json").read_text())["explicit_stop"]
+    assert not push.called
+
+
+def test_configuration_save_invalidates_inflight_observer_resume(plugin_instance, run_async, monkeypatch):
+    port, _, push = external_setup(plugin_instance, monkeypatch)
+    raw = plugin_instance.config.dump.return_value
+    async def exercise():
+        entered, release = asyncio.Event(), asyncio.Event()
+        first = True
+        async def delayed(**_):
+            nonlocal first
+            if first:
+                first = False
+                entered.set()
+                await release.wait()
+            return raw
+        monkeypatch.setattr(plugin_instance.config, "dump", delayed)
+        monkeypatch.setattr(plugin_instance.config, "update", AsyncMock())
+        with session_lease(port.directory):
+            resuming = asyncio.create_task(plugin_instance.resume_observation())
+            await entered.wait()
+            assert (await plugin_instance.save_settings({"server": {"username": "OtherBot"}})).value["saved"]
+            release.set()
+            result = await resuming
+            assert isinstance(result, Err) and result.error["code"] == "resume_cancelled"
+    run_async(exercise())
+    assert json.loads(plugin_instance.data_path("operator.json").read_text())["explicit_stop"]
     assert not push.called
 
 

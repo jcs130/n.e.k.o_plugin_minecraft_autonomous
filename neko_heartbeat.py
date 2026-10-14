@@ -4,8 +4,10 @@ import json
 from dataclasses import dataclass
 
 from agent_mc_autonomy.configuration import Settings, _text
-from agent_mc_autonomy.review import ReviewPolicy, ReviewPort
-from plugin.sdk.plugin import Ok, llm_tool, plugin_entry, timer_interval, ui
+from agent_mc_autonomy.mailbox import observation
+from agent_mc_autonomy.ownership import session_is_owned
+from agent_mc_autonomy.review import ReviewPolicy, ReviewPort, review_observation
+from plugin.sdk.plugin import Err, Ok, llm_tool, plugin_entry, timer_interval, ui
 
 
 @dataclass(frozen=True)
@@ -59,6 +61,36 @@ def heartbeat_text(review):
 
 
 class NekoHeartbeat:
+    @ui.action(label="恢复 Neko 主脑参与", tone="primary")
+    @plugin_entry(id="resume_observation", name="恢复外部游戏主脑反馈", kind="service",
+                  description="显式恢复已运行的独立框架观测。检查同账号租约和新鲜状态，只清除 Neko 的停止标记；不启动游戏或投递任务。")
+    async def resume_observation(self, **_):
+        with self._control_lock:
+            generation = self._generation
+            if self._configuration_writes:
+                return Err({"code": "resume_cancelled", "message": "配置正在保存，保持停止。"})
+        try:
+            raw = await self.config.dump()
+            settings = Settings.parse(raw)
+            if not settings.enabled or not HeartbeatSettings.parse(raw).enabled:
+                return Err({"code": "disabled", "message": "先启用自主框架和主脑决策心跳。"})
+            if settings.runtime_mode != "external" or not settings.data_directory:
+                return Err({"code": "external_runtime_required", "message": "此入口用于已显式启动的独立框架。"})
+            settings.require_server()
+            port = review_port(self, settings)
+            with self._control_lock:
+                if generation != self._generation or self._configuration_writes:
+                    return Err({"code": "resume_cancelled", "message": "恢复期间已收到停止指令或配置变更。"})
+                snapshot = observation(port.directory)
+                if (snapshot.get("phase") != "running" or not review_observation(snapshot, port.now())
+                        or not session_is_owned(port.directory) or port.stopping()):
+                    return Err({"code": "runtime_not_observed", "message": "尚无同账号的有效运行租约及新鲜联机状态，保持停止。"})
+                self._operator_state(False)
+            return Ok({"observer_resumed": True, "game_started": False, "task_dispatched": False,
+                       "submitted": False, "main_brain_acknowledged": False, "playback_verified": False})
+        except (OSError, ValueError, KeyError):
+            return Err({"code": "observation_unavailable", "message": "配置或运行观测暂不可用，保持停止。"})
+
     @timer_interval(id="game_decision_heartbeat", seconds=10, name="转交自主框架决策请求",
                     description="仅转交独立框架生成的有效决策请求，不在插件中调度游戏。")
     async def game_decision_heartbeat(self, **_):

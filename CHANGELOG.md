@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.6 — Unreleased
+
+- Consume shared autonomy 0.1.20, preserving native scalar parameter constraints in compact model tools while keeping full manuals progressive.
+- Add an explicit control-panel action to resume Neko participation after an external runtime restart. Require its account lease and fresh connected evidence; preserve stop on stale state, configuration changes or concurrent stop.
+- Show the separate host stop flag. Resume does not start a game, dispatch a task, reset review history or invoke a model; the existing framework review transport continues normally afterward.
+- Offline checks and deployment do not establish sustained survival, food acquisition or voice playback. No Release or Market publication.
+
 ## 0.5.2 — Unreleased
 
 - Consume shared agent-mc-autonomy 0.1.16 for native Chat/Responses, Claude and Gemini model APIs; add explicit domestic provider presets, streaming and protocol-specific parameters.
