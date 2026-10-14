@@ -53,11 +53,14 @@ def heartbeat_text(review):
 
     evidence = review["evidence"]
     facts = evidence["facts"]
+    user = evidence.get("current_user_goal") or {}
+    intent = ("当前用户目标:" + brief(user["goal"], 70) if user.get("goal") else
+              "长期目标:" + brief(evidence.get("standing_goal", ""), 70))
     readings = "；".join(brief(facts.get(key, ""), size) for key, size in (
-        ("queue", 90), ("body", 80), ("foodReserve", 65)))
+        ("queue", 70), ("body", 70), ("foodReserve", 55)))
     reads = sum(evidence.get("read_activity", {}).values())
     return ("Minecraft复盘 " + review["id"] + "。先用minecraft_autonomy_review的inspect读取完整现场，"
-            "再continue/insert/revise；按实际队列和回执决策并简短解说。" + readings + f"；连续查询{reads}次。")
+            "再continue/insert/revise；按实际队列和回执决策并简短解说。" + intent + "；" + readings + f"；连续查询{reads}次。")
 
 
 class NekoHeartbeat:
@@ -127,6 +130,7 @@ class NekoHeartbeat:
     @llm_tool(name="minecraft_autonomy_review", timeout=10,
               description="回应Minecraft决策心跳：你是正在游戏中自主生存的主脑，负责阶段目标和策略。用通知里的heartbeat_id。"
               "每次先inspect读本次目标、身体、食物、物品、附近危险、原生队列和最近回执；通知只是短预览。"
+              "优先读current_user_goal和standing_goal；current_goal.origin=host_review是你自己的建议阶段，不是用户要求。旧对话中的测试或练习不能覆盖当前用户目标。"
               "正常工作用continue，不打断长动作；空闲/缺资源/受阻需改策略用insert加具体自然语言阶段目标，由独立框架规划、在安全检查点执行。"
               "已有自己插入的目标且stage_delivery.can_revise为true时，用revise修订该阶段；保留现有动作和原用户目标，不重复堆积任务。planning表示已送达，不能推断身体正忙。"
               "队列空闲或持续无进展时自己决定下一项工作，不等待观众回复；同位反复观察不算生存进展。"
@@ -134,11 +138,12 @@ class NekoHeartbeat:
               "用户新反馈仍用minecraft_autonomy_intent并优先于旧心跳，停止只在用户明确要求时用stop。",
               parameters={"type": "object", "properties": {
                   "heartbeat_id": {"type": "string"}, "decision": {"enum": ["inspect", "continue", "insert", "revise"]},
-                  "reason": {"type": "string", "maxLength": 600}, "goal": {"type": "string", "maxLength": 2000}},
+                  "reason": {"type": "string", "maxLength": 600}, "goal": {"type": "string", "maxLength": 2000},
+                  "lineage_offset": {"type": "integer", "minimum": 0, "description": "inspect时按4条分页查询目标父链原文；平时省略。"}},
                   "required": ["heartbeat_id", "decision"], "additionalProperties": False})
-    async def minecraft_autonomy_review(self, heartbeat_id, decision, reason="", goal="", **_):
+    async def minecraft_autonomy_review(self, heartbeat_id, decision, reason="", goal="", lineage_offset=None, **_):
         raw = await self.config.dump()
         config, settings = HeartbeatSettings.parse(raw), Settings.parse(raw)
         if not config.enabled or not settings.enabled or is_stopped(self):
             return {"is_error": True, "error": "disabled_or_stopped"}
-        return review_port(self, settings).decide(heartbeat_id, decision, reason, goal)
+        return review_port(self, settings).decide(heartbeat_id, decision, reason, goal, lineage_offset=lineage_offset)

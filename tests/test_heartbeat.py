@@ -83,6 +83,15 @@ def test_long_review_uses_small_inspection_cue_without_losing_framework_evidence
     assert not port.state()["review"].get("result")
 
 
+def test_review_lineage_pages_are_forwarded_without_plugin_policy(plugin_instance, run_async, monkeypatch):
+    port, snapshot, _ = setup(plugin_instance, monkeypatch)
+    port.observe(snapshot)
+    review_id = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
+    page = run_async(plugin_instance.minecraft_autonomy_review(review_id, "inspect", lineage_offset=0))
+    assert page["goal_lineage"] == [] and page["has_more"] is False
+    assert not port.mailbox.ready()
+
+
 def test_revision_routes_through_framework_without_plugin_queue_policy(plugin_instance, run_async, monkeypatch):
     port, snapshot, _ = setup(plugin_instance, monkeypatch)
     port.observe(snapshot)

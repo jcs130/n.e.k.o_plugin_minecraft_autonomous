@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.7 — Unreleased
+
+- Consume autonomy 0.1.21 for explicit goal provenance, paged original parent goals and complete rejected-call history.
+- Mark manual panel goals as user-sourced while preserving legacy UUID retries and unknown model-intent provenance. Show a bounded current-user-goal cue and expose framework lineage inspection through the existing review tool.
+- Document the installed Neko SDK's separate review-history limitation and a forwardable upstream capability request; do not impersonate the legacy plugin or modify host SDK internals.
+
 ## 0.5.6 — Unreleased
 
 - Consume shared autonomy 0.1.20, preserving native scalar parameter constraints in compact model tools while keeping full manuals progressive.

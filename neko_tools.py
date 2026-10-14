@@ -37,7 +37,7 @@ class NekoAutonomyTools:
             "phase", "game_connected", "autonomy_running", "updated_at", "source", "live_verified", "error")}
         summary["standing_goal"] = str(snapshot.get("standing_goal", ""))[:700]
         active = snapshot.get("current_goal")
-        summary["current_goal"] = {key: active.get(key) for key in ("id", "mode", "goal")} if active else None
+        summary["current_goal"] = {key: active.get(key) for key in ("id", "mode", "goal", "origin", "parent_id")} if active else None
         summary["pending"] = [{key: item.get(key) for key in ("kind", "id", "phase", "terminal")}
                               for item in snapshot.get("pending", [])[:16]]
         summary["facts"] = [{"key": key, "text": part.get("text", "")[:240],

@@ -126,3 +126,27 @@ def test_main_brain_status_pages_full_fact_without_repeating_it(plugin_instance,
     assert page["text"] == ("木板" * 1400)[1200:2400]
     assert page["has_more"] and page["next_offset"] == 2400
     assert page["source"] == "last_observed_snapshot"
+
+
+def test_panel_user_origin_does_not_relabel_legacy_or_model_commands(plugin_instance, run_async, monkeypatch, tmp_path):
+    import uuid
+
+    from agent_mc_autonomy.mailbox import Mailbox
+
+    raw = {"runtime": {"mode": "external", "data_directory": str(tmp_path / "runtime")},
+           "autonomy": {"enabled": True}, "server": {"host": "example.test", "username": "Alice"}}
+    async def config(**_):
+        return raw
+    monkeypatch.setattr(plugin_instance.config, "dump", config)
+    settings = plugin_instance.__class__.__module__
+    module = __import__(settings)
+    parsed = module.Settings.parse(raw)
+    box = Mailbox(parsed.data_root(plugin_instance.data_path()) / "sessions" / parsed.identity / "host")
+    user, legacy, model = (str(uuid.uuid4()) for _ in range(3))
+    assert run_async(plugin_instance.panel_intent("food", "insert", user)).value["delivery"] == "queued"
+    assert box.goal_lineage(user)[0]["origin"] == "user"
+    assert run_async(plugin_instance.feedback("old goal", "insert", legacy)).value["delivery"] == "queued"
+    assert run_async(plugin_instance.panel_intent("old goal", "insert", legacy)).value["delivery"] == "queued"
+    assert box.goal_lineage(legacy)[0]["origin"] == "unknown"
+    assert run_async(plugin_instance.minecraft_autonomy_intent("shelter", "insert", model))["delivery"] == "queued"
+    assert box.goal_lineage(model)[0]["origin"] == "unknown"

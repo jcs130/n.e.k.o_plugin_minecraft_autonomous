@@ -199,9 +199,9 @@ class Dashboard:
                       "required": ["goal", "mode", "request_id"]})
     async def panel_intent(self, goal: str, mode: str, request_id: str, **_):
         if mode == "append":
-            return await self.submit_goal(goal=goal, request_id=request_id)
+            return await self._submit("goal", {"goal": goal, "origin": "user"}, request_id)
         if mode in {"insert", "replace"}:
-            return await self.feedback(goal=goal, mode=mode, request_id=request_id)
+            return await self._submit("feedback", {"goal": goal, "mode": mode, "origin": "user"}, request_id)
         return Err({"code": "invalid_intent_mode"})
 
     @ui.action(label="开始嵌入式游玩", tone="primary")

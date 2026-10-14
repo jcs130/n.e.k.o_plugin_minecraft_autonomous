@@ -156,7 +156,10 @@ class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoHeartbeat, Nek
                 raise ValueError("external_data_directory_required")
             settings.require_server()
             directory = settings.data_root(self.data_path()) / "sessions" / settings.identity / "host"
-            return Ok(Mailbox(directory).submit(kind, payload, request_id))
+            mailbox = Mailbox(directory)
+            if payload.get("origin") == "user" and kind in {"goal", "feedback"}:
+                return Ok(mailbox.submit_user_intent(kind, {key: value for key, value in payload.items() if key != "origin"}, request_id))
+            return Ok(mailbox.submit(kind, payload, request_id))
         except (OSError, ValueError) as error:
             return Err({"code": "command_rejected", "message": str(error)})
 
