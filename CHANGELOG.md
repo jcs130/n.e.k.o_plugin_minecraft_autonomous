@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.16 — Unreleased
+
+- Consume autonomy 0.1.31: keep a rejected body plan across intervening failed observations, cached retries and corrected reads. A read error cannot overwrite the action error that still needs correction.
+- Allow explicit `tool_choice=required` for compatible Chat/Responses planners, so supported providers can prevent text-only plans without forcing a particular Minecraft action. Defaults remain unchanged.
+- Preserve concurrent upstream source while keeping the separately verified Mineflayer core pin. The optional new Java client body is not enabled by this deployment.
+
 ## 0.5.15 — Unreleased
 
 - Consume autonomy 0.1.29: queued observations retain rejected body-plan evidence, including after history eviction, and rejected batches explain that earlier steps did not run.
