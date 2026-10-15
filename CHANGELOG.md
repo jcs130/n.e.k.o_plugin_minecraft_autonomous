@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.45 — Internal candidate
+
+- Pin reviewed autonomy 0.1.64 at `784047e72a67d616e8847c3032b3b79c4d0d672e` so installation provides the heartbeat idle-presence and final-review speech/death-reflection APIs already used by this adapter.
+- Keep its checked core 0.5.7-dev.20261016.6 pin and refresh matching installation metadata. This candidate is not deployed or released; startup/autonomy remain disabled by default.
+
 ## 0.5.44 — Internal candidate
 
 - Pin autonomy 0.1.61 and core 0.5.7-dev.20261016.2. New operation evidence sums duplicate inventory stacks, preserves unknown inventory and leaves historical records unchanged.
