@@ -176,7 +176,6 @@ class Dashboard:
         except (OSError, ValueError, KeyError):
             return {"error": "configuration_or_observation_unavailable"}
 
-    @ui.action(label="保存插件设置", tone="primary")
     @plugin_entry(id="save_settings", name="保存自主游玩设置", kind="service",
                   description="仅保存经过校验的插件设置；不连接游戏、不调用模型，已有运行下次显式启动生效。",
                   input_schema={"type": "object", "properties": {"settings": {"type": "object"}}, "required": ["settings"]})
@@ -223,6 +222,18 @@ class Dashboard:
             return Ok({"saved": True, "running_session_changed": False, "applies": "next_explicit_start_or_observer_read"})
         except (ValueError, TypeError) as error:
             return Err(validation_feedback(error))
+
+    @ui.action(label="保存插件设置", tone="primary")
+    @plugin_entry(id="save_settings_hosted", name="托管面板保存设置", kind="service",
+                  description="通过可序列化反馈保存设置；校验拒绝保留草稿，不启动运行。",
+                  input_schema={"type": "object", "properties": {"settings": {"type": "object"}}, "required": ["settings"]})
+    async def save_settings_hosted(self, settings: dict, **_):
+        result = await self.save_settings(settings)
+        if isinstance(result, Err):
+            # The host stringifies Err payloads. Expected rejection must travel
+            # through a successful dispatch so the panel receives field metadata.
+            return Ok({"success": False, "error": result.error})
+        return result
 
     @ui.action(label="投递目标", tone="primary")
     @plugin_entry(id="panel_intent", name="控制台投递目标", kind="service", description="通过同一个持久队列投递自然语言目标。",

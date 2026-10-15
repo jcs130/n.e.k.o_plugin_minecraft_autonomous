@@ -36,3 +36,38 @@ def test_dashboard_metadata_does_not_hash_backend(plugin_instance, plugin_module
     assert result["installation"]["scope"] == "metadata_only_not_runtime_or_render_verification"
     assert result["installation"]["viewer"] == "text_only"
     assert plugin_instance._worker is None
+
+
+@pytest.mark.parametrize("patch,field", [
+    ({"operator": {"port": 80}}, "operator.port"),
+    ({"viewer": {"renderer_directory": "SECRET"}}, "viewer.renderer_directory"),
+])
+def test_hosted_rejection_survives_real_host_serialization(plugin_instance, run_async, monkeypatch, patch, field):
+    import ast
+    import os
+    from pathlib import Path
+
+    # Execute the actual read-only host result-normalization branch without
+    # starting its child process, service, watchdog or network transport.
+    host_source = Path(os.environ["NEKO_ROOT"]) / "plugin/core/host.py"
+    tree = ast.parse(host_source.read_text(encoding="utf-8"))
+    branches = [node for node in ast.walk(tree) if isinstance(node, ast.If)
+                and ast.unparse(node.test) == "hasattr(result, 'is_ok') and callable(result.is_ok)"
+                and "ret['data'] = result.value" in ast.unparse(node)]
+    assert branches
+    update = AsyncMock()
+    monkeypatch.setattr(plugin_instance.config, "update", update)
+    generation = plugin_instance._generation
+    result = run_async(plugin_instance.save_settings_hosted(patch))
+    scope = {"result": result, "ret": {}}
+    for branch in branches:
+        exec(compile(ast.Module(body=[branch], type_ignores=[]), str(host_source), "exec"), scope)
+    transport = json.loads(json.dumps(scope["ret"]))
+    assert transport["success"] is True
+    hosted_response = {"result": transport["data"]}
+    assert hosted_response["result"]["success"] is False
+    feedback = hosted_response["result"]["error"]
+    assert feedback["field"] == field and feedback["message"]
+    assert "SECRET" not in json.dumps(hosted_response)
+    assert update.await_count == 0 and plugin_instance._generation == generation
+    assert plugin_instance._worker is None and plugin_instance._configuration_writes == 0

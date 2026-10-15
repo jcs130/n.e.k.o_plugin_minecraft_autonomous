@@ -22,4 +22,4 @@ exclude = [".env", ".env.*", "*.key", "*.log", "*.local.toml"]
 # Official excludes run before includes. These suffix-complement patterns keep
 # every non-PEM path plus exactly Certifi's public CA trust store; arbitrary
 # root/nested PEM credentials remain excluded. Do not use include=["**"].
-include = ["*[!m]", "*[!e]m", "*[!p]em", "*[!.]pem", "m", "em", "pem", "vendor/certifi/cacert.pem"]
+include = ["*[!mM]", "*[!eE][mM]", "*[!pP][eE][mM]", "*[!.][pP][eE][mM]", "m", "em", "pem", "vendor/certifi/cacert.pem"]

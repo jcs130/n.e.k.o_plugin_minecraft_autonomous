@@ -30,7 +30,8 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const call = async (id: string, args: any) => {
     setBusy(true); setNotice(""); setFailure(false); setFieldError(null)
     try {
-      const reply = await props.api.call(action(id)?.id || id, args, { userInitiated: true })
+      const transportId = id === "save_settings" ? "save_settings_hosted" : id
+      const reply = await props.api.call(action(transportId)?.id || transportId, args, { userInitiated: true })
       const result = reply?.result ?? reply
       if (result?.is_error || result?.error || result?.success === false) {
         const detail = result?.error || result
