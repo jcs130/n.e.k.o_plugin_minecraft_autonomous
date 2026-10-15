@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.43 — Internal candidate
+
+- Pin autonomy 0.1.60 and reviewed core 0.5.7-dev.20261016.1; expose bounded installation metadata without repeated full runtime hashes. Explicit starts still verify the pinned runtime.
+- Return safe field-specific configuration guidance, retain rejected drafts, and explain local addresses and Microsoft human authorization. Public-server shortcuts preserve the user account and authentication choice.
+- Document exact locally staged core/viewer/optional sound assets and reproducible setup. No public artifact URLs, clean-machine guarantee, release or Market submission are claimed.
+- Exclude development/private artifacts while retaining only Certifi's public CA PEM bundle, so packaged direct-model clients can construct their TLS context.
+
 ## 0.5.29 — Unreleased
 
 - Consume checked autonomy 0.1.46/core 0.5.2, preserving current main's Java 1.21.1 build/registry/login defaults and the existing knowledge, food and queue fixes.
