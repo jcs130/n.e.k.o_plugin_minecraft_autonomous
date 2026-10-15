@@ -62,12 +62,12 @@ def heartbeat_text(review, commentary=None):
     readings = "；".join(brief(facts.get(key, ""), size) for key, size in (
         ("queue", 55), ("body", 50), ("foodReserve", 40)))
     reads = sum(evidence.get("read_activity", {}).values())
-    speech = ("本轮只用工具确认策略，不出声。" if commentary and not commentary["allowed"] else
-              "解说只说一个新重点≤30字，不念背包或读取过程。")
+    speech = ("无新重点，正常玩，本轮无需口播。" if commentary and not commentary["allowed"] else
+              "以自己的性格边玩边聊1—2句，分享自然反应或小打算，不作汇报、不念背包。")
     if review.get("attempts", 0) > 1:
         speech = "本轮重试确认，只调用工具，不重复解说。"
-    return ("Minecraft复盘 " + review["id"] + "。" + speech + "本次无新用户指令，不用minecraft_autonomy_intent重发旧目标。调用工具前不说话。先用minecraft_autonomy_review的inspect核对，"
-            "再continue/insert/revise；表达遵循返回的commentary，只说新重点。" + intent + "；" + readings + f"；连续查询{reads}次。")
+    return ("Minecraft " + review["id"] + "。" + speech + "调用工具前不说话。先minecraft_autonomy_review inspect，"
+            "再continue/insert/revise。无新用户指令，勿重发旧目标。" + intent + "；" + readings + f"；连续查询{reads}次。")
 
 
 class NekoHeartbeat:
@@ -128,7 +128,9 @@ class NekoHeartbeat:
         # Presentation is host-specific; the framework supplies the signal and
         # still owns review creation/acknowledgement and the native work queue.
         from .neko_presentation import PresentationSettings
-        event = commentary_observation({**review["evidence"], "session": review["session"]}, port.now())
+        # Use the original fresh snapshot for presentation: the strategic
+        # envelope may abridge away the successful part of a mixed receipt.
+        event = commentary_observation({**observation(port.directory), "session": review["session"]}, port.now())
         if event is None:
             port.delivered(review["id"], False)
             return Ok({"submitted": False, "reason": "no_fresh_review_evidence"})
@@ -155,7 +157,7 @@ class NekoHeartbeat:
               "已有自己插入的目标且stage_delivery.can_revise为true时，用revise修订该阶段；保留现有动作和原用户目标，不重复堆积任务。planning表示已送达，不能推断身体正忙。"
               "队列空闲或持续无进展时自己决定下一项工作，不等待观众回复；同位反复观察不算生存进展。"
               "reason写观测依据。别重复提交现有目标；受理不是完成。调用工具前不说话。现场和背包是内部决策资料，不是朗读稿。"
-              "表达遵循返回的commentary：有新重点才用角色口吻说1—2句，不念背包清单、工具名、坐标或查询过程；无新重点可安静游玩。用户直接提问正常回答。"
+              "表达遵循返回的commentary：有新重点才以自己的性格边玩边聊1—2句，自然反应或吐槽，不作状态汇报；不念背包清单、工具名、坐标或查询过程。无新重点可安静游玩，用户直接提问正常回答。"
               "用户新反馈仍用minecraft_autonomy_intent并优先于旧心跳，停止只在用户明确要求时用stop。",
               parameters={"type": "object", "properties": {
                   "heartbeat_id": {"type": "string"}, "decision": {"enum": ["inspect", "continue", "insert", "revise"]},

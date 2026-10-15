@@ -108,3 +108,17 @@ def test_new_critical_danger_bypasses_interval_once(plugin_instance, run_async, 
     plugin_instance.status.return_value = Ok(snapshot(10011, "生命 3/20"))
     assert not run_async(plugin_instance.observe_game_changes()).value["submitted"]
     assert push.call_count == 2
+
+
+def test_rate_limited_review_does_not_consume_the_next_speaking_topic(plugin_instance):
+    mod = importlib.import_module(plugin_instance.__class__.__module__ + ".neko_commentary")
+    settings = importlib.import_module("agent_mc_autonomy.configuration").Settings.parse({})
+    def event(now, health):
+        return importlib.import_module("agent_mc_autonomy.commentary").commentary_observation(snapshot(now, health), now)
+    path, state, _ = mod.commentary_plan(plugin_instance, settings, "TestRole", event(10000, "生命20/20"), 10000, 90)
+    mod.save_commentary(path, {**state, "submitted_at": 10000})
+    _, quiet, note = mod.commentary_plan(plugin_instance, settings, "TestRole", event(10060, "生命12/20"), 10060, 90, review_id="review-one")
+    assert not note["allowed"]
+    mod.save_commentary(path, quiet)
+    _, _, later = mod.commentary_plan(plugin_instance, settings, "TestRole", event(10120, "生命12/20"), 10120, 90, review_id="review-two")
+    assert later["allowed"] and "health_changed" in later["topics"]

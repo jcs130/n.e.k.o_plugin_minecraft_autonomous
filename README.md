@@ -7,7 +7,7 @@ Neko 提供高层目标、策略、角色演出与语音；独立框架细化规
 可配置其他人的兼容服务器，不要求在本机开服。
 Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minecraft-ai-friend` 项目。
 
-**0.5.34 发布准备版：默认使用 Mineflayer，主力优化与验收版本为 Java 1.21.1。使用独立框架 0.1.51、经校验核心 0.5.4 和已验收的共享观战输入。成功原生任务与真实阶段切换可立即衔接一次规划，避免额外等待普通决策冷却；保留失败退避和正常长动作。保留本地工具说明校验、拒绝历史精简、完整原文入口、按需知识检索、熟食优先、原生队列、多厂商模型和观战页复用。千灯纪等扩展只按实际收到并校验的数据及匹配资源启用，无数据就隐藏；不根据服名或聊天猜测。不修改 Neko 主程序或 SDK。长期自主生活与完整场景一致性仍在验收；见 [本次维护候选](docs/release-candidate-0.5.34.md) 和 [发布准备](docs/release-candidate-20261015.md)。**
+**0.5.35 发布准备版：默认使用 Mineflayer，主力优化与验收版本为 Java 1.21.1。固定独立框架 0.1.52 和经校验核心 0.5.4；解说保留有用的新进展，用角色自己的性格边玩边聊，区分部分成果与整单成功。保留原生队列、成功动作连续衔接、失败退避、完整原文入口、按需知识检索、熟食优先和多厂商模型。千灯纪等扩展只按实际收到并校验的数据及匹配资源启用，无数据就隐藏。不修改 Neko 主程序或 SDK。长期自主生活与完整场景一致性仍在验收；见 [本次维护候选](docs/release-candidate-0.5.35.md) 和 [发布准备](docs/release-candidate-20261015.md)。**
 默认关闭自主游玩，必须显式执行独立 `run` 或内嵌 `start`。普通源码更新不自动开始游戏；Release/Market 仍需单独发布。
 实际结果及失败记录见 [原版服验收](docs/vanilla-live-acceptance-2026-10-13.md)。
 
@@ -17,7 +17,7 @@ Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minec
 | SDK 入口 | `plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin` |
 | 环境 | Python 3.11+；Node 22+；N.E.K.O 为可选前端 |
 | 游戏协议 | **Java 1.21.1（767）**，拒绝 `auto` 和其他版本 |
-| 自主框架 | `agent-mc-autonomy@0.1.51`，固定来源 `minecraft-ai-friend@05f5d47cf7502b29b9f61c05f7c6e235efb60f21` |
+| 自主框架 | `agent-mc-autonomy@0.1.52`，固定来源 `minecraft-ai-friend@0b440ecebc13ba0ddd34afb611b67a38975cb7b6` |
 | 执行核心 | `agent-mc-world@0.5.4`，来源提交 `7e8b9750015bb31b7307da6dfb03a90302ce9cef` |
 | 构建 | 固定源码，直接运行核心官方 `build:engine`；无插件专用补丁或第二份编译实现 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT，归档保留其许可证和来源 |

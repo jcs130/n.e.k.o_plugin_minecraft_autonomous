@@ -5,7 +5,8 @@ import json
 
 from agent_mc_autonomy.commentary import commentary_changes
 
-SPEAK = ("像正在玩游戏的主播，只选一个新重点说1—2句，总共约40个汉字，可有自然情绪。"
+SPEAK = ("你正亲自在玩Minecraft，用自己的角色性格边玩边聊1—2句，约40字。"
+         "抓一个亲身经历的新重点，自然反应、吐槽或说小打算，和观众分享，不作汇报。"
          "不要念背包清单、坐标、工具名、受理回执或‘先读取现场’等过程；不用先复述状态。"
          "行动未完成就只说打算，不说已完成。用户直接提问仍正常回答。")
 QUIET = ("本轮没有到期的新解说重点。照常检查并确认策略，工具调用前后都不用出声；"
@@ -23,10 +24,13 @@ def commentary_plan(plugin, settings, target, event, now, interval, *, review_id
     retrying = now < previous.get("retry_after", 0)
     allowed = not retrying and (manual or bool(changed["topics"])) and (ready or changed["urgent"])
     note = {"allowed": allowed, "topics": changed["topics"], "urgent": changed["urgent"],
+            "evidence": {"progress": event["payload"].get("progress", ""),
+                         "task_outcome": event["payload"].get("task_outcome")},
             "reason": "highlight" if allowed else ("unchanged" if not manual and not changed["topics"]
                                                      else "rate_limited"),
             "instruction": SPEAK if allowed else QUIET, "playback_verified": False}
-    state = {**previous, "signature": event["signature"], "baseline": event["baseline"],
+    state = {**previous, "signature": event["signature"],
+             "baseline": event["baseline"] if allowed else previous.get("baseline"),
              "review_id": review_id, "commentary": note}
     return path, state, note
 

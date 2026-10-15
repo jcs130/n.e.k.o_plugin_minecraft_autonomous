@@ -48,7 +48,7 @@ def test_frontend_only_transports_framework_reviews(plugin_instance, run_async, 
     assert event["target_lanlan"] == "TestRole" and event["ai_behavior"] == "respond"
     text = event["parts"][0]["text"]
     assert "minecraft_autonomy_review" in text and "口粮0个" in text and len(text.encode()) < 650
-    assert "30字" in text[:130] and "不念背包" in text[:130]
+    assert "1—2句" in text[:130] and "不念背包" in text[:130]
     review_id = result["heartbeat_id"]
     acknowledged = run_async(plugin_instance.minecraft_autonomy_review(review_id, "continue", "继续当前工作"))
     assert acknowledged["acknowledged"] and not acknowledged["dispatched"]
