@@ -5,12 +5,14 @@ from dataclasses import dataclass
 
 from agent_mc_autonomy.commentary import commentary_observation
 from agent_mc_autonomy.configuration import Settings, _text
+from agent_mc_autonomy.host_context import HostContextPort
 from agent_mc_autonomy.mailbox import observation
 from agent_mc_autonomy.ownership import session_is_owned
 from agent_mc_autonomy.review import ReviewPolicy, ReviewPort, review_observation
 from plugin.sdk.plugin import Err, Ok, llm_tool, plugin_entry, timer_interval, ui
 
 from .neko_commentary import commentary_plan, save_commentary
+from .neko_host_context import HostContextSettings, context_request, shared_context
 
 
 @dataclass(frozen=True)
@@ -152,6 +154,8 @@ class NekoHeartbeat:
     @llm_tool(name="minecraft_autonomy_review", timeout=10,
               description="回应Minecraft决策心跳：你是正在游戏中自主生存的主脑，负责阶段目标和策略。用通知里的heartbeat_id。"
               "每次先inspect读本次目标、身体、食物、物品、附近危险、原生队列和最近回执；通知只是短预览。"
+              "你是这具Minecraft身体的主脑，不是汇报员。inspect的context_request若needed，复用已有recall_memory召回少量相关记忆。"
+              "最终判断用context同步当前关注current_intent和记忆原id/source/text；未命中用[]，不编造。未配置档案时可提供persona人格要点。"
               "优先读current_user_goal和standing_goal；current_goal.origin=host_review是你自己的建议阶段，不是用户要求。旧对话中的测试或练习不能覆盖当前用户目标。"
               "正常工作用continue，不打断长动作；空闲/缺资源/受阻需改策略用insert加具体自然语言阶段目标，由独立框架规划、在安全检查点执行。"
               "已有自己插入的目标且stage_delivery.can_revise为true时，用revise修订该阶段；保留现有动作和原用户目标，不重复堆积任务。planning表示已送达，不能推断身体正忙。"
@@ -162,17 +166,37 @@ class NekoHeartbeat:
               parameters={"type": "object", "properties": {
                   "heartbeat_id": {"type": "string"}, "decision": {"enum": ["inspect", "continue", "insert", "revise"]},
                   "reason": {"type": "string", "maxLength": 600}, "goal": {"type": "string", "maxLength": 2000},
+                  "context": {"type": "object", "properties": {
+                      "agent_name": {"type": "string", "maxLength": 80}, "persona": {"type": "string", "maxLength": 800},
+                      "current_intent": {"type": "string", "maxLength": 500},
+                      "memories": {"type": "array", "maxItems": 6, "items": {"type": "object", "properties": {
+                          "id": {"type": "string", "maxLength": 80}, "source": {"type": "string", "maxLength": 80},
+                          "text": {"type": "string", "maxLength": 600}}, "required": ["id", "source", "text"], "additionalProperties": False}}},
+                      "required": ["current_intent", "memories"], "additionalProperties": False},
                   "lineage_offset": {"type": "integer", "minimum": 0, "description": "inspect时按4条分页查询目标父链原文；平时省略。"}},
                   "required": ["heartbeat_id", "decision"], "additionalProperties": False})
-    async def minecraft_autonomy_review(self, heartbeat_id, decision, reason="", goal="", lineage_offset=None, **_):
+    async def minecraft_autonomy_review(self, heartbeat_id, decision, reason="", goal="", lineage_offset=None, context=None, **_):
+        with self._control_lock:
+            generation = self._generation
         raw = await self.config.dump()
         config, settings = HeartbeatSettings.parse(raw), Settings.parse(raw)
         if not config.enabled or not settings.enabled or is_stopped(self):
             return {"is_error": True, "error": "disabled_or_stopped"}
         port = review_port(self, settings)
-        result = port.decide(heartbeat_id, decision, reason, goal, lineage_offset=lineage_offset)
+        try:
+            projection = (await shared_context(self, raw, config.target, context, port.state().get("review", {}),
+                          existing=HostContextPort(port.directory, now=port.now).read(port.mailbox.intent_revision()))
+                          if decision != "inspect" else None)
+        except ValueError as error:
+            return {"is_error": True, "error": str(error)}
+        with self._control_lock:
+            if generation != self._generation or self._configuration_writes or is_stopped(self):
+                return {"is_error": True, "error": "configuration_changed_or_stopped"}
+            result = port.decide(heartbeat_id, decision, reason, goal, lineage_offset=lineage_offset, host_context=projection)
         if result.get("is_error"):
             return result
+        if decision == "inspect":
+            result = {**result, "context_request": context_request(port, port.now, enabled=HostContextSettings.parse(raw).enabled)}
         from .neko_presentation import PresentationSettings
         review = port.state().get("review", {})
         event = commentary_observation({**review.get("evidence", {}), "session": review.get("session", "")}, port.now())

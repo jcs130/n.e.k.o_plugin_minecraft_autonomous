@@ -115,6 +115,8 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>解说只抓一个新重点，说1—2句自然反应。普通背包数量、工具耐久和读取现场不逐条播报；新危险、明显恢复或重要进展可开口。下方解说间隔也作用于决策心跳，突发危险可及时提醒。直接聊天正常回应。</Text>
         <Text>变化合并后限频唤醒；定期复核带上实际进展。等待主脑回执时不重复派单，用户新反馈优先。通知受理不等于主脑决策或语音播放完成。</Text>
         <JsonView data={state.heartbeat || {enabled:false}} />
+        <Text>同一个主脑的人格、当前关注和相关记忆可共享给身体规划器；以下仅显示投影元数据，不展示私人正文。</Text>
+        <JsonView data={runtime.host_context || {available:false}} />
       </Stack></Card>
       <Card title="模型与感知"><Stack gap={10}>
         <Text>{external ? "当前由独立运行配置决定模型；本插件设置不覆盖外部进程。" : settings.planner?.route === "direct" ? "动作规划使用下方配置的模型服务。Neko 继续负责目标、人格和解说。" : "在 Neko 的模型 API 页面配置模型，并在本插件模型绑定中选择用途。凭据由宿主保管。"}</Text>
@@ -154,6 +156,8 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           {field("heartbeat","target","主脑角色（留空跟随当前角色）")}
           {field("heartbeat","min_interval_seconds","变化唤醒最小间隔（秒）","number")}
           {field("heartbeat","review_interval_seconds","无新变化时复核间隔（秒）","number")}
+          <Switch checked={draft.host_context?.enabled !== false} label="共享主脑人格、当前关注和相关记忆" onChange={v=>change("host_context","enabled",v)} />
+          {field("host_context","character_api_url","角色档案接口（可选，仅显式本机 /api/characters 地址）")}
           <Text>启用决策心跳后，自动解说合并到主脑决策中。此设置不启动游戏；关闭只停止主脑自动复盘，独立框架继续运行。</Text>
           <Switch checked={draft.presentation?.enabled === true} label="让 Neko 解说重要游戏变化" onChange={v=>change("presentation","enabled",v)} />
           {field("presentation","target","解说角色（留空跟随 Neko 当前角色）")}

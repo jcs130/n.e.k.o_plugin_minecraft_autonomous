@@ -42,6 +42,10 @@ data_directory = "" # external mode: same absolute data root used by standalone.
 [perception]
 enabled = true # Only actual core PNG artifacts. Bind optional vision slot in Neko.
 
+[host_context]
+enabled = true
+character_api_url = "" # Optional explicit local public /api/characters endpoint; no port scanning.
+
 [presentation]
 enabled = false # Optional meaningful game-event narration through Neko's official voice path.
 target = "" # Empty: host-selected role; otherwise a configured Neko character name.

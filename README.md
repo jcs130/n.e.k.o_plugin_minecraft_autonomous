@@ -7,7 +7,7 @@ Neko 提供高层目标、策略、角色演出与语音；独立框架细化规
 可配置其他人的兼容服务器，不要求在本机开服。
 Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minecraft-ai-friend` 项目。
 
-**0.5.35 发布准备版：默认使用 Mineflayer，主力优化与验收版本为 Java 1.21.1。固定独立框架 0.1.52 和经校验核心 0.5.4；解说保留有用的新进展，用角色自己的性格边玩边聊，区分部分成果与整单成功。保留原生队列、成功动作连续衔接、失败退避、完整原文入口、按需知识检索、熟食优先和多厂商模型。千灯纪等扩展只按实际收到并校验的数据及匹配资源启用，无数据就隐藏。不修改 Neko 主程序或 SDK。长期自主生活与完整场景一致性仍在验收；见 [本次维护候选](docs/release-candidate-0.5.35.md) 和 [发布准备](docs/release-candidate-20261015.md)。**
+**0.5.36 发布准备版：默认使用 Mineflayer，主力优化与验收版本为 Java 1.21.1。固定独立框架 0.1.53 和经校验核心 0.5.4；主脑的人格、当前关注和选出的相关记忆进入实际身体规划，解说沿用同一个角色。保留原生队列、成功动作连续衔接、失败退避、完整原文入口、按需知识检索、熟食优先和多厂商模型。千灯纪等扩展只按实际收到并校验的数据及匹配资源启用，无数据就隐藏。不修改 Neko 主程序或 SDK。长期自主生活与完整场景一致性仍在验收；见 [本次维护候选](docs/release-candidate-0.5.36.md) 和 [发布准备](docs/release-candidate-20261015.md)。**
 默认关闭自主游玩，必须显式执行独立 `run` 或内嵌 `start`。普通源码更新不自动开始游戏；Release/Market 仍需单独发布。
 实际结果及失败记录见 [原版服验收](docs/vanilla-live-acceptance-2026-10-13.md)。
 
@@ -17,7 +17,7 @@ Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minec
 | SDK 入口 | `plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin` |
 | 环境 | Python 3.11+；Node 22+；N.E.K.O 为可选前端 |
 | 游戏协议 | **Java 1.21.1（767）**，拒绝 `auto` 和其他版本 |
-| 自主框架 | `agent-mc-autonomy@0.1.52`，固定来源 `minecraft-ai-friend@0b440ecebc13ba0ddd34afb611b67a38975cb7b6` |
+| 自主框架 | `agent-mc-autonomy@0.1.53`，固定来源 `minecraft-ai-friend@f206b2b2c846fb3f23b06010ef43c7834ca6ff60` |
 | 执行核心 | `agent-mc-world@0.5.4`，来源提交 `7e8b9750015bb31b7307da6dfb03a90302ce9cef` |
 | 构建 | 固定源码，直接运行核心官方 `build:engine`；无插件专用补丁或第二份编译实现 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT，归档保留其许可证和来源 |
@@ -33,8 +33,8 @@ Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minec
 基础外部检索只匹配本机游戏笔记。可选 `learning_enabled` 接入 PowerContext 1.3 的任务证据、Experience/Skill 候选、Dream 整理与限量历史召回，也可通过通用 HTTP 桥接接入其他服务。PowerContext 需要该服务器、账号和角色专用的已有 Scope；候选在记忆服务中人工审核，插件不会自动批准、安装技能或训练权重。换电脑需迁移本地笔记与提交回执。具体地址与接口边界见共享核心的 [游戏记忆文档](https://github.com/jcs130/minecraft-ai-friend/blob/main/packages/agent-mc-world/docs/game-memory.md)。本地检查未连接真实云账号或家庭记忆服务。
 
 ```text
-N.E.K.O 主脑：目标 / 新反馈 / 解说 / 语音 / 表演
-  ↕ 自然语言目标与反馈；原生状态及回执（不需要逐动作点头）
+N.E.K.O 主脑：人格 / 相关记忆 / 当前意图 / 策略 / 解说与语音表演
+  ↕ 有界共享上下文、目标与反馈；原生状态及回执（不需要逐动作点头）
 独立框架：目标管理 → 可替换规划模型 → 事件调度与执行账本
   → MCP stdio / agent-mc/v1 → Agent MC World 原生队列
   → 一个 Mineflayer 客户端 → 远程 Java 1.21.1 服务器
@@ -44,6 +44,17 @@ N.E.K.O 主脑：目标 / 新反馈 / 解说 / 语音 / 表演
 
 Neko 主脑、低层规划模型和 Minecraft 执行器是三个职责。Neko 的主对话人格、记忆、语音情绪
 由 Neko 自己管理；`decision` 模型槽只是可选的规划模型来源，不等于主脑完整会话。
+启用 `host_context.enabled` 后，主脑在已有复盘回合选取相关记忆与当前关注，通过
+`minecraft_autonomy_review.context` 交给同一个身体规划器；没有另跑人格或记忆总结模型。
+人格保持在请求固定前缀，变化信息只放在末尾。宿主选出的记忆保留原 ID、来源和原文，
+实际现场及当前用户意图优先。投影限量、限时，并绑定身体会话和意图版本；不复制整个聊天记录。
+
+可在配置页显式填写 Neko 的本机公共角色接口，例如已配置主服务的 `/api/characters` 完整地址，
+用于获取目标角色的有界人格档案节选；默认留空，不探测端口。此接口不是最终主脑请求或运行中反思人格的完整快照。
+未配置时由主脑回传当前人格要点，标为 `host_projection`；相关记忆复用主脑已有的 `recall_memory`，
+未检索到则传空列表，不编造或扫描私有记忆文件。关闭共享会清除旧投影，游戏继续运行。
+控制面板只显示共享状态、人格字节数、记忆条数及哈希，不公开人格或个人记忆正文。
+研究对照和正式接口边界见 [Neko/Cortico 上下文核查](docs/research/neko-host-context-port-20261015.md)。
 SQLite 只保存目标和跨进程指令投递、去重及回执；正在执行哪一步、待执行动作和抢占规则
 以 **原生 `mc_queue` / `mc_do` / task 事件**为准，不再复制一个身体执行器。
 

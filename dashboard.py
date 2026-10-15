@@ -5,6 +5,7 @@ import uuid
 from dataclasses import asdict
 
 from agent_mc_autonomy.configuration import Settings
+from agent_mc_autonomy.host_context import HostContextPort
 from agent_mc_autonomy.model_config import HttpPlannerConfig, planner_settings
 from agent_mc_autonomy.viewer import viewer_observation
 from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
@@ -12,6 +13,7 @@ from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
 from .direct_planner import public_planner
 from .model_check import check_model
 from .neko_heartbeat import HeartbeatSettings, is_stopped, review_port
+from .neko_host_context import HostContextSettings
 from .neko_presentation import PresentationSettings
 from .neko_tools import unwrap
 
@@ -24,6 +26,7 @@ EDITABLE = {
     "perception": {"enabled"},
     "presentation": {"enabled", "target", "min_interval_seconds"},
     "heartbeat": {"enabled", "target", "min_interval_seconds", "review_interval_seconds"},
+    "host_context": {"enabled", "character_api_url"},
     "fast": {"mode", "endpoint", "model", "api_key_env", "min_confidence"},
     "memory": {"mode", "endpoint", "model", "api_key_env", "timeout_ms", "provider", "library_id", "project_id", "scope_id", "search_mode", "learning_enabled"},
     "planner": {"route", *HttpPlannerConfig.__dataclass_fields__},
@@ -137,7 +140,7 @@ class Dashboard:
             directory = settings.data_root(self.data_path()) / "sessions" / settings.identity / "host"
             state = {key: snapshot.get(key) for key in (
                 "phase", "game_connected", "autonomy_running", "updated_at", "decisions", "source", "live_verified",
-                "standing_goal", "current_goal", "context", "model_status", "fast_focus", "perception", "planner_error", "viewer", "viewer_window")}
+                "standing_goal", "current_goal", "context", "host_context", "model_status", "fast_focus", "perception", "planner_error", "viewer", "viewer_window")}
             state["facts"] = [{"key": str(p.get("key", ""))[:80], "text": str(p.get("text", ""))[:900],
                                "has_more": len(str(p.get("text", ""))) > 900} for p in snapshot.get("facts", {}).get("parts", [])[:24]]
             state["pending"] = [{k: p.get(k) for k in ("kind", "id", "phase", "terminal")} for p in snapshot.get("pending", [])[:16]]
@@ -148,7 +151,7 @@ class Dashboard:
                                "submitted_at": review_state.get("submitted_at"), "retry_after": review_state.get("retry_after"),
                                "review": {key: review.get(key) for key in ("id", "trigger", "attempts", "result")}}
             return {"settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
-                                 "heartbeat": asdict(heartbeat), "planner": public_planner(raw.get("planner", {}))}, "heartbeat": heartbeat_state, "runtime": state, "audit": audit_sample(directory),
+                                 "heartbeat": asdict(heartbeat), "host_context": asdict(HostContextSettings.parse(raw)), "planner": public_planner(raw.get("planner", {}))}, "heartbeat": heartbeat_state, "runtime": state, "audit": audit_sample(directory),
                     "model_slots": ["decision", "vision", "fast"], **viewer_observation(settings, snapshot)}
         except (OSError, ValueError, KeyError):
             return {"error": "configuration_or_observation_unavailable"}
@@ -172,15 +175,21 @@ class Dashboard:
                 direct.validate_budget(parsed.max_output_tokens)
             PresentationSettings.parse(merged)
             HeartbeatSettings.parse(merged)
+            HostContextSettings.parse(merged)
             with self._control_lock:
-                if set(settings) - {"viewer", "presentation", "heartbeat"} and self._worker and self._worker.snapshot().get("worker_alive"):
+                if set(settings) - {"viewer", "presentation", "heartbeat", "host_context"} and self._worker and self._worker.snapshot().get("worker_alive"):
                     return Err({"code": "settings_runtime_active", "message": "运行参数须先显式停止嵌入式运行再保存；观战地址可单独保存，模型槽绑定可在宿主修改。"})
-                fence = bool(set(settings) & {"server", "runtime", "autonomy", "heartbeat"})
+                fence = bool(set(settings) & {"server", "runtime", "autonomy", "heartbeat", "host_context"})
                 if fence:
                     self._generation += 1
                     self._configuration_writes += 1
             try:
                 await self.config.update(settings)
+                if set(settings) & {"host_context", "heartbeat"}:
+                    port = review_port(self, parsed)
+                    with self._control_lock:
+                        HostContextPort(port.directory).invalidate()
+                        self._host_profile_cache = None
             finally:
                 if fence:
                     with self._control_lock:
