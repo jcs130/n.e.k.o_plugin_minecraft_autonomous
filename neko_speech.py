@@ -23,8 +23,15 @@ def sanitize_speech(value):
     prefix = r"(?:neko\s*_\s*\w+|tts\s*[_:-]\s*\w+|voice\s*[_:-]\s*\w+|speech\s*[_:-]\s*\w+|emotion|prosody|control)"
     value = re.sub(r"<\s*" + prefix + r"\b[^>]*>.*?</\s*[^>]+>", "", value, flags=re.I | re.S)
     value = re.sub(r"[\[<【]+\s*/?\s*" + prefix + r"\b[^\]>】]*(?:[\]>】]+|$)", "", value, flags=re.I | re.S)
-    value = re.sub(r"(?m)^\s*no\s+comment(?:ary)?(?:\s+(?:is\s+)?needed)?(?:\s+(?:this\s+round|for\s+this\s+round))?\s*[.!。]?\s*$", "", value, flags=re.I)
-    value = re.sub(r"(?m)^\s*(?:本轮(?:无需|不需要|没有)口播|保持安静|无需回复|最终口播正文为空)[。.!]?\s*$", "", value)
+    placeholder = (r"no[\s-]+(?:new[\s-]+)?(?:commentary|comments?)"
+                   r"(?:[\s-]+(?:is[\s-]+)?needed)?(?:[\s-]+(?:for[\s-]+)?this[\s-]+round)?"
+                   r"|本轮(?:无需|不需要|没有)口播|保持安静|无需回复|最终口播正文为空")
+    # Normalize wrappers only for recognition, before accepting any speech.
+    # Whole-line matching keeps meaningful quoted/game text intact; repeated
+    # outer delimiters cannot hide a placeholder from the owned output boundary.
+    wrappers = " \t\r\n[]【】<>〈〉《》()（）{}「」『』\"'‘’“”`*.!。！"
+    value = "\n".join(line for line in value.splitlines()
+                      if not re.fullmatch(placeholder, line.strip(wrappers), flags=re.I))
     value = value.strip(" \t\r\n[]【】<>")
     return value if any(c.isalnum() for c in value) else ""
 

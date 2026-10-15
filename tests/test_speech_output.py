@@ -8,6 +8,28 @@ import httpx
 import pytest
 from test_heartbeat import setup
 
+PLACEHOLDERS = [
+    "[No commentary needed this round.]",
+    "[neko_emotion:neutral] [No commentary needed this round.]",
+    "[[ (No commentary needed this round.) ]]",
+    "【「No commentary needed this round.」】",
+    '{"No commentary needed this round."}',
+    "<‘No commentary needed this round.’>",
+    "`[No commentary needed this round.]`",
+    "（“No commentary needed this round.”）",
+    "[No comment this round.]", "(no-comment)",
+    "[No new comment this round.]", "[[no-new-comment]]",
+    "【No new commentary needed for this round.】",
+    "[tts_style:neutral] [No new comments this round.]",
+    "[[本轮无需口播。]]", "（无需回复）",
+]
+
+
+@pytest.mark.parametrize("text", PLACEHOLDERS)
+def test_wrapped_placeholder_is_empty(plugin_module, text):
+    mod = importlib.import_module(plugin_module.__name__ + ".neko_speech")
+    assert mod.sanitize_speech(text) == ""
+
 
 @pytest.mark.parametrize(("text", "expected"), [
     ("No commentary needed this round.", ""), (" no comment this round ", ""),
@@ -17,6 +39,10 @@ from test_heartbeat import setup
     ("[neko_future_style: secret", ""), ("<tts_style>quiet</tts_style>来搭个小屋。", "来搭个小屋。"),
     ("I like [Minecraft] and No Man's Sky.", "I like [Minecraft] and No Man's Sky."),
     ("No commentary about that creeper could do it justice.", "No commentary about that creeper could do it justice."),
+    ("(No commentary about that creeper could do it justice.)", "(No commentary about that creeper could do it justice.)"),
+    ("No new comments from the villagers yet.", "No new comments from the villagers yet."),
+    ("‘Minecraft is lovely tonight.’", "‘Minecraft is lovely tonight.’"),
+    ("[No commentary needed this round.]\nLet's find a tree.", "Let's find a tree."),
 ])
 def test_owned_boundary_preserves_speech_and_removes_controls(plugin_module, text, expected):
     mod = importlib.import_module(plugin_module.__name__ + ".neko_speech")
@@ -33,6 +59,17 @@ def prepare(plugin, monkeypatch):
     port.observe(snapshot)
     review = port.offer()["review"]
     return mod, port, snapshot, review, raw
+
+
+@pytest.mark.parametrize("text", PLACEHOLDERS)
+def test_wrapped_placeholder_never_schedules_output(plugin_instance, run_async, monkeypatch, text):
+    _, port, _, review, _ = prepare(plugin_instance, monkeypatch)
+    result = run_async(plugin_instance.minecraft_autonomy_review(
+        review["id"], "insert", "Need shelter", "Build shelter", spoken_text=text))
+    assert result["speech"]["status"] == "empty_or_control_only"
+    assert result["delivery"] == "queued"
+    assert not getattr(plugin_instance, "_speech_output_tasks", None)
+    assert not (port.directory / "speech-output.json").exists()
 
 
 @pytest.mark.parametrize("outcome", ["accepted", "busy", "foreign", "unknown", "unsupported"])
