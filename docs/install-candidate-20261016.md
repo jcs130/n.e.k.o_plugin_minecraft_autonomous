@@ -1,16 +1,16 @@
-# 0.5.43 内部候选安装说明（2026-10-16）
+# 0.5.44 内部候选安装说明（2026-10-16）
 
 当前只有本地待发布资产，没有已发布下载地址。请向候选维护者取得下列原始文件；公开发布授权后才能补上不可变下载链接。不要把本说明当成任意干净机器或长期生存、完整 3D 画面已经验收的证明。
 
 ## 准备固定后端
 
-要求 Python 3.11+、Node.js >=22 与 npm。插件安装后使用宿主管理的 Python 解释器，避免调用另一个未安装依赖的系统 Python。插件固定框架 `agent-mc-autonomy 0.1.60`，源码 `minecraft-ai-friend@42b52e4f162229b627cd0c9b1e6c233fa570e72e`；核心 `0.5.7-dev.20261016.1`，源码 `6594fe16dd3c82cb33b81bffbea5e1735d219bb0`。
+要求 Python 3.11+、Node.js >=22 与 npm。插件安装后使用宿主管理的 Python 解释器，避免调用另一个未安装依赖的系统 Python。插件固定框架 `agent-mc-autonomy 0.1.61`，源码 `minecraft-ai-friend@621cda08276cc061aff50a5e2f3e103f2b65a084`；核心 `0.5.7-dev.20261016.2`，源码 `5171af57f06547e04d46d6b84c4e52ac418a28ae`。
 
-取得 `agent-mc-world-0.5.7-dev.20261016.1.tgz`，SHA256 必须为 `e166ca75238e96afda6d224f2c5060f017914e48437e334e777b53f299362327`。在插件安装目录执行（路径全部替换成自己机器上的真实路径）：
+取得 `agent-mc-world-0.5.7-dev.20261016.2.tgz`，SHA256 必须为 `e6fee8e467d102040f18ac867320ae526d8e2389f96ab0ff40f405a1914109e4`。在插件安装目录执行（路径全部替换成自己机器上的真实路径）：
 
 ```powershell
 $env:PYTHONPATH = 'C:/Neko/plugin/plugins/minecraft_autonomous/vendor'
-& 'C:/Neko/.venv/Scripts/python.exe' 'C:/Neko/plugin/plugins/minecraft_autonomous/backend/install.py' --destination 'C:/MinecraftAgent/backend-20261016' --archive 'C:/Downloads/agent-mc-world-0.5.7-dev.20261016.1.tgz'
+& 'C:/Neko/.venv/Scripts/python.exe' 'C:/Neko/plugin/plugins/minecraft_autonomous/backend/install.py' --destination 'C:/MinecraftAgent/backend-20261016' --archive 'C:/Downloads/agent-mc-world-0.5.7-dev.20261016.2.tgz'
 ```
 
 安装器检查归档 SHA、构建凭据、执行文件和类型清单，并运行 `npm ci --ignore-scripts --omit=dev --no-audit --no-fund`。通常需要联网取得固定 npm 依赖；已有完整缓存时可显式加 `--offline`。没有承诺提供离线依赖缓存包。使用空的专用目标目录，不覆盖现有私有运行目录。在插件设置中填入该后端绝对目录；默认启动与 autonomy 均关闭，安装不会连接游戏。

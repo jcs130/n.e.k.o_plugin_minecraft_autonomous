@@ -71,3 +71,38 @@ def test_hosted_rejection_survives_real_host_serialization(plugin_instance, run_
     assert "SECRET" not in json.dumps(hosted_response)
     assert update.await_count == 0 and plugin_instance._generation == generation
     assert plugin_instance._worker is None and plugin_instance._configuration_writes == 0
+
+
+@pytest.mark.parametrize("preference", ["balanced", "local-first", "remote-first"])
+def test_dashboard_full_draft_roundtrip_preserves_memory_and_typed_rejection(
+    plugin_instance, run_async, monkeypatch, preference
+):
+    from copy import deepcopy
+
+    from agent_mc_autonomy.configuration import Settings
+    from plugin.sdk.plugin import Ok
+
+    original = {} if preference == "balanced" else {"memory": {"read_preference": preference}}
+    dump = AsyncMock(return_value=original)
+    update = AsyncMock()
+    monkeypatch.setattr(plugin_instance.config, "dump", dump)
+    monkeypatch.setattr(plugin_instance.config, "update", update)
+    state = run_async(plugin_instance.dashboard())
+    draft = state["settings"]
+    assert draft["memory"]["read_preference"] == preference
+    generation = plugin_instance._generation
+    invalid = deepcopy(draft)
+    invalid["operator"]["port"] = 80
+    rejected = run_async(plugin_instance.save_settings_hosted(invalid))
+    assert isinstance(rejected, Ok)
+    assert rejected.value["success"] is False
+    assert rejected.value["error"]["code"] == "operator_port_unprivileged"
+    assert rejected.value["error"]["field"] == "operator.port"
+    assert update.await_count == 0 and plugin_instance._generation == generation
+    assert plugin_instance._worker is None and plugin_instance._configuration_writes == 0
+    saved = run_async(plugin_instance.save_settings_hosted(deepcopy(draft)))
+    assert isinstance(saved, Ok) and saved.value["saved"] is True
+    update.assert_awaited_once_with(draft)
+    assert Settings.parse(update.await_args.args[0]).memory.read_preference == preference
+    assert original == ({} if preference == "balanced" else {"memory": {"read_preference": preference}})
+    assert plugin_instance._worker is None and plugin_instance._configuration_writes == 0

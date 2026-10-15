@@ -4,6 +4,7 @@ import {
   Alert, Accordion, JsonView, FileDownload, useState,
 } from "@neko/plugin-ui"
 import type { PluginSurfaceProps } from "@neko/plugin-ui"
+import { installationGuidance } from "./installation-guidance.js"
 import { applyConnectionPreset } from "./connection-presets.js"
 
 export default function Panel(props: PluginSurfaceProps<any>) {
@@ -26,6 +27,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const runtime = state.runtime || {}
   const audit = state.audit || {}
   const external = settings.runtime?.mode === "external"
+  const installation = installationGuidance(state.installation, external, state.viewer_url)
   const action = (id: string) => actions.find(a => a.entry_id === id || a.id === id)
   const call = async (id: string, args: any) => {
     setBusy(true); setNotice(""); setFailure(false); setFieldError(null)
@@ -157,8 +159,10 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       </Stack></Card>
       <Card title="安装元数据（只读）"><Stack gap={8}>
         <Text>后端目录：{state.installation?.backend_directory || "暂不可用"}</Text>
-        <Text>要求核心：{state.installation?.required_core_version || "暂不可用"}；后端：{state.installation?.backend || "暂不可用"}；观战：{state.installation?.viewer || "暂不可用"}</Text>
-        <Text>仅检查配置目录中的有限元数据；版本匹配不等于后端完整性校验、游戏连接或真实画面验证。未配置观战时可使用文字模式。请按安装文档准备匹配的渲染器和 catalog；实际启动仍执行完整后端校验。</Text>
+        <Text>要求核心：{state.installation?.required_core_version || "暂不可用"}；本地后端：{installation.backend}</Text>
+        <Text>本地渲染资源：{installation.localResources}</Text>
+        <Text>{installation.externalView}</Text>
+        <Text>仅检查配置目录中的有限元数据；版本匹配不等于后端完整性校验、游戏连接或真实画面验证。实际启动仍执行完整后端校验。</Text>
       </Stack></Card>
       <Card title="插件设置"><Stack gap={12}>
         <Text>保存不会启动或重启游戏。嵌入式运行参数须先显式停止再修改，观战地址可在上方单独保存。外部模式下，这些设置只改变 Neko 观察入口；独立运行的模型与策略请同步到 standalone 配置。</Text>

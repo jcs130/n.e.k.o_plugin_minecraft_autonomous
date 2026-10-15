@@ -42,7 +42,7 @@ EDITABLE = {
     "heartbeat": {"enabled", "target", "min_interval_seconds", "review_interval_seconds"},
     "host_context": {"enabled", "character_api_url"},
     "fast": {"mode", "endpoint", "model", "api_key_env", "min_confidence"},
-    "memory": {"mode", "endpoint", "model", "api_key_env", "timeout_ms", "provider", "library_id", "project_id", "scope_id", "search_mode", "learning_enabled"},
+    "memory": {"mode", "endpoint", "model", "api_key_env", "timeout_ms", "provider", "library_id", "project_id", "scope_id", "search_mode", "learning_enabled", "read_preference"},
     "planner": {"route", *HttpPlannerConfig.__dataclass_fields__},
 }
 

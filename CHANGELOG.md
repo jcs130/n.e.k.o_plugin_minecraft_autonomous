@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.44 — Internal candidate
+
+- Pin autonomy 0.1.61 and core 0.5.7-dev.20261016.2. New operation evidence sums duplicate inventory stacks, preserves unknown inventory and leaves historical records unchanged.
+- Preserve the canonical memory read preference through full dashboard draft saves, so typed field feedback reaches the panel.
+- Explain local installation metadata in Chinese and distinguish external executor resources from local configuration; actual scene and role binding remain to be verified in the viewer.
+- Refresh exact committed source and archive pins. Default startup/autonomy remain disabled; no public release or Market submission.
+
 ## 0.5.43 — Internal candidate
 
 - Pin autonomy 0.1.60 and reviewed core 0.5.7-dev.20261016.1; expose bounded installation metadata without repeated full runtime hashes. Explicit starts still verify the pinned runtime.

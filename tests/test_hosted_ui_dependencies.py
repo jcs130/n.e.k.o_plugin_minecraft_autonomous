@@ -25,6 +25,10 @@ def test_panel_dependency_graph_is_supported_by_host(monkeypatch):
     )
     assert dependencies == [
         {
+            "path": "ui/installation-guidance.js",
+            "source": (root / "ui/installation-guidance.js").read_text(encoding="utf-8"),
+        },
+        {
             "path": "ui/connection-presets.js",
             "source": (root / "ui/connection-presets.js").read_text(encoding="utf-8"),
         }
