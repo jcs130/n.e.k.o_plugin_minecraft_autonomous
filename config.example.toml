@@ -24,7 +24,7 @@ login_config_file = "" # Optional private login configuration; never commit it.
 
 [backend]
 node = "node"
-directory = "" # Defaults to the plugin cache / agent-mc-world-0.4.0-headless.
+directory = "" # Set an absolute verified installation path; version is checked against the pinned manifest.
 
 [viewer]
 renderer_directory = ""

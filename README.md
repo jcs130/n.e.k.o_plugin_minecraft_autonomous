@@ -7,7 +7,7 @@ Neko 提供高层目标、策略、角色演出与语音；独立框架细化规
 可配置其他人的兼容服务器，不要求在本机开服。
 Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minecraft-ai-friend` 项目。
 
-**0.5.29 开发版：默认使用 Mineflayer，主力优化与验收版本为 Java 1.21.1。使用独立框架 0.1.46、经校验核心 0.5.2 和可视化主干 4b59ce79。保留按需知识检索、熟食优先、经验整理、原生队列、多厂商模型和已连接观战页复用；原生观战入口统一工具栏、显示设置与消息历史。千灯纪等扩展只按实际收到并校验的数据及匹配资源启用，无数据就隐藏；不根据服名或聊天猜测。不修改 Neko 主程序或 SDK。长期自主生活与完整场景一致性仍在验收。**
+**0.5.30 发布准备版：默认使用 Mineflayer，主力优化与验收版本为 Java 1.21.1。使用独立框架 0.1.47、经校验核心 0.5.3 和可视化主干 4b59ce79。新增结构化动作拒绝回执、原生烹饪说明及同一现场下的重复无效计划抑制；保留按需知识检索、熟食优先、经验整理、原生队列、多厂商模型和观战页复用。千灯纪等扩展只按实际收到并校验的数据及匹配资源启用，无数据就隐藏；不根据服名或聊天猜测。不修改 Neko 主程序或 SDK。长期自主生活与完整场景一致性仍在验收；候选包及投稿资料见 [发布准备](docs/release-candidate-20261015.md)。**
 默认关闭自主游玩，必须显式执行独立 `run` 或内嵌 `start`。普通源码更新不自动开始游戏；Release/Market 仍需单独发布。
 实际结果及失败记录见 [原版服验收](docs/vanilla-live-acceptance-2026-10-13.md)。
 
@@ -17,7 +17,7 @@ Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minec
 | SDK 入口 | `plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin` |
 | 环境 | Python 3.11+；Node 22+；N.E.K.O 为可选前端 |
 | 游戏协议 | **Java 1.21.1（767）**，拒绝 `auto` 和其他版本 |
-| 自主框架 | `agent-mc-autonomy@0.1.46`，固定来源 `minecraft-ai-friend@54af30496bf8402290e08a1fbcf9c90d4b1fd1dd` |
+| 自主框架 | `agent-mc-autonomy@0.1.47`，固定来源 `minecraft-ai-friend@e758502aff47ebcd8645a95331bb923300cac1b5` |
 | 执行核心 | `agent-mc-world@0.5.2`，来源提交 `3f7ec0c69a2475e20a5f7aea63cc6ae6460df1eb` |
 | 构建 | 固定源码，直接运行核心官方 `build:engine`；无插件专用补丁或第二份编译实现 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT，归档保留其许可证和来源 |
@@ -150,18 +150,23 @@ python standalone.py status --config config.local.toml
 
 ```powershell
 git clone https://github.com/jcs130/minecraft-ai-friend.git ../minecraft-ai-friend
-git -C ../minecraft-ai-friend fetch origin 77111bbe2081c66391244a9195e35f3f3be7c1d8
-# 构建需要 pnpm 11.5.0；destination 必须为空。
+$env:PYTHONPATH = (Resolve-Path ./vendor).Path
+$corePin = Get-Content ./vendor/agent_mc_autonomy/core_distribution/source.json -Raw | ConvertFrom-Json
+git -C ../minecraft-ai-friend fetch origin $corePin.source_revision
+# 这是新克隆的构建源目录；切到固定提交后，显式准备依赖缓存。
+git -C ../minecraft-ai-friend checkout --detach $corePin.source_revision
+pnpm --dir ../minecraft-ai-friend/packages/agent-mc-world fetch
+# 构建需要 pnpm 11.5.0 和 Node.js >=22；destination 必须为空。
 python backend/build.py --checkout ../minecraft-ai-friend --destination ../agent-mc-world-neko-build
-python backend/install.py --destination ./local/backend-050 --archive ../agent-mc-world-neko-build/agent-mc-world-0.5.1.tgz
-python backend/check_disconnected.py --directory ./local/backend-047
+python backend/install.py --destination ./local/backend --archive "../agent-mc-world-neko-build/$($corePin.archive)"
+python backend/check_disconnected.py --directory ./local/backend
 ```
 
 安装器检查 `agent_mc_autonomy/core_distribution/source.json`（来自固定版本框架依赖） 中的归档 SHA256、版本、源提交和编译文件清单，
 同时校验源码、运行文件、公开类型及入口的标准构建回执。
 使用固定 npm lockfile 和 `--ignore-scripts`。构建工具链差异导致哈希不符时会拒绝安装，
 需要重新核查构建产物，不能直接跳过校验。已准备运行目录不等于已登录游戏。
-发布到其他机器时，同样需要显式准备后端；`.neko-plugin` 不夹带 Node、账号或原生 SDK。
+发布到其他机器时，同样需要显式准备后端；`.neko-plugin` 不夹带 Node、账号或原生 SDK。若已有与固定清单匹配的 `agent-mc-world` 归档，只需执行 install/check 两步，不需要 Git 或 pnpm 构建。准备版的配套归档与校验值见发布准备文档。
 
 ## Neko 内嵌运行（可选）
 
@@ -169,7 +174,7 @@ python backend/check_disconnected.py --directory ./local/backend-047
 
 - `server.host` / `port`：可用的远程服务器；`version` 固定为 `1.21.1`。
 - `username` / `auth`：使用该服务器允许的账号。正版服使用 `microsoft`；首次认证可能需要按私有后端日志完成设备授权。`offline` 只适用于允许该认证方式的服务器。
-- `backend.directory`：安装后的绝对目录；留空则使用插件缓存内的 `agent-mc-world-0.4.0-headless`。
+- `backend.directory`：填写安装后的绝对目录；版本以固定校验清单为准，目录存在不代表安装校验通过。
 - `viewer.url`：填写已部署、与当前角色配套的现代可视化页面；在观战面板点击后载入，也可单独打开。不创建第二个游戏账号。
 - `autonomy.enabled=true`：允许显式启动；`plugin_runtime.auto_start=false` 保持默认。
 
