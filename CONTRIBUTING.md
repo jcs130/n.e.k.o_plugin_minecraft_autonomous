@@ -57,8 +57,8 @@ uv run --project "$env:NEKO_ROOT" neko-plugin check --release --market-release .
 开发者显式安装固定后端后，可以独立验证 MCP 传输：
 
 ```powershell
-python backend/install.py --destination ./local/backend-045 --archive /path/to/agent-mc-world-0.4.5.tgz
-python backend/check_disconnected.py --directory ./local/backend-045
+python backend/install.py --destination ./local/backend-046 --archive /path/to/agent-mc-world-0.4.6.tgz
+python backend/check_disconnected.py --directory ./local/backend-046
 ```
 
 安装器校验官方 `build:engine` 归档 SHA256、固定构建凭据和源码/运行文件/类型清单，

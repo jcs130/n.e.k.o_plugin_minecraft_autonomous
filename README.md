@@ -7,7 +7,7 @@ Neko 提供高层目标、策略、角色演出与语音；独立框架细化规
 可配置其他人的兼容服务器，不要求在本机开服。
 Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minecraft-ai-friend` 项目。
 
-**0.5.24 开发版：使用独立框架 0.1.40 与经校验的核心 0.4.5，保留多厂商模型、参数、可选 OAuth 和经验整理接口。当前物品 ID 与失败反馈进入动态上下文，合成与烧炼分别处理。原版 1.21.1 已有登录、采集、合成、捕猎、拾取、进食与解说的运行记录；长期自主生活、复杂目标可靠性和完整观战仍在验收。**
+**0.5.25 开发版：使用独立框架 0.1.41 与经校验的核心 0.4.6，保留多厂商模型、参数、可选 OAuth 和经验整理接口。当前物品 ID、真实口粮与失败反馈进入动态上下文，合成与烧炼分别处理。原版 1.21.1 已有登录、采集、合成、捕猎、拾取、进食与解说的运行记录；长期自主生活、复杂目标可靠性和完整观战仍在验收。**
 默认关闭自主游玩，必须显式执行独立 `run` 或内嵌 `start`。普通源码更新不自动开始游戏；Release/Market 仍需单独发布。
 实际结果及失败记录见 [原版服验收](docs/vanilla-live-acceptance-2026-10-13.md)。
 
@@ -17,8 +17,8 @@ Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minec
 | SDK 入口 | `plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin` |
 | 环境 | Python 3.11+；Node 22+；N.E.K.O 为可选前端 |
 | 游戏协议 | **Java 1.21.1（767）**，拒绝 `auto` 和其他版本 |
-| 自主框架 | `agent-mc-autonomy@0.1.40`，固定来源 `minecraft-ai-friend@c4492370a057f88f3b370d19b0f8c8da09633a57` |
-| 执行核心 | `agent-mc-world@0.4.5`，来源提交 `784f32a47072823c5aac1b8f8b1b7be680fa3e82` |
+| 自主框架 | `agent-mc-autonomy@0.1.41`，固定来源 `minecraft-ai-friend@c619feb5c0c7192744652b73afad4f0da617a575` |
+| 执行核心 | `agent-mc-world@0.4.6`，来源提交 `8da46747a8a1792aef52ba68923ad0972c660516` |
 | 构建 | 固定源码，直接运行核心官方 `build:engine`；无插件专用补丁或第二份编译实现 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT，归档保留其许可证和来源 |
 
@@ -150,11 +150,11 @@ python standalone.py status --config config.local.toml
 
 ```powershell
 git clone https://github.com/jcs130/minecraft-ai-friend.git ../minecraft-ai-friend
-git -C ../minecraft-ai-friend fetch origin 784f32a47072823c5aac1b8f8b1b7be680fa3e82
+git -C ../minecraft-ai-friend fetch origin 8da46747a8a1792aef52ba68923ad0972c660516
 # 构建需要 pnpm 11.5.0；destination 必须为空。
 python backend/build.py --checkout ../minecraft-ai-friend --destination ../agent-mc-world-neko-build
-python backend/install.py --destination ./local/backend-045 --archive ../agent-mc-world-neko-build/agent-mc-world-0.4.5.tgz
-python backend/check_disconnected.py --directory ./local/backend-045
+python backend/install.py --destination ./local/backend-046 --archive ../agent-mc-world-neko-build/agent-mc-world-0.4.6.tgz
+python backend/check_disconnected.py --directory ./local/backend-046
 ```
 
 安装器检查 `agent_mc_autonomy/core_distribution/source.json`（来自固定版本框架依赖） 中的归档 SHA256、版本、源提交和编译文件清单，
