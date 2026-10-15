@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.29 — Unreleased
+
+- Consume checked autonomy 0.1.46/core 0.5.2, preserving current main's Java 1.21.1 build/registry/login defaults and the existing knowledge, food and queue fixes.
+- Synchronize shared viewer main `4b59ce79`: the native entry now uses the common toolbar, display settings, chat history and photo entry. Actual capture provider and night vision gaps stay explicit.
+- Default to ordinary Mineflayer data. Optional server visuals follow validated received capabilities/state and exact resources; hostname/chat/profile guesses cannot enable Qiandengji abilities or mana. Loss/reset removes stale panels.
+- Add public-SDK-only host boundary regressions. No Neko main program/SDK source patch, second game account, extra model loop or host restart is introduced.
+
 ## 0.5.28 — Unreleased
 
 - Make vanilla Java 1.21.1 the primary optimization/acceptance target; consume autonomy 0.1.45 and checked core 0.5.1 from pinned main commits.
