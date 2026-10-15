@@ -184,3 +184,15 @@ def test_viewer_setting_can_change_without_stopping_active_body(plugin_instance,
     assert isinstance(run_async(plugin_instance.save_settings({"autonomy": {"enabled": False}})), Err)
     assert isinstance(run_async(plugin_instance.save_settings({**patch, "server": {"port": 25566}})), Err)
     assert update.await_count == 1
+
+
+def test_bundled_catalog_setting_roundtrips_without_starting_game(plugin_instance, plugin_module, run_async, monkeypatch):
+    update = AsyncMock(return_value={})
+    monkeypatch.setattr(plugin_instance.config, "update", update)
+    patch = {"viewer": {"bundled_appearance_catalog_file": "D:/plugin/assets/appearances/catalog.json"}}
+    result = run_async(plugin_instance.save_settings(patch))
+    assert isinstance(result, Ok) and not result.value["running_session_changed"]
+    update.assert_awaited_once_with(patch)
+    state = module(plugin_module, "dashboard").public_config(plugin_module.Settings.parse(patch))
+    assert state["viewer"]["bundled_appearance_catalog_file"] == patch["viewer"]["bundled_appearance_catalog_file"]
+    assert plugin_instance._worker is None

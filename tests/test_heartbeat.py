@@ -96,15 +96,13 @@ def test_routine_reviews_keep_strategy_but_do_not_require_spoken_readouts(plugin
     port.observe(snapshot)
     review_id = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
     cue = push.call_args.kwargs["parts"][0]["text"]
-    assert "调用工具前不说话" in cue
-    detail = run_async(plugin_instance.minecraft_autonomy_review(review_id, "inspect"))
-    assert not detail["commentary"]["allowed"]
-    assert "木镐1把" in detail["facts"]["gear"]
-    result = run_async(plugin_instance.minecraft_autonomy_review(review_id, "continue", "继续采集"))
-    assert result["acknowledged"] and not result["dispatched"]
-    assert not result["commentary"]["allowed"]
-    assert "现在可简短说明" not in result["reply"]
-    assert "背包清单" in result["commentary"]["instruction"]
+    assert "无需回复或口播" in cue
+    assert push.call_args.kwargs["ai_behavior"] == "read"
+    result = port.state()["review"]["result"]
+    assert result["deferred"] and result["context_only"]
+    assert not result["acknowledged"] and not result["dispatched"]
+    assert port.state()["last_decision"]["heartbeat_id"] == first
+    assert port.state()["review"]["id"] == review_id
 
 
 def test_review_lineage_pages_are_forwarded_without_plugin_policy(plugin_instance, run_async, monkeypatch):

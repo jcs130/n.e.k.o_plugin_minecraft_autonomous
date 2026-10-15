@@ -11,7 +11,7 @@ from agent_mc_autonomy.ownership import session_is_owned
 from agent_mc_autonomy.review import ReviewPolicy, ReviewPort, review_observation
 from plugin.sdk.plugin import Err, Ok, llm_tool, plugin_entry, timer_interval, ui
 
-from .neko_commentary import commentary_plan, save_commentary
+from .neko_commentary import commentary_delivery, commentary_plan, save_commentary
 from .neko_host_context import HostContextSettings, context_request, shared_context
 
 
@@ -136,19 +136,29 @@ class NekoHeartbeat:
         if event is None:
             port.delivered(review["id"], False)
             return Ok({"submitted": False, "reason": "no_fresh_review_evidence"})
+        if review["evidence"].get("death_episode"):
+            event["payload"]["death_episode"] = review["evidence"]["death_episode"]
         with self._control_lock:
             path, state, note = commentary_plan(self, settings, config.target, event, port.now(),
                 PresentationSettings.parse(raw).min_interval_seconds, review_id=review["id"])
-        result = self.push_message(visibility=[], ai_behavior="respond",
-            parts=[{"type": "text", "text": heartbeat_text(review, note)}], source="minecraft_autonomous",
+        passive = not note["allowed"] and review["trigger"] == "periodic_review"
+        text = ("游戏仍在自主运行。以下内部观测静默留给下次交流，无需回复或口播："
+                + str(review["evidence"]["facts"].get("body", ""))[:100]
+                + "；" + str(review["evidence"]["facts"].get("queue", ""))[:100] if passive else heartbeat_text(review, note))
+        result = self.push_message(visibility=[], ai_behavior="read" if passive else "respond",
+            parts=[{"type": "text", "text": text}], source="minecraft_autonomous",
             target_lanlan=config.target or None, coalesce_key="minecraft_review_" + settings.identity,
             metadata={"heartbeat_id": review["id"], "sampled_at": review["evidence"]["sampled_at"], "expires_in_s": 90})
         accepted = result.get("submitted") is True
         if accepted:
             with self._control_lock:
                 save_commentary(path, state)
-        port.delivered(review["id"], accepted)
+        if passive:
+            port.defer(review["id"], accepted)
+        else:
+            port.delivered(review["id"], accepted)
         return Ok({"submitted": accepted, "heartbeat_id": review["id"], "trigger": review["trigger"],
+                   "context_only": passive,
                    "main_brain_acknowledged": False, "playback_verified": False})
 
     @llm_tool(name="minecraft_autonomy_review", timeout=10,
@@ -202,10 +212,12 @@ class NekoHeartbeat:
         event = commentary_observation({**review.get("evidence", {}), "session": review.get("session", "")}, port.now())
         if event is None:
             return result
+        if review.get("evidence", {}).get("death_episode"):
+            event["payload"]["death_episode"] = review["evidence"]["death_episode"]
         with self._control_lock:
             path, state, note = commentary_plan(self, settings, config.target, event, port.now(),
                 PresentationSettings.parse(raw).min_interval_seconds, review_id=heartbeat_id)
             if result.get("acknowledged") and note["allowed"]:
                 # This records a speaking opportunity, never synthesis/playback.
                 save_commentary(path, {**state, "submitted_at": port.now(), "playback_verified": False})
-        return {**result, "commentary": note}
+        return {**result, "commentary": commentary_delivery(note)}

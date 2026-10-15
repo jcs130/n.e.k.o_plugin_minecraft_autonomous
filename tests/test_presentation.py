@@ -44,7 +44,7 @@ def test_fresh_progress_uses_public_role_aware_push_and_deduplicates(plugin_inst
     plugin_instance.status.return_value = Ok(snapshot(10100, "生命 12/20"))
     assert run_async(plugin_instance.observe_game_changes()).value["submitted"]
     assert push.call_count == 2
-    assert json.loads(next(plugin_instance.data_path("presentation").glob("*.json")).read_text())["playback_verified"] is False
+    assert json.loads(next(plugin_instance.data_path("presentation").glob("*.json")).read_text(encoding="utf-8"))["playback_verified"] is False
 
 
 def test_stale_snapshot_and_not_observed_never_narrate(plugin_instance, run_async, monkeypatch):
@@ -122,3 +122,24 @@ def test_rate_limited_review_does_not_consume_the_next_speaking_topic(plugin_ins
     mod.save_commentary(path, quiet)
     _, _, later = mod.commentary_plan(plugin_instance, settings, "TestRole", event(10120, "生命12/20"), 10120, 90, review_id="review-two")
     assert later["allowed"] and "health_changed" in later["topics"]
+
+
+def test_death_speaking_opportunity_uses_real_episode_once_and_loads_bundled_skill(plugin_instance):
+    mod = importlib.import_module(plugin_instance.__class__.__module__ + ".neko_commentary")
+    settings = importlib.import_module("agent_mc_autonomy.configuration").Settings.parse({})
+    observe = importlib.import_module("agent_mc_autonomy.commentary").commentary_observation
+    event = observe(snapshot(10000), 10000)
+    path, state, _ = mod.commentary_plan(plugin_instance, settings, "TestRole", event, 10000, 90)
+    mod.save_commentary(path, {**state, "submitted_at": 10000})
+    event = observe(snapshot(10001), 10001)
+    event["payload"]["death_episode"] = {"id": "actual-native-death", "source_event": {"run": "run", "cursor": 7}}
+    _, state, note = mod.commentary_plan(plugin_instance, settings, "TestRole", event, 10001, 90, review_id="death-review")
+    assert note["allowed"] and note["urgent"]
+    delivered = mod.commentary_delivery(note)
+    assert delivered["本轮重点证据"]["death_episode"]["source_event"]["cursor"] == 7
+    assert "沿用自己的人格" in delivered["表达技能"]
+    mod.save_commentary(path, {**state, "submitted_at": 10001})
+    _, _, repeated = mod.commentary_plan(plugin_instance, settings, "TestRole", event, 10002, 90, review_id="later-review")
+    assert not repeated["allowed"]
+    quiet = mod.commentary_delivery(repeated)
+    assert "本轮重点证据" not in quiet and "最终口播正文为空" in quiet["instruction"]

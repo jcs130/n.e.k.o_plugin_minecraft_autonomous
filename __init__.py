@@ -13,6 +13,7 @@ from agent_mc_autonomy.worker import Worker
 from plugin.sdk.plugin import Err, NekoPluginBase, Ok, TransportError, lifecycle, neko_plugin, plugin_entry
 
 from .backend.install import verify_runtime
+from .bundled_appearance import default_bundled_appearance_settings
 from .dashboard import Dashboard
 from .direct_planner import create_planner
 from .neko_heartbeat import NekoHeartbeat
@@ -94,7 +95,7 @@ class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoHeartbeat, Nek
         try:
             if not isinstance(goal, str) or not goal.strip() or len(goal) > 4000:
                 raise ValueError("invalid_goal: goal must contain 1..4000 characters")
-            planner_raw = await self.config.dump()
+            planner_raw = default_bundled_appearance_settings(await self.config.dump())
             settings = Settings.parse(planner_raw)
             if settings.runtime_mode == "external":
                 return Err({"code": "external_runtime", "message": "此入口只观察和投递任务。请显式启动 standalone.py run；Neko 不接管外部运行进程。"})

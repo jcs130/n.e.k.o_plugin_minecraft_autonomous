@@ -7,8 +7,9 @@ Neko 提供高层目标、策略、角色演出与语音；独立框架细化规
 可配置其他人的兼容服务器，不要求在本机开服。
 Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minecraft-ai-friend` 项目。
 
-**0.5.37 发布准备版：默认使用 Mineflayer，主力优化与验收版本为 Java 1.21.1。固定独立框架 0.1.53 和经校验核心 0.5.4；主脑的人格、当前关注和选出的相关记忆进入实际身体规划，解说沿用同一个角色。支持默认结构化性格档案与自定义提示词，空档案明确回退到主脑投影。保留原生队列、成功动作连续衔接、失败退避、完整原文入口、按需知识检索、熟食优先和多厂商模型。千灯纪等扩展只按实际收到并校验的数据及匹配资源启用，无数据就隐藏。不修改 Neko 主程序或 SDK。长期自主生活与完整场景一致性仍在验收；见 [本次维护候选](docs/release-candidate-0.5.37.md) 和 [发布准备](docs/release-candidate-20261015.md)。**
+**0.5.38 发布准备版：默认使用 Mineflayer，主力优化与验收版本为 Java 1.21.1。固定独立框架 0.1.54 和经校验核心 0.5.5；主脑的人格、当前关注和选出的相关记忆进入实际身体规划，解说沿用同一个角色。支持结构化性格档案与自定义提示词，空档案明确回退到主脑投影。生存指南按需参考，角色可按兴趣选择活动；明确用户目标优先。保留原生队列、动作连续衔接、失败退避、原文查询、知识检索、熟食优先和多厂商模型。新增真实死亡的延迟重生、证据复盘及分域记忆，观战支持平滑移动、短轨迹和背包操作回放。千灯纪等扩展按实际校验数据及匹配资源启用。不修改 Neko 主程序或 SDK。长期自主生活与完整场景一致性仍在验收；见 [本次维护说明](docs/gameplay-experience-20261015.md) 和 [发布准备](docs/release-candidate-20261015.md)。**
 默认关闭自主游玩，必须显式执行独立 `run` 或内嵌 `start`。普通源码更新不自动开始游戏；Release/Market 仍需单独发布。
+YUI 普通 slim 皮肤和原创 YSM 模型默认随插件附带，内嵌运行自动注册。在观战页「人物模型」选择；默认跟随服务器，显式选择只改变 Web 显示。独立运行可将 `viewer.bundled_appearance_catalog_file` 指向安装目录的 `assets/appearances/catalog.json`，无需另下载这些外观素材。
 实际结果及失败记录见 [原版服验收](docs/vanilla-live-acceptance-2026-10-13.md)。
 
 | 项目 | 内容 |
@@ -17,8 +18,8 @@ Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minec
 | SDK 入口 | `plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin` |
 | 环境 | Python 3.11+；Node 22+；N.E.K.O 为可选前端 |
 | 游戏协议 | **Java 1.21.1（767）**，拒绝 `auto` 和其他版本 |
-| 自主框架 | `agent-mc-autonomy@0.1.53`，固定来源 `minecraft-ai-friend@f206b2b2c846fb3f23b06010ef43c7834ca6ff60` |
-| 执行核心 | `agent-mc-world@0.5.4`，来源提交 `7e8b9750015bb31b7307da6dfb03a90302ce9cef` |
+| 自主框架 | `agent-mc-autonomy@0.1.54`，固定来源 `minecraft-ai-friend@1d1119d210820e100e3efff9fc3ed99a2f00b764` |
+| 执行核心 | `agent-mc-world@0.5.5`，来源提交 `954f6f96829e9e2766f41b2599f7dab0cefc54fd` |
 | 构建 | 固定源码，直接运行核心官方 `build:engine`；无插件专用补丁或第二份编译实现 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT，归档保留其许可证和来源 |
 

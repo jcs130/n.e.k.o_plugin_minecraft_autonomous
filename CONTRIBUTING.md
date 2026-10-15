@@ -20,12 +20,13 @@ GitHub 仓库名包含点号；直接把该名字作为 Python 包目录运行�
 $env:NEKO_ROOT = '/path/to/N.E.K.O'
 uv run --project "$env:NEKO_ROOT" python -m pytest tests -q
 node --test tests/observer-data.test.mjs
-uvx ruff==0.12.4 check --ignore-noqa --config ruff.toml .
+uvx ruff==0.12.4 check --ignore-noqa --config ruff.toml --exclude assets/appearances/sources .
 uv run --project "$env:NEKO_ROOT" neko-plugin check --release --market-release .
 ```
 
 也可使用已配置开发环境的 Python 直接执行 `python -m pytest tests -q`。
 先用 `neko-plugin sync .` 安装固定版本的自主框架依赖。游戏逻辑的测试在 MC friend 主仓库运行，本仓库只检验适配层。
+随包外观的 `assets/appearances/sources` 保存未改动的原始素材生成器与许可；不格式化第三方来源文件，Ruff 检查插件自身源码、测试及适配代码。
 本地测试通过 `NEKO_ROOT` 找到真实 SDK；官方 CI 将插件挂载到宿主源码树后验证。
 主仓库 `packages/agent-mc-autonomy/tests/standalone_probe.py` 在隔离 Python 进程中禁止宿主导入、网络和游戏进程，
 用假模型与假执行器检验自主循环和纯原生队列模式。端到端演出/语音仍须另行实测。
@@ -57,7 +58,7 @@ uv run --project "$env:NEKO_ROOT" neko-plugin check --release --market-release .
 开发者显式安装固定后端后，可以独立验证 MCP 传输：
 
 ```powershell
-python backend/install.py --destination ./local/backend --archive /path/to/agent-mc-world-0.5.4.tgz
+python backend/install.py --destination ./local/backend --archive /path/to/agent-mc-world-0.5.5.tgz
 python backend/check_disconnected.py --directory ./local/backend
 ```
 
