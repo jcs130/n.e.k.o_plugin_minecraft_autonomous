@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {applyConnectionPreset} from '../ui/connection-presets.mjs';
+import {applyConnectionPreset} from '../ui/connection-presets.js';
 
 test('Qiandeng preset only returns a new draft and preserves explicit authentication and unrelated settings', () => {
   const original = {server:{host:'localhost',port:25565,auth:'microsoft',username:'my-account'},operator:{port:0},autonomy:{enabled:false}};

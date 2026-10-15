@@ -4,7 +4,7 @@ import {
   Alert, Accordion, JsonView, FileDownload, useState,
 } from "@neko/plugin-ui"
 import type { PluginSurfaceProps } from "@neko/plugin-ui"
-import { applyConnectionPreset } from "./connection-presets.mjs"
+import { applyConnectionPreset } from "./connection-presets.js"
 
 export default function Panel(props: PluginSurfaceProps<any>) {
   const { state, actions } = props
