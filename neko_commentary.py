@@ -31,10 +31,11 @@ def commentary_plan(plugin, settings, target, event, now, interval, *, review_id
     identity = hashlib.sha256((settings.identity + target).encode()).hexdigest()[:24]
     path = plugin.data_path("presentation", identity + ".json")
     previous = load_commentary(path)
-    if review_id and previous.get("review_id") == review_id:
+    episode = event["payload"].get("death_episode")
+    review_key = hashlib.sha256(json.dumps([event["signature"], episode.get("id") if episode else None]).encode()).hexdigest()
+    if review_id and previous.get("review_id") == review_id and previous.get("review_key") == review_key:
         return path, previous, previous["commentary"]
     changed = commentary_changes(event, previous.get("baseline"))
-    episode = event["payload"].get("death_episode")
     new_death = bool(episode and episode.get("id") != previous.get("death_episode_id"))
     if new_death:
         changed = {"topics": ["死亡后的感想与复盘"], "urgent": True}
@@ -51,7 +52,7 @@ def commentary_plan(plugin, settings, target, event, now, interval, *, review_id
             "instruction": SPEAK if allowed else QUIET, "playback_verified": False}
     state = {**previous, "signature": event["signature"],
              "baseline": event["baseline"] if allowed else previous.get("baseline"),
-             "review_id": review_id, "commentary": note,
+             "review_id": review_id, "review_key": review_key, "commentary": note,
              "death_episode_id": episode["id"] if new_death and allowed else previous.get("death_episode_id")}
     return path, state, note
 

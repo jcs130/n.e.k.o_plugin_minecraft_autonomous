@@ -36,6 +36,85 @@ def test_disabled_never_reads_game(plugin_instance, run_async, monkeypatch):
     assert run_async(plugin_instance.game_decision_heartbeat()).value["reason"] == "disabled"
 
 
+@pytest.mark.parametrize("phase", ["blocked", "inhibited"])
+def test_delivered_pending_review_refreshes_commentary_for_new_material_episode(plugin_instance, run_async, monkeypatch, phase):
+    port, snapshot, push = setup(plugin_instance, monkeypatch)
+    port.observe(snapshot)
+    first = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
+    run_async(plugin_instance.minecraft_autonomy_review(first, "continue", "continue useful work"))
+    port.now = lambda: 10180
+    snapshot["updated_at"] = datetime.fromtimestamp(10180, timezone.utc).isoformat()
+    snapshot["planner_error"] = "temporary_request_unavailable"
+    (port.directory / "status.json").write_text(json.dumps(snapshot), encoding="utf-8")
+    port.observe(snapshot)
+    # A real planner-error change delivers a review but has no speaking topic.
+    assert port.state()["review"]["trigger"] == "state_changed"
+    pending_id = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
+    assert not run_async(plugin_instance.minecraft_autonomy_review(pending_id, "inspect"))["commentary"]["allowed"]
+    port.now = lambda: 10281
+    snapshot["updated_at"] = datetime.fromtimestamp(10281, timezone.utc).isoformat()
+    if phase == "blocked":
+        snapshot["native_outcomes"] = [{"tool": "mc_do", "execution_id": "new-failure", "phase": "blocked",
+            "receipt": "new actual failure", "original_event": {"run": "r", "cursor": 8}}]
+    else:
+        snapshot["body_events"] = [{"type": "minecraft.body", "run": "r", "cursor": 9,
+            "text": "[身体受限] new actual inhibition"}]
+    (port.directory / "status.json").write_text(json.dumps(snapshot), encoding="utf-8")
+    port.observe(snapshot)
+    assert port.state()["review"]["id"] == pending_id
+    detail = run_async(plugin_instance.minecraft_autonomy_review(pending_id, "inspect"))
+    note = detail["commentary"]
+    assert note["allowed"] and note["本轮重点证据"]["body_feedback"]
+    evidence_key = "native_outcomes" if phase == "blocked" else "body_events"
+    assert note["本轮重点证据"]["body_feedback"][evidence_key][-1]["phase"] == phase
+    acknowledged = run_async(plugin_instance.minecraft_autonomy_review(pending_id, "continue", "use the new episode"))
+    assert acknowledged["commentary"] == note and not note.get("playback_verified", False)
+    port.now = lambda: 10341
+    snapshot["updated_at"] = datetime.fromtimestamp(10341, timezone.utc).isoformat()
+    (port.directory / "status.json").write_text(json.dumps(snapshot), encoding="utf-8")
+    port.observe(snapshot)
+    assert not port.offer()["offered"]
+    assert push.call_count == 2
+
+
+@pytest.mark.parametrize("body_phase", [None, "inhibited", "recovered", "restriction_fact"])
+def test_resolved_failure_does_not_override_current_preview(plugin_module, body_phase):
+    heartbeat = importlib.import_module(plugin_module.__name__ + ".neko_heartbeat")
+    evidence = {"facts": {"queue": "useful work", "body": "生命20/20", "foodReserve": "口粮0个"},
+        "standing_goal": "survive", "tool_failure": None, "native_outcomes": [
+            {"tool": "mc_do", "phase": "blocked", "receipt": "old path_stalled", "original_event": {"run": "r", "cursor": 8}},
+            {"tool": "mc_do", "phase": "completed", "receipt": "known task completed", "original_event": {"run": "r", "cursor": 12}}]}
+    if body_phase == "restriction_fact":
+        evidence["facts"]["bodyRestriction"] = "current restriction"
+        evidence["fact_originals"] = {"bodyRestriction": "fact:restriction"}
+    elif body_phase:
+        evidence["body_events"] = [{"type": "minecraft.body", "phase": body_phase, "text": "current " + body_phase,
+            "original_event": {"run": "r", "cursor": 13}}]
+    text = heartbeat.heartbeat_text({"id": "review", "evidence": evidence})
+    assert "old path_stalled" not in text and "r:8" not in text and "mc_do/blocked" not in text
+    if body_phase == "restriction_fact":
+        assert "bodyRestriction/inhibited" in text and "current restriction" in text and "fact:restriction" in text
+    elif body_phase:
+        assert "minecraft.body/" + body_phase in text and "current " + body_phase in text and "r:13" in text
+    else:
+        assert "useful work" in text
+
+
+@pytest.mark.parametrize("runtime_error", [None, "outcome_unknown"])
+def test_preview_error_phase_and_reference_share_one_source(plugin_module, runtime_error):
+    heartbeat = importlib.import_module(plugin_module.__name__ + ".neko_heartbeat")
+    evidence = {"facts": {}, "standing_goal": "survive", "phase": "failed" if runtime_error else "running",
+        "runtime_error": runtime_error, "tool_failure": {"tool": "mc_do", "error": "unresolved native failure",
+            "native_execution": {"phase": "partial"}, "native_event": {"run": "r", "cursor": 8}},
+        "body_events": [{"type": "minecraft.body", "phase": "recovered", "text": "actual recovery",
+            "original_event": {"run": "r", "cursor": 13}}]}
+    text = heartbeat.heartbeat_text({"id": "review", "evidence": evidence})
+    if runtime_error:
+        assert "runtime/failed outcome_unknown" in text and "r:8" not in text and "r:13" not in text
+    else:
+        assert "mc_do/partial unresolved native failure" in text and "r:8" in text and "r:13" not in text
+
+
 def test_actual_blocked_outcome_has_bounded_preview_and_unverified_reaction(plugin_instance, run_async, monkeypatch):
     port, snapshot, push = setup(plugin_instance, monkeypatch)
     snapshot["native_outcomes"] = [{"tool": "mc_do", "execution_id": "task-7", "phase": "blocked",

@@ -66,16 +66,24 @@ def heartbeat_text(review, commentary=None):
     reads = sum(evidence.get("read_activity", {}).values())
     failure = evidence.get("tool_failure") or {}
     native = failure.get("native_execution") or {}
-    outcome = next((row for row in reversed(evidence.get("native_outcomes", []))
-                    if not row.get("observation_only") and row.get("phase") in {"blocked", "rejected", "partial"}), {})
+    outcome = next((row for row in reversed(evidence.get("native_outcomes", [])) if not row.get("observation_only")), {})
     body = next(iter(reversed(evidence.get("body_events", []))), {})
-    reference = failure.get("native_event") or outcome.get("original_event") or body.get("original_event") or failure.get("receipt") or {}
-    problem = (evidence.get("runtime_error") or failure.get("error") or outcome.get("receipt")
-               or facts.get("bodyRestriction") or body.get("text"))
+    selected = None
+    if evidence.get("runtime_error"):
+        selected = ("runtime", evidence.get("phase", "failed"), evidence["runtime_error"], {})
+    elif failure:
+        selected = (failure.get("tool", ""), native.get("phase", "failed"), failure.get("error", ""),
+                    failure.get("native_event") or failure.get("receipt") or {})
+    elif outcome.get("phase") in {"blocked", "rejected", "partial"}:
+        selected = (outcome.get("tool", ""), outcome["phase"], outcome.get("receipt", ""), outcome.get("original_event") or {})
+    elif facts.get("bodyRestriction"):
+        selected = ("bodyRestriction", "inhibited", facts["bodyRestriction"],
+                    {"archive": evidence.get("fact_originals", {}).get("bodyRestriction")})
+    elif body:
+        selected = (body.get("type", "minecraft.body"), body.get("phase", "observed"), body.get("text", ""), body.get("original_event") or {})
     cue = ""
-    if problem:
-        origin = (failure.get("tool") or outcome.get("tool") or body.get("type") or "runtime")
-        phase = native.get("phase") or outcome.get("phase") or body.get("phase") or evidence.get("phase", "")
+    if selected:
+        origin, phase, problem, reference = selected
         ref = (str(reference.get("run", "")) + ":" + str(reference["cursor"]) if "cursor" in reference else
                reference.get("request_id") or reference.get("archive") or "status")
         cue = "实际反馈:" + brief(origin, 25) + "/" + brief(phase, 25) + " " + brief(problem, 75) + " 引用:" + brief(ref, 40) + "；"
