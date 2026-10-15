@@ -4,6 +4,7 @@ import {
   Alert, Accordion, JsonView, FileDownload, useState,
 } from "@neko/plugin-ui"
 import type { PluginSurfaceProps } from "@neko/plugin-ui"
+import { applyConnectionPreset } from "./connection-presets.mjs"
 
 export default function Panel(props: PluginSurfaceProps<any>) {
   const { state, actions } = props
@@ -138,17 +139,30 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>此 headless 后端可读取背包地图图像；现代 3D 画面还需匹配的观战适配。没有真实图像时按文字运行。</Text>
         <Accordion title="上下文预算与最近图像"><JsonView data={{context:runtime.context,perception:runtime.perception}} /></Accordion>
       </Stack></Card>
+      <Card title="Minecraft 账户与皮肤"><Stack gap={10}>
+        <Text>当前认证：{settings.server?.auth === "microsoft" ? "Microsoft 授权账号" : "离线昵称"}。离线昵称不能登录要求正版验证的服务器。Microsoft 授权后的实际角色名以本机账户页为准。</Text>
+        {state.operator?.available ? <FileDownload href={state.operator.url} label="打开本机账户页：授权、状态与取消" openExternal /> : <Alert tone="info" message={state.operator?.guidance || "账户接口暂不可用。启用本机账户端口并显式启动匹配的执行器；Java 客户端请使用自身登录入口。"} />}
+        <Text>入口属于运行机器的 127.0.0.1，只能在该机器浏览器打开。执行器更换后请刷新入口。开启页面不自动连接；授权码、实际账号与过期状态仅在独立的本机页面显示，不进入观战流。</Text>
+        <Text>Web 观战外观：在「观战与状态」打开画面后选择随包 YUI slim、YSM 或跟随服务器。随包目录可在下方配置；未安装匹配资源时不可用。</Text>
+        <Text>这些选择只影响网页显示，不会修改服务器角色皮肤、Microsoft 全局皮肤或其他玩家看到的外观。服务器皮肤取决于服务器与已授权账号；本插件没有通用的服务器皮肤修改接口。</Text>
+      </Stack></Card>
       <Card title="插件设置"><Stack gap={12}>
         <Text>保存不会启动或重启游戏。嵌入式运行参数须先显式停止再修改，观战地址可在上方单独保存。外部模式下，这些设置只改变 Neko 观察入口；独立运行的模型与策略请同步到 standalone 配置。</Text>
         {!editing && <Button onClick={() => { setDraft(JSON.parse(JSON.stringify(settings))); setParametersText(JSON.stringify(settings.planner?.parameters || {},null,2)); setEditing(true) }}>编辑设置</Button>}
         {editing && draft && <Stack gap={12}>
+          <Field label="连接类型"><Select value={draft.server.connection_type || "local"} options={[{value:"local",label:"原版 / 本地服务器（默认）"},{value:"custom",label:"自定义 / 公共服务器"}]} onChange={v=>setDraft({...draft,server:{...draft.server,connection_type:v,...(v === "local" ? {host:"127.0.0.1",port:25565} : {})}})} /></Field>
+          {draft.server.connection_type === "custom" && <Button onClick={()=>setDraft(applyConnectionPreset(draft,"qiandeng"))}>填入千灯纪预设（仅草稿）</Button>}
+          <Text>千灯纪可选预设：micro.kangqiang.site:25702 · Java 1.21.1 · ag_NEKO。只填入草稿，请核对认证方式后保存，再显式开始；不会自动连接或授予服务器权限。</Text>
           <Grid cols={2}>
             {field("server","host","服务器地址")}{field("server","port","端口","number")}
-            {field("server","username","玩家名 / Microsoft 账号")}
-            <Field label="认证方式"><Select value={draft.server.auth} options={["offline","microsoft"]} onChange={v=>change("server","auth",v)} /></Field>
+            {field("server","username",draft.server.auth === "microsoft" ? "Microsoft 账户标识（原生授权缓存按此隔离）" : "离线玩家昵称（1–16 位字母、数字或下划线）")}
+            <Field label="认证方式"><Select value={draft.server.auth} options={[{value:"offline",label:"离线昵称"},{value:"microsoft",label:"Microsoft 正版账号授权"}]} onChange={v=>change("server","auth",v)} /></Field>
+            <Field label="请求 Java 版本"><Select value={draft.server.version} options={["1.21.1"]} onChange={v=>change("server","version",v)} /></Field>
+            {field("operator","port","本机账户端口（0 关闭；启用后下次显式启动生效）","number")}
             <Field label="运行方式"><Select value={draft.runtime.mode} options={[{value:"embedded",label:"Neko 嵌入式"},{value:"external",label:"独立运行观察入口"}]} onChange={v=>change("runtime","mode",v)} /></Field>
             {field("runtime","data_directory","共享数据目录")}{field("backend","directory","已验证后端目录")}{field("viewer","url","外部观战地址")}
             {field("viewer","renderer_directory","共享渲染器目录（可选）")}{field("viewer","catalog_file","版本资源目录 JSON（可选）")}{field("viewer","listen_port","本机观战端口","number")}
+            {field("viewer","bundled_appearance_catalog_file","随包 Web 外观目录（YUI slim / YSM，可选）")}
           </Grid>
           <Switch checked={draft.autonomy.enabled} label="允许显式启动自主游玩" onChange={v=>change("autonomy","enabled",v)} />
           <Switch checked={draft.viewer.auto_open !== false} label="进入游戏后自动打开观战界面" onChange={v=>change("viewer","auto_open",v)} />

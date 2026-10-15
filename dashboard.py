@@ -17,9 +17,20 @@ from .neko_host_context import HostContextSettings
 from .neko_presentation import PresentationSettings
 from .neko_tools import unwrap
 
+try:
+    from agent_mc_autonomy.operator import operator_link
+except ModuleNotFoundError as error:
+    if error.name != "agent_mc_autonomy.operator":
+        raise
+    operator_link = None
+
+OPERATOR_UNAVAILABLE = {"available": False, "reason": "operator_capability_unavailable",
+                        "guidance": "当前框架尚不支持账户入口。请安装匹配的核心与自主框架后启用；没有读取或发起 Microsoft 授权。"}
+
 EDITABLE = {
     "autonomy": {"enabled", "min_decision_seconds", "idle_decision_seconds", "max_decisions", "max_tool_rounds", "context_tokens", "max_output_tokens", "model_timeout_seconds"},
-    "server": {"host", "port", "username", "auth", "version"},
+    "server": {"host", "port", "username", "auth", "version", "connection_type"},
+    "operator": {"port"},
     "runtime": {"mode", "data_directory"},
     "backend": {"node", "directory"},
     "viewer": {"url", "auto_open", "renderer_directory", "catalog_file", "bundled_appearance_catalog_file", "listen_port"},
@@ -36,7 +47,8 @@ EDITABLE = {
 def public_config(settings):
     return {
         "autonomy": {key: getattr(settings, "enabled" if key == "enabled" else key) for key in EDITABLE["autonomy"]},
-        "server": {key: getattr(settings, key) for key in EDITABLE["server"]},
+        "server": {key: getattr(settings, key, "local" if settings.host in {"", "localhost", "127.0.0.1", "::1"} else "custom") for key in EDITABLE["server"]},
+        "operator": {"port": settings.console_port},
         "runtime": {"mode": settings.runtime_mode, "data_directory": settings.data_directory},
         "backend": {"node": settings.node, "directory": settings.backend_directory},
         "viewer": {"url": settings.external_viewer_url, "auto_open": settings.viewer_auto_open,
@@ -153,7 +165,9 @@ class Dashboard:
                                "review": {key: review.get(key) for key in ("id", "trigger", "attempts", "result")}}
             return {"settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
                                  "heartbeat": asdict(heartbeat), "host_context": asdict(HostContextSettings.parse(raw)), "planner": public_planner(raw.get("planner", {}))}, "heartbeat": heartbeat_state, "runtime": state, "audit": audit_sample(directory),
-                    "model_slots": ["decision", "vision", "fast"], **viewer_observation(settings, snapshot)}
+                    "model_slots": ["decision", "vision", "fast"],
+                    "operator": operator_link(settings, settings.data_root(self.data_path())) if operator_link else OPERATOR_UNAVAILABLE,
+                    **viewer_observation(settings, snapshot)}
         except (OSError, ValueError, KeyError):
             return {"error": "configuration_or_observation_unavailable"}
 
@@ -168,6 +182,8 @@ class Dashboard:
             for section, values in settings.items():
                 if not isinstance(values, dict) or set(values) - EDITABLE[section]:
                     raise ValueError("unknown_settings_field")
+            if operator_link is None and ("operator" in settings or "connection_type" in settings.get("server", {})):
+                return Err({"code": "operator_capability_unavailable", "message": OPERATOR_UNAVAILABLE["guidance"]})
             original = await self.config.dump()
             merged = {**original, **{key: {**original.get(key, {}), **value} for key, value in settings.items()}}
             parsed = Settings.parse(merged)
