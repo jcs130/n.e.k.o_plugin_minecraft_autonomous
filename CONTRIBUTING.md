@@ -57,7 +57,7 @@ uv run --project "$env:NEKO_ROOT" neko-plugin check --release --market-release .
 开发者显式安装固定后端后，可以独立验证 MCP 传输：
 
 ```powershell
-python backend/install.py --destination ./local/backend-047 --archive /path/to/agent-mc-world-0.4.7.tgz
+python backend/install.py --destination ./local/backend-050 --archive /path/to/agent-mc-world-0.5.1.tgz
 python backend/check_disconnected.py --directory ./local/backend-047
 ```
 

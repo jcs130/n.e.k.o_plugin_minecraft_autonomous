@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.28 — Unreleased
+
+- Make vanilla Java 1.21.1 the primary optimization/acceptance target; consume autonomy 0.1.45 and checked core 0.5.1 from pinned main commits.
+- Expose the core's bounded `mc_knowledge` search/get for versioned food, cooking, regeneration and full registered item/block/crafting references. Retrieval defaults to local reference data; historical memory and explicitly configured vector providers remain separate. No extra model request or duplicated gameplay policy in this adapter.
+- Prefer an available cooked counterpart during routine eating, keep emergency food usable, and include baseline hunger/saturation, cooking gains and harmful-food warnings in current ration facts. Ominous bottles are not rations. Explicit eat requests are not silently rewritten.
+
+- Live follow-up: infer read-only search/get when action is omitted and expose verified cooking/charcoal recipes through recipe-filtered search.
+
 ## 0.5.27 — Unreleased
 
 - Consume autonomy 0.1.43 and checked core 0.4.7. Every named craft step is checked for a known recipe before accepting a batch, so a later nonexistent recipe cannot consume materials in earlier steps or interrupt existing work.
