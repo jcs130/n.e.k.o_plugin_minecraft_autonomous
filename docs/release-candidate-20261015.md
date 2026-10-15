@@ -1,4 +1,4 @@
-# 0.5.30 发布准备
+# 0.5.31 发布准备
 
 状态：候选包准备中，未创建发布 tag、GitHub Release 或 Market 版本。长期自主生存、清洁机器安装与完整场景一致性不能以单元测试替代。最终部署与生存观测结果另记；未通过的项目继续作为发布阻塞。
 
@@ -6,10 +6,10 @@
 
 | 组件 | 版本与来源 |
 | --- | --- |
-| 薄插件 | `minecraft_autonomous` 0.5.30 |
-| 独立运行层 | 0.1.47，`e758502aff47ebcd8645a95331bb923300cac1b5` |
-| Mineflayer 核心 | 0.5.3，`d6ffbf446a768d1ff2cf72079554b9c7217706e9` |
-| 核心归档 | `agent-mc-world-0.5.3.tgz`，SHA256 `f6b0376b70cf1f2ee8259aae54496db5fc8cc522844716c14ae0f6d88e393fb0` |
+| 薄插件 | `minecraft_autonomous` 0.5.31 |
+| 独立运行层 | 0.1.48，`b996abfe66a30c84d1a50cc42db579bb935ff8f3` |
+| Mineflayer 核心 | 0.5.4，`7e8b9750015bb31b7307da6dfb03a90302ce9cef` |
+| 核心归档 | `agent-mc-world-0.5.4.tgz`，SHA256 `225da8b326e4409093ca34f3522d47cadcfcfda5d748f04f9599c04e7f378ebf` |
 | 独立可视化实现 | `mc-visual-console@4b59ce791e6d5f8ac0e6ce0b3a285ebd844b4122`，资源按真实连接版本匹配 |
 
 ## 普通使用者安装路径
