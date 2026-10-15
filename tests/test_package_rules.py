@@ -11,3 +11,13 @@ def test_public_ca_only_pem_exception():
         assert should_skip_path(Path(name), is_dir=False, rules=rules), name
     for name in ("vendor/certifi/cacert.pem", "dashboard.py", "ui/panel.tsx", "vendor/certifi/core.py", "LICENSE", "assets/a.png"):
         assert not should_skip_path(Path(name), is_dir=False, rules=rules), name
+
+
+def test_pem_complement_is_case_sensitive_platform_independent():
+    from fnmatch import fnmatchcase
+
+    root = Path(__file__).resolve().parents[1]
+    patterns = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["tool"]["neko"]["build"]["include"]
+    for name in ("secret.pem", "nested/secret.PEM", "vendor/secret.pEm", "vendor/certifi/private.PeM"):
+        assert not any(fnmatchcase(name, pattern) for pattern in patterns), name
+    assert any(fnmatchcase("vendor/certifi/cacert.pem", pattern) for pattern in patterns)
