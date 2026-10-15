@@ -17,4 +17,9 @@ Issues = "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/issues"
 [tool.neko.build]
 exclude_dirs = ["tests", "docs", "tasks", "local", "runtime", "logs", ".superpowers"]
 exclude_files = ["AGENTS.md", "CONTRIBUTING.md", "ruff.toml", ".gitignore", ".gitattributes", ".editorconfig"]
-exclude = [".env", ".env.*", "*.key", "*.pem", "*.log", "*.local.toml"]
+exclude = [".env", ".env.*", "*.key", "*.log", "*.local.toml"]
+
+# Official excludes run before includes. These suffix-complement patterns keep
+# every non-PEM path plus exactly Certifi's public CA trust store; arbitrary
+# root/nested PEM credentials remain excluded. Do not use include=["**"].
+include = ["*[!m]", "*[!e]m", "*[!p]em", "*[!.]pem", "m", "em", "pem", "vendor/certifi/cacert.pem"]
