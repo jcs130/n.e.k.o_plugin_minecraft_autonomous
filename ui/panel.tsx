@@ -19,6 +19,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState("")
   const [failure, setFailure] = useState(false)
+  const [fieldError, setFieldError] = useState<any>(null)
   const [modelCheck, setModelCheck] = useState<any>(null)
   const [viewerDraft, setViewerDraft] = useState<string | null>(null)
   const settings = state.settings || {}
@@ -27,11 +28,15 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const external = settings.runtime?.mode === "external"
   const action = (id: string) => actions.find(a => a.entry_id === id || a.id === id)
   const call = async (id: string, args: any) => {
-    setBusy(true); setNotice(""); setFailure(false)
+    setBusy(true); setNotice(""); setFailure(false); setFieldError(null)
     try {
       const reply = await props.api.call(action(id)?.id || id, args, { userInitiated: true })
       const result = reply?.result ?? reply
-      if (result?.is_error || result?.error || result?.success === false) throw new Error(result?.error?.message || "请求未成功，请检查回执。")
+      if (result?.is_error || result?.error || result?.success === false) {
+        const detail = result?.error || result
+        if (id === "save_settings") setFieldError({field:detail.field || "", message:detail.message || "配置不合法，请检查设置。"})
+        throw new Error(detail.message || "请求未成功，请检查回执。")
+      }
       if (id === "check_model" || id === "check_direct_model") setModelCheck(result)
       setNotice("请求已受理，请核对更新后的状态和回执。")
       await props.api.refresh()
@@ -45,7 +50,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
     ...(section === "memory" && ((key === "mode" && value !== "remote") || (key === "provider" && !["powercontext","http"].includes(value))) ? {learning_enabled:false} : {}),
   } })
   const field = (section: string, key: string, label: string, type = "text") =>
-    <Field label={label}><Input type={type} value={draft?.[section]?.[key] ?? ""} onChange={v => change(section, key, type === "number" ? Number(v) : v)} /></Field>
+    <Field label={label}><Stack gap={4}><Input type={type} value={draft?.[section]?.[key] ?? ""} placeholder={section === "server" && key === "host" ? "本机填写 127.0.0.1；远程填写域名或 IP" : ""} onChange={v => change(section, key, type === "number" ? Number(v) : v)} />{fieldError?.field === `${section}.${key}` && <Text>{fieldError.message}</Text>}</Stack></Field>
   const authField = (key: string, label: string) => <Field label={label}><Input value={draft?.planner?.auth?.[key] || ""}
     onChange={v=>change("planner","auth",{...draft.planner.auth,[key]:v})} /></Field>
   const saveDraft = async () => {
@@ -149,13 +154,20 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>Web 观战外观：在「观战与状态」打开画面后选择随包 YUI slim、YSM 或跟随服务器。随包目录可在下方配置；未安装匹配资源时不可用。</Text>
         <Text>这些选择只影响网页显示，不会修改服务器角色皮肤、Microsoft 全局皮肤或其他玩家看到的外观。服务器皮肤取决于服务器与已授权账号；本插件没有通用的服务器皮肤修改接口。</Text>
       </Stack></Card>
+      <Card title="安装元数据（只读）"><Stack gap={8}>
+        <Text>后端目录：{state.installation?.backend_directory || "暂不可用"}</Text>
+        <Text>要求核心：{state.installation?.required_core_version || "暂不可用"}；后端：{state.installation?.backend || "暂不可用"}；观战：{state.installation?.viewer || "暂不可用"}</Text>
+        <Text>仅检查配置目录中的有限元数据；版本匹配不等于后端完整性校验、游戏连接或真实画面验证。未配置观战时可使用文字模式。请按安装文档准备匹配的渲染器和 catalog；实际启动仍执行完整后端校验。</Text>
+      </Stack></Card>
       <Card title="插件设置"><Stack gap={12}>
         <Text>保存不会启动或重启游戏。嵌入式运行参数须先显式停止再修改，观战地址可在上方单独保存。外部模式下，这些设置只改变 Neko 观察入口；独立运行的模型与策略请同步到 standalone 配置。</Text>
         {!editing && <Button onClick={() => { setDraft(JSON.parse(JSON.stringify(settings))); setParametersText(JSON.stringify(settings.planner?.parameters || {},null,2)); setRoutineParameters(JSON.stringify(settings.decision_policy?.routine_parameters || {},null,2));setComplexParameters(JSON.stringify(settings.decision_policy?.complex_parameters || {},null,2));setEditing(true) }}>编辑设置</Button>}
         {editing && draft && <Stack gap={12}>
-          <Field label="连接类型"><Select value={draft.server.connection_type || "local"} options={[{value:"local",label:"原版 / 本地服务器（默认）"},{value:"custom",label:"自定义 / 公共服务器"}]} onChange={v=>setDraft({...draft,server:{...draft.server,connection_type:v,...(v === "local" ? {host:"127.0.0.1",port:25565} : {})}})} /></Field>
+          <Field label="连接类型"><Stack gap={4}><Select value={draft.server.connection_type || "local"} options={[{value:"local",label:"原版 / 本地服务器（默认）"},{value:"custom",label:"自定义 / 公共服务器"}]} onChange={v=>setDraft({...draft,server:{...draft.server,connection_type:v,...(v === "local" ? {host:"127.0.0.1",port:25565} : {})}})} />{fieldError?.field === "server.connection_type" && <Text>{fieldError.message}</Text>}</Stack></Field>
           {draft.server.connection_type === "custom" && <Button onClick={()=>setDraft(applyConnectionPreset(draft,"qiandeng"))}>填入千灯纪预设（仅草稿）</Button>}
-          <Text>千灯纪可选预设：micro.kangqiang.site:25702 · Java 1.21.1 · ag_NEKO。只填入草稿，请核对认证方式后保存，再显式开始；不会自动连接或授予服务器权限。</Text>
+          <Text>千灯纪可选预设：micro.kangqiang.site:25702 · Java 1.21.1。保留你填写的账号和认证方式；空账号仍需填写。只填入草稿，请核对后保存，再显式开始；不会自动连接或授予服务器权限。</Text>
+          <Text>开始前必须填写服务器地址和账户。本机服务器通常为 127.0.0.1:25565；远程地址请选择自定义连接。填写与保存均不自动连接。</Text>
+          {draft.server.auth === "microsoft" && !draft.operator?.port && <Alert tone="info" message="Microsoft 账户：可先设置 1024–65535 的空闲本机账户端口，保存后显式启动，再在运行机器打开授权页；保持 0 时请由本人查看私有原生设备授权日志。不要把授权码或令牌填到观战页面。" />}
           <Grid cols={2}>
             {field("server","host","服务器地址")}{field("server","port","端口","number")}
             {field("server","username",draft.server.auth === "microsoft" ? "Microsoft 账户标识（原生授权缓存按此隔离）" : "离线玩家昵称（1–16 位字母、数字或下划线）")}

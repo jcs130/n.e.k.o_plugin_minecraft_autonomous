@@ -8,6 +8,7 @@ from agent_mc_autonomy.configuration import Settings
 from agent_mc_autonomy.decision_profiles import validate_policy
 from agent_mc_autonomy.host_context import HostContextPort
 from agent_mc_autonomy.model_config import HttpPlannerConfig, planner_settings
+from agent_mc_autonomy.readiness import installation_readiness, validation_feedback
 from agent_mc_autonomy.viewer import viewer_observation
 from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
 
@@ -149,7 +150,7 @@ class Dashboard:
         try:
             raw = await self.config.dump()
             settings = Settings.parse(raw)
-            result = unwrap(await self.status())
+            result = unwrap(await self.status(metadata_only=True))
             if result.get("is_error"):
                 return {"error": "configuration_or_observation_unavailable"}
             snapshot = result.get("observation", result)
@@ -169,6 +170,7 @@ class Dashboard:
             return {"settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
                                  "heartbeat": asdict(heartbeat), "host_context": asdict(HostContextSettings.parse(raw)), "planner": public_planner(raw.get("planner", {}))}, "heartbeat": heartbeat_state, "runtime": state, "audit": audit_sample(directory),
                     "model_slots": ["decision", "vision", "fast"],
+                    "installation": installation_readiness(settings, self.cache_path()),
                     "operator": operator_link(settings, settings.data_root(self.data_path())) if operator_link else OPERATOR_UNAVAILABLE,
                     **viewer_observation(settings, snapshot)}
         except (OSError, ValueError, KeyError):
@@ -219,8 +221,8 @@ class Dashboard:
             if "heartbeat" in settings:
                 review_port(self, Settings.parse(merged)).configure(HeartbeatSettings.parse(merged).policy())
             return Ok({"saved": True, "running_session_changed": False, "applies": "next_explicit_start_or_observer_read"})
-        except (ValueError, TypeError):
-            return Err({"code": "invalid_settings", "message": "配置不合法。请检查服务器、路径、预算及快决策端点；远程 System One 要求 HTTPS。"})
+        except (ValueError, TypeError) as error:
+            return Err(validation_feedback(error))
 
     @ui.action(label="投递目标", tone="primary")
     @plugin_entry(id="panel_intent", name="控制台投递目标", kind="service", description="通过同一个持久队列投递自然语言目标。",

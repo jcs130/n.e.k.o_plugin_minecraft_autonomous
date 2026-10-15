@@ -1,12 +1,12 @@
 [project]
 name = "minecraft_autonomous"
-version = "0.5.42"
+version = "0.5.43"
 description = "Thin N.E.K.O adapter for the host-neutral Minecraft autonomy framework"
 requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"
 dependencies = [
-  "agent-mc-autonomy @ git+https://github.com/jcs130/minecraft-ai-friend.git@15fe96eaa74afca99134490900d1761b3a6b5555#subdirectory=packages/agent-mc-autonomy",
+  "agent-mc-autonomy @ git+https://github.com/jcs130/minecraft-ai-friend.git@42b52e4f162229b627cd0c9b1e6c233fa570e72e#subdirectory=packages/agent-mc-autonomy",
   "mcp==2.1.1", "httpx>=0.27,<1", "openai>=1,<3"
 ]
 
@@ -15,6 +15,6 @@ Repository = "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous"
 Issues = "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/issues"
 
 [tool.neko.build]
-exclude_dirs = ["tests", "docs", "tasks", "local", "runtime", "logs"]
+exclude_dirs = ["tests", "docs", "tasks", "local", "runtime", "logs", ".superpowers"]
 exclude_files = ["AGENTS.md", "CONTRIBUTING.md", "ruff.toml", ".gitignore", ".gitattributes", ".editorconfig"]
 exclude = [".env", ".env.*", "*.key", "*.pem", "*.log", "*.local.toml"]

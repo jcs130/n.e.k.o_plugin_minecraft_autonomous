@@ -54,7 +54,7 @@ class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoHeartbeat, Nek
         description="只读报告后端、Minecraft 连接、当前动作与自主决策状态。",
         kind="service",
     )
-    async def status(self, **_):
+    async def status(self, metadata_only: bool = False, **_):
         state = {"phase": "stopped", "game_connected": False, "autonomy_running": False, "worker_alive": False}
         with self._control_lock:
             if self._worker:
@@ -70,8 +70,11 @@ class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoHeartbeat, Nek
                 return Ok({"mode": "external", "minecraft_version": "1.21.1", "observation": snapshot,
                            **viewer_observation(settings, snapshot)})
             viewer = settings.external_viewer_url
-            verify_runtime(settings.runtime_directory(self.cache_path()))
-            ready, reason = True, "ready_for_explicit_start"
+            if metadata_only:
+                reason = "metadata_only_not_runtime_verified"
+            else:
+                verify_runtime(settings.runtime_directory(self.cache_path()))
+                ready, reason = True, "ready_for_explicit_start"
         except (OSError, ValueError, KeyError):
             pass
         except TransportError:
