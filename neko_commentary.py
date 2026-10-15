@@ -8,11 +8,11 @@ from pathlib import Path
 from agent_mc_autonomy.commentary import commentary_changes
 
 SPEAK = ("你正亲自在玩Minecraft，用自己的角色性格用中文边玩边聊1—2句。"
-         "抓一个亲身经历的新重点，自然反应、吐槽或说小打算，和观众分享，不作汇报。"
+         "分享自然反应、好奇、心情或小打算；平静时也能轻松闲聊，不作汇报。"
          "不要念背包清单、坐标、工具名、受理回执或‘先读取现场’等过程；不用先复述状态。"
          "行动未完成就只说打算，不说已完成。用户直接提问仍正常回答。")
-QUIET = ("本轮没有到期的新解说重点。照常检查并确认策略，工具调用前后都不用出声；"
-         "最终口播正文为空，不输出占位句、英文控制状态、工具确认或‘保持安静’。用户直接提问仍正常回答。")
+QUIET = ("这是策略交流的延续，可自然分享当前打算或感受；具体依据留在工具判断里。"
+         "若同一判断已通过spoken_text排入语音，接话时推进话题，不复述那句打算。")
 
 
 @lru_cache(maxsize=1)
@@ -39,10 +39,13 @@ def commentary_plan(plugin, settings, target, event, now, interval, *, review_id
     new_death = bool(episode and episode.get("id") != previous.get("death_episode_id"))
     if new_death:
         changed = {"topics": ["死亡后的感想与复盘"], "urgent": True}
+    opportunity = event["payload"].get("opportunity", {})
+    if opportunity.get("kind") == "idle_presence":
+        changed = {"topics": ["idle_presence"], "urgent": False}
     ready = now - previous.get("submitted_at", 0) >= (30 if manual else interval)
     retrying = now < previous.get("retry_after", 0)
-    allowed = not retrying and (manual or bool(changed["topics"])) and (ready or changed["urgent"])
-    note = {"allowed": allowed, "topics": changed["topics"], "urgent": changed["urgent"],
+    allowed = not retrying and (manual or bool(changed["topics"])) and (ready or changed["urgent"] or opportunity.get("kind") == "idle_presence")
+    note = {"opportunity_id": opportunity.get("id", review_id), "allowed": allowed, "topics": changed["topics"], "urgent": changed["urgent"],
             "evidence": {"progress": event["payload"].get("progress", ""),
                          "task_outcome": event["payload"].get("task_outcome"),
                          "body_feedback": event["payload"].get("body_feedback", {}),

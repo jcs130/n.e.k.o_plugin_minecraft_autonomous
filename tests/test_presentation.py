@@ -229,4 +229,4 @@ def test_death_speaking_opportunity_uses_real_episode_once_and_loads_bundled_ski
     _, _, repeated = mod.commentary_plan(plugin_instance, settings, "TestRole", event, 10002, 90, review_id="later-review")
     assert not repeated["allowed"]
     quiet = mod.commentary_delivery(repeated)
-    assert "本轮重点证据" not in quiet and "最终口播正文为空" in quiet["instruction"]
+    assert "本轮重点证据" not in quiet and "最终口播正文为空" not in quiet["instruction"]

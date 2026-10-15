@@ -78,7 +78,7 @@ def context_request(port, now, *, enabled=True):
     return {**metadata(existing), "needed": persona_needed or memory_needed,
             "persona_needed": persona_needed, "memory_needed": memory_needed,
             "instructions": "这是你的Minecraft身体与动作规划器。当前人格、相关记忆和关注应共享，不能另立角色。"
-            "若memory_needed，使用你已有的recall_memory按当前游戏目标/用户偏好召回少量相关记忆；"
+            "先完成最终continue/insert/revise判断；memory_needed仅是可选建议，不要求额外回合。已有相关记忆可直接携带；"
             "最终判断通过context携带current_intent及记忆原id/source/text，未命中用空列表，不编造。"
             "agent_name用你的角色名；若persona_needed，提供当前人格要点persona，标记为主脑投影；不要复制整个聊天历史。"
             "这是私有规划上下文，不是口播稿，也不是当前世界事实。"}

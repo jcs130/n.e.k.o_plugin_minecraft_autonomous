@@ -55,7 +55,14 @@ min_interval_seconds = 90 # Ordinary commentary, including strategic reviews; ur
 enabled = false # Explicitly enable Neko main-character strategic reviews of an already running game.
 target = "" # Empty: current Neko character. Independent runtime does not require Neko.
 min_interval_seconds = 60 # Material changes are coalesced; this is not a fixed model-call interval.
-review_interval_seconds = 180 # Fallback strategic review with fresh facts, even without user messages.
+review_interval_seconds = 180 # Fallback strategic review with fresh facts.
+idle_presence_seconds = 45 # Bounded optional character chat in the existing review loop; accepted events reset it.
+
+[speech_output]
+enabled = false # Explicit optional public Neko REST output-only integration; no additional model.
+base_url = "" # Exact local Neko origin, with no path/credentials. Requires heartbeat.target.
+# Capability checked through /openapi.json; only /api/game/minecraft_autonomous/speak is used.
+# Enqueue is not playback; ordinary final host replies cannot be filtered by this plugin.
 
 [fast]
 mode = "rules" # rules | neko (public fast slot) | system_one (Jev/Decider protocol)

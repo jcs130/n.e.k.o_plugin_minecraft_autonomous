@@ -15,7 +15,7 @@ from plugin.sdk.plugin import Err
 def setup(plugin, monkeypatch):
     mod = importlib.import_module(plugin.__class__.__module__ + ".neko_heartbeat")
     raw = {"autonomy": {"enabled": True}, "server": {"host": "example.invalid", "username": "TestBot"},
-           "heartbeat": {"enabled": True, "target": "TestRole"}}
+           "heartbeat": {"enabled": True, "target": "TestRole", "idle_presence_seconds": 900}}
     monkeypatch.setattr(plugin.config, "dump", AsyncMock(return_value=raw))
     directory = mod.review_port(plugin, mod.Settings.parse(raw)).directory
     port = ReviewPort(directory, now=lambda: 10000)
@@ -168,7 +168,7 @@ def test_frontend_only_transports_framework_reviews(plugin_instance, run_async, 
     assert event["target_lanlan"] == "TestRole" and event["ai_behavior"] == "respond"
     text = event["parts"][0]["text"]
     assert "minecraft_autonomy_review" in text and "口粮0个" in text and len(text.encode()) < 650
-    assert "1—2句" in text[:130] and "不念背包" in text[:130]
+    assert "inspect" in text[:130] and "spoken_text" in text and "调用工具前不说话" not in text
     review_id = result["heartbeat_id"]
     acknowledged = run_async(plugin_instance.minecraft_autonomy_review(review_id, "continue", "继续当前工作"))
     assert acknowledged["acknowledged"] and not acknowledged["dispatched"]

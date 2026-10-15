@@ -17,6 +17,7 @@ from .model_check import check_model
 from .neko_heartbeat import HeartbeatSettings, is_stopped, review_port
 from .neko_host_context import HostContextSettings
 from .neko_presentation import PresentationSettings
+from .neko_speech import output_settings
 from .neko_tools import unwrap
 
 try:
@@ -39,7 +40,8 @@ EDITABLE = {
     "viewer": {"url", "auto_open", "renderer_directory", "catalog_file", "bundled_appearance_catalog_file", "listen_port"},
     "perception": {"enabled"},
     "presentation": {"enabled", "target", "min_interval_seconds"},
-    "heartbeat": {"enabled", "target", "min_interval_seconds", "review_interval_seconds"},
+    "heartbeat": {"enabled", "target", "min_interval_seconds", "review_interval_seconds", "idle_presence_seconds"},
+    "speech_output": {"enabled", "base_url"},
     "host_context": {"enabled", "character_api_url"},
     "fast": {"mode", "endpoint", "model", "api_key_env", "min_confidence"},
     "memory": {"mode", "endpoint", "model", "api_key_env", "timeout_ms", "provider", "library_id", "project_id", "scope_id", "search_mode", "learning_enabled", "read_preference"},
@@ -166,7 +168,7 @@ class Dashboard:
             review = review_state.get("review", {})
             heartbeat_state = {"enabled": heartbeat.enabled, "explicit_stop": is_stopped(self), "last_decision": review_state.get("last_decision"),
                                "submitted_at": review_state.get("submitted_at"), "retry_after": review_state.get("retry_after"),
-                               "review": {key: review.get(key) for key in ("id", "trigger", "attempts", "result")}}
+                               "review": {key: review.get(key) for key in ("id", "trigger", "attempts", "result", "opportunity", "notification_status", "inspected_at", "reflection")}}
             return {"settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
                                  "heartbeat": asdict(heartbeat), "host_context": asdict(HostContextSettings.parse(raw)), "planner": public_planner(raw.get("planner", {}))}, "heartbeat": heartbeat_state, "runtime": state, "audit": audit_sample(directory),
                     "model_slots": ["decision", "vision", "fast"],
@@ -198,10 +200,11 @@ class Dashboard:
             PresentationSettings.parse(merged)
             HeartbeatSettings.parse(merged)
             HostContextSettings.parse(merged)
+            output_settings(merged, HeartbeatSettings.parse(merged).target)
             with self._control_lock:
-                if set(settings) - {"viewer", "presentation", "heartbeat", "host_context"} and self._worker and self._worker.snapshot().get("worker_alive"):
+                if set(settings) - {"viewer", "presentation", "heartbeat", "host_context", "speech_output"} and self._worker and self._worker.snapshot().get("worker_alive"):
                     return Err({"code": "settings_runtime_active", "message": "运行参数须先显式停止嵌入式运行再保存；观战地址可单独保存，模型槽绑定可在宿主修改。"})
-                fence = bool(set(settings) & {"server", "runtime", "autonomy", "heartbeat", "host_context"})
+                fence = bool(set(settings) & {"server", "runtime", "autonomy", "heartbeat", "host_context", "speech_output"})
                 if fence:
                     self._generation += 1
                     self._configuration_writes += 1

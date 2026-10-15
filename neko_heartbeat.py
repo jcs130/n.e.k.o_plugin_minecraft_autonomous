@@ -21,6 +21,7 @@ class HeartbeatSettings:
     target: str = ""
     min_interval_seconds: int = 60
     review_interval_seconds: int = 180
+    idle_presence_seconds: int = 45
 
     @classmethod
     def parse(cls, raw):
@@ -31,10 +32,10 @@ class HeartbeatSettings:
         policy = ReviewPolicy.parse(section)
         if len(target) > 80:
             raise ValueError("heartbeat.target is too long")
-        return cls(policy.enabled, target, policy.min_interval_seconds, policy.review_interval_seconds)
+        return cls(policy.enabled, target, policy.min_interval_seconds, policy.review_interval_seconds, policy.idle_presence_seconds)
 
     def policy(self):
-        return ReviewPolicy(self.enabled, self.min_interval_seconds, self.review_interval_seconds)
+        return ReviewPolicy(self.enabled, self.min_interval_seconds, self.review_interval_seconds, self.idle_presence_seconds)
 
 
 def review_port(plugin, settings):
@@ -88,12 +89,14 @@ def heartbeat_text(review, commentary=None):
                reference.get("request_id") or reference.get("archive") or "status")
         cue = "实际反馈:" + brief(origin, 25) + "/" + brief(phase, 25) + " " + brief(problem, 75) + " 引用:" + brief(ref, 40) + "；"
         readings = ""  # Keep the causal cue within the host preview budget.
-    speech = ("无新重点，正常玩，本轮无需口播。" if commentary and not commentary["allowed"] else
-              "以自己的性格边玩边聊1—2句，分享自然反应或小打算，不作汇报、不念背包。")
+    speech = "说一个自然的小打算或感想。"
+    if review.get("trigger") == "idle_presence":
+        speech = "轻松聊一句自己的好奇、心情或小打算；有兴致也可轻哼原创小调。"
     if review.get("attempts", 0) > 1:
-        speech = "本轮重试确认，只调用工具，不重复解说。"
-    return ("Minecraft " + review["id"] + "。" + speech + "调用工具前不说话。先minecraft_autonomy_review inspect，"
-            "再continue/insert/revise。无新用户指令，勿重发旧目标。" + cue + intent + "；" + readings
+        speech = "延续刚才的话题，补齐策略判断。"
+    return ("Minecraft " + review["id"] + "。先minecraft_autonomy_review inspect，再continue/insert/revise完成判断。"
+            + speech + "在最终判断的spoken_text给一句行动前打算；之后可自然接话，不复述。"
+            + cue + intent + "；" + readings
             + f"；连续查询{reads}次。" + (f"未行动回复{evidence['unactioned_replies']}次。" if evidence.get("unactioned_replies") else ""))
 
 
@@ -161,6 +164,7 @@ class NekoHeartbeat:
         if event is None:
             port.delivered(review["id"], False)
             return Ok({"submitted": False, "reason": "no_fresh_review_evidence"})
+        event["payload"]["opportunity"] = review.get("opportunity", {})
         if review["evidence"].get("death_episode"):
             event["payload"]["death_episode"] = review["evidence"]["death_episode"]
         with self._control_lock:
@@ -177,30 +181,37 @@ class NekoHeartbeat:
         accepted = result.get("submitted") is True
         if accepted:
             with self._control_lock:
-                save_commentary(path, state)
+                save_commentary(path, {**state, "submitted_at": port.now(), "playback_verified": False})
         if passive:
             port.defer(review["id"], accepted)
         else:
-            port.delivered(review["id"], accepted)
+            port.delivered(review["id"], result.get("submitted"))
         return Ok({"submitted": accepted, "heartbeat_id": review["id"], "trigger": review["trigger"],
+                   "offered": True, "transport_status": "accepted" if accepted else "rejected" if result.get("submitted") is False else "unknown",
                    "context_only": passive,
                    "main_brain_acknowledged": False, "playback_verified": False})
 
     @llm_tool(name="minecraft_autonomy_review", timeout=10,
               description="回应Minecraft决策心跳：你是正在游戏中自主生存的主脑，负责阶段目标和策略。用通知里的heartbeat_id。"
               "每次先inspect读本次目标、身体、食物、物品、附近危险、原生队列和最近回执；通知只是短预览。"
-              "你是这具Minecraft身体的主脑，不是汇报员。inspect的context_request若memory_needed，复用已有recall_memory召回少量相关记忆。"
+              "你是这具Minecraft身体的主脑，不是汇报员。先inspect再完成最终判断；context_request的记忆召回仅为可选，不能挤掉最终判断。"
               "最终判断用context同步当前关注current_intent和记忆原id/source/text；未命中用[]，不编造。persona_needed时提供persona人格要点。"
               "优先读current_user_goal和standing_goal；current_goal.origin=host_review是你自己的建议阶段，不是用户要求。旧对话中的测试或练习不能覆盖当前用户目标。"
               "正常工作用continue，不打断长动作；空闲/缺资源/受阻需改策略用insert加具体自然语言阶段目标，由独立框架规划、在安全检查点执行。"
               "已有自己插入的目标且stage_delivery.can_revise为true时，用revise修订该阶段；保留现有动作和原用户目标，不重复堆积任务。planning表示已送达，不能推断身体正忙。"
               "队列空闲或持续无进展时自己决定下一项工作，不等待观众回复；同位反复观察不算生存进展。"
-              "reason写观测依据。别重复提交现有目标；受理不是完成。调用工具前不说话。现场和背包是内部决策资料，不是朗读稿。"
-              "表达遵循返回的commentary：有新重点才以自己的性格边玩边聊1—2句，自然反应或吐槽，不作状态汇报；不念背包清单、工具名、坐标或查询过程。无新重点可安静游玩，用户直接提问正常回答。"
+              "reason写观测依据。别重复提交现有目标；受理不是完成。现场和背包是内部决策资料，不是朗读稿。"
+              "最终判断可附spoken_text一句同一打算，插件在普通目标投递前异步排入现有语音。按speech回执理解是否受理，受理不代表播放。之后可自然接话而不重复意图句。闲聊可分享好奇、心情或原创轻哼。死亡时同次判断附death_reflection，记录有依据的教训或明确暂缓原因。"
               "用户新反馈仍用minecraft_autonomy_intent并优先于旧心跳，停止只在用户明确要求时用stop。",
               parameters={"type": "object", "properties": {
                   "heartbeat_id": {"type": "string"}, "decision": {"enum": ["inspect", "continue", "insert", "revise"]},
                   "reason": {"type": "string", "maxLength": 600}, "goal": {"type": "string", "maxLength": 2000},
+                  "spoken_text": {"type": "string", "maxLength": 600, "description": "可选的一句自然意图，由本次主脑判断产生；不填控制标记。"},
+                  "death_reflection": {"type": "object", "properties": {
+                      "episode_id": {"type": "string"}, "outcome": {"enum": ["lesson", "deferred"]},
+                      "lesson": {"type": "string", "maxLength": 1200}, "applicability": {"type": "string", "maxLength": 600},
+                      "evidence": {"type": "string", "maxLength": 600, "description": "引用本次episode_id或source_event.run并说明事实依据。"}, "reason": {"type": "string", "maxLength": 600}},
+                      "required": ["episode_id", "outcome"], "additionalProperties": False},
                   "context": {"type": "object", "properties": {
                       "agent_name": {"type": "string", "maxLength": 80}, "persona": {"type": "string", "maxLength": 800},
                       "current_intent": {"type": "string", "maxLength": 500},
@@ -210,7 +221,7 @@ class NekoHeartbeat:
                       "required": ["current_intent", "memories"], "additionalProperties": False},
                   "lineage_offset": {"type": "integer", "minimum": 0, "description": "inspect时按4条分页查询目标父链原文；平时省略。"}},
                   "required": ["heartbeat_id", "decision"], "additionalProperties": False})
-    async def minecraft_autonomy_review(self, heartbeat_id, decision, reason="", goal="", lineage_offset=None, context=None, **_):
+    async def minecraft_autonomy_review(self, heartbeat_id, decision, reason="", goal="", lineage_offset=None, context=None, spoken_text=None, death_reflection=None, **_):
         with self._control_lock:
             generation = self._generation
         raw = await self.config.dump()
@@ -227,16 +238,25 @@ class NekoHeartbeat:
         with self._control_lock:
             if generation != self._generation or self._configuration_writes or is_stopped(self):
                 return {"is_error": True, "error": "configuration_changed_or_stopped"}
-            result = port.decide(heartbeat_id, decision, reason, goal, lineage_offset=lineage_offset, host_context=projection)
+            from .neko_speech import enqueue_speech
+            result = port.decide(heartbeat_id, decision, reason, goal, lineage_offset=lineage_offset,
+                host_context=projection, death_reflection=death_reflection,
+                before_dispatch=(lambda correlation: enqueue_speech(self, raw, settings, config.target,
+                    port, generation, spoken_text, correlation)) if spoken_text is not None else None)
         if result.get("is_error"):
             return result
         if decision == "inspect":
-            result = {**result, "context_request": context_request(port, port.now, enabled=HostContextSettings.parse(raw).enabled)}
+            result = {**result, "context_request": context_request(port, port.now, enabled=HostContextSettings.parse(raw).enabled),
+                      "speech_contract": "Optional spoken_text in the final decision uses configured public output only. Final host text is outside plugin filtering; avoid duplicating a queued intent."}
+            from .neko_commentary import load_commentary
+            opportunity = port.state().get("review", {}).get("opportunity", {}).get("id", heartbeat_id)
+            result["speech_delivery"] = load_commentary(port.directory / "speech-output.json").get("records", {}).get(opportunity)
         from .neko_presentation import PresentationSettings
         review = port.state().get("review", {})
         event = commentary_observation({**review.get("evidence", {}), "session": review.get("session", "")}, port.now())
         if event is None:
             return result
+        event["payload"]["opportunity"] = review.get("opportunity", {})
         if review.get("evidence", {}).get("death_episode"):
             event["payload"]["death_episode"] = review["evidence"]["death_episode"]
         with self._control_lock:
