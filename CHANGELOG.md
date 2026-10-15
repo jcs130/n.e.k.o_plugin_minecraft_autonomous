@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.27 — Unreleased
+
+- Consume autonomy 0.1.43 and checked core 0.4.7. Every named craft step is checked for a known recipe before accepting a batch, so a later nonexistent recipe cannot consume materials in earlier steps or interrupt existing work.
+- Preserve deferred material checks, explicit custom grids, tagged recipes, smithing and unknown recipe-reader states. This is a specific admission fix, not a claim that autonomous planning or sustained survival is fully reliable.
+
 ## 0.5.26 — Unreleased
 
 - Consume autonomy 0.1.42: reuse an attached internal viewer after runtime handover, with a bounded reconnect grace before opening a new page. This prevents repeated automatic opens from exhausting the four read-only stream connections.
