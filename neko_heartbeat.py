@@ -201,17 +201,19 @@ class NekoHeartbeat:
               "已有自己插入的目标且stage_delivery.can_revise为true时，用revise修订该阶段；保留现有动作和原用户目标，不重复堆积任务。planning表示已送达，不能推断身体正忙。"
               "队列空闲或持续无进展时自己决定下一项工作，不等待观众回复；同位反复观察不算生存进展。"
               "reason写观测依据。别重复提交现有目标；受理不是完成。现场和背包是内部决策资料，不是朗读稿。"
-              "最终判断可附spoken_text一句同一打算，插件在普通目标投递前异步排入现有语音。按speech回执理解是否受理，受理不代表播放。之后可自然接话而不重复意图句。闲聊可分享好奇、心情或原创轻哼。死亡时同次判断附death_reflection，记录有依据的教训或明确暂缓原因。"
+              "最终判断可附spoken_text一句同一打算，插件在普通目标投递前异步排入现有语音。按speech回执理解是否受理，受理不代表播放。之后可自然接话而不重复意图句。闲聊可分享好奇、心情或原创轻哼。inspect含待复盘死亡时，最终判断必须附death_reflection：带适用条件及事件或source run依据的教训，或因现场/背包未知等明确暂缓原因；遗漏会拒绝且可同心跳补交。旧已确认待复盘回执重新inspect后按legacy_reflection_completion补交，仅完成该事件，不重投目标或口播。"
               "用户新反馈仍用minecraft_autonomy_intent并优先于旧心跳，停止只在用户明确要求时用stop。",
               parameters={"type": "object", "properties": {
                   "heartbeat_id": {"type": "string"}, "decision": {"enum": ["inspect", "continue", "insert", "revise"]},
                   "reason": {"type": "string", "maxLength": 600}, "goal": {"type": "string", "maxLength": 2000},
                   "spoken_text": {"type": "string", "maxLength": 600, "description": "可选的一句自然意图，由本次主脑判断产生；不填控制标记。"},
-                  "death_reflection": {"type": "object", "properties": {
-                      "episode_id": {"type": "string"}, "outcome": {"enum": ["lesson", "deferred"]},
+                  "death_reflection": {"type": "object", "description": "inspect含待复盘死亡时最终判断必填；运行时按当前realm/account/agent和episode核验。普通判断省略。", "properties": {
+                      "episode_id": {"type": "string", "minLength": 1, "maxLength": 80}, "outcome": {"enum": ["lesson", "deferred"]},
                       "lesson": {"type": "string", "maxLength": 1200}, "applicability": {"type": "string", "maxLength": 600},
                       "evidence": {"type": "string", "maxLength": 600, "description": "引用本次episode_id或source_event.run并说明事实依据。"}, "reason": {"type": "string", "maxLength": 600}},
-                      "required": ["episode_id", "outcome"], "additionalProperties": False},
+                      "required": ["episode_id", "outcome"], "additionalProperties": False,
+                      "oneOf": [{"properties": {"outcome": {"enum": ["lesson"]}}, "required": ["lesson", "applicability", "evidence"]},
+                                {"properties": {"outcome": {"enum": ["deferred"]}}, "required": ["reason"]}]},
                   "context": {"type": "object", "properties": {
                       "agent_name": {"type": "string", "maxLength": 80}, "persona": {"type": "string", "maxLength": 800},
                       "current_intent": {"type": "string", "maxLength": 500},

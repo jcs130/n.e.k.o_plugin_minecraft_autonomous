@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.46 — Internal candidate
+
+- Pin autonomy 0.1.66 at `fd205ba5f3cb8957a70a3709fa42c0beef6c2fd4` with unchanged checked core 0.5.7-dev.20261016.9 inputs. Pending death decisions require an inspected evidence-based lesson or explicit justified deferral before acknowledgement, speech or goal delivery; missing reflection can be corrected on the same heartbeat.
+- Expose lesson/deferral requirements through the public SDK schema and tool help. Freshly inspect and complete legacy acknowledged pending reflections without replaying their original goal or speech. Historical lessons remain hypotheses with improvement unverified.
+- Normal-drain the independent body to 0.1.66 as well: its transactional history writer preserves concurrent host reflection/completion fields. Reloading only the adapter leaves the old 0.1.65 producer's stale-write race. Startup/autonomy remain disabled by default; package checks do not prove live recovery or playback.
+
 ## 0.5.45 — Internal candidate
 
 - Pin reviewed autonomy 0.1.64 at `784047e72a67d616e8847c3032b3b79c4d0d672e` so installation provides the heartbeat idle-presence and final-review speech/death-reflection APIs already used by this adapter.
