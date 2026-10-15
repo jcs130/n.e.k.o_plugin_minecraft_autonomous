@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.26 — Unreleased
+
+- Consume autonomy 0.1.42: reuse an attached internal viewer after runtime handover, with a bounded reconnect grace before opening a new page. This prevents repeated automatic opens from exhausting the four read-only stream connections.
+- Keep the checked 0.4.6 body, synchronized food-reserve facts and private source/build evidence. This change does not claim complete visualization or sustained survival.
+
 ## 0.5.23 — Unreleased
 
 - Consume autonomy 0.1.39 and checked core 0.4.4: keep concise native action parameter meanings, return a legal bounded voxel retry, and expose repeated read-only activity to the optional planner. Game decisions and body execution remain in the independent framework.
