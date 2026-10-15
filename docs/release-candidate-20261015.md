@@ -1,6 +1,6 @@
 # 0.5.31 发布准备
 
-状态：候选包准备中，未创建发布 tag、GitHub Release 或 Market 版本。长期自主生存、清洁机器安装与完整场景一致性不能以单元测试替代。最终部署与生存观测结果另记；未通过的项目继续作为发布阻塞。
+状态：0.5.31 候选包已构建，官方 `check --release --market-release` 通过，未创建发布 tag、GitHub Release 或 Market 版本。配套核心 824 项测试通过（无渲染器构建另有 2 项条件跳过），运行层源码与隔离 wheel 各 414 项通过，薄插件 58 项 Python／4 项界面数据测试及 Ruff 通过。长期自主生存、清洁机器完整安装与完整场景一致性仍单独验收，不能以这些检查代替。
 
 ## 固定来源
 
@@ -10,6 +10,7 @@
 | 独立运行层 | 0.1.48，`b996abfe66a30c84d1a50cc42db579bb935ff8f3` |
 | Mineflayer 核心 | 0.5.4，`7e8b9750015bb31b7307da6dfb03a90302ce9cef` |
 | 核心归档 | `agent-mc-world-0.5.4.tgz`，SHA256 `225da8b326e4409093ca34f3522d47cadcfcfda5d748f04f9599c04e7f378ebf` |
+| 候选安装包 | `minecraft_autonomous-0.5.31.neko-plugin`，SHA256 `c14ee76373566addeb5e3ee3f38ac1288ff9ff61a4f67444ac5dae8f5fa2260c` |
 | 独立可视化实现 | `mc-visual-console@4b59ce791e6d5f8ac0e6ce0b3a285ebd844b4122`，资源按真实连接版本匹配 |
 
 ## 普通使用者安装路径
@@ -31,5 +32,13 @@
 - 插件仅使用公共 SDK，未修改 Neko 主程序或 SDK。主脑关闭时独立外部模式仍可持续运行；用户明确停止后不自动恢复。
 
 ## 投稿资料与后续步骤
+
+本次现场已正常排空旧执行器并部署 0.5.4 / 0.1.48，未更改原存档；Neko 的 5,273 个受保护源码文件及主程序、插件管理器、测试服、模型四组进程身份保持不变。公共 `decision` 模型槽的真实结构化调用通过，未向游戏发送测试消息。普通 Mineflayer 直播已重连，并实际显示“无可直接进食的食物”新事实。
+
+生存观察：北京时间 2026-10-15 14:33:09 服务端原文 `ag_NEKO was slain by Drowned`；之后重生、重新采木并制成钓鱼竿和木剑。14:47 生命 19/20、饥饿 5/20，仍在搜索食物，尚无稳定补给或长期避险证据。生命回升来自重生，不能作为修复成功。一次维护目标纠正通过正常目标入口投递，单独保留回执，不计为无人干预验收。
+
+官方 CLI 当前提示 `[plugin].models is not a recognized plugin.toml field`，但发布结构检查通过；当前宿主的公共模型槽实测可用，宿主配置 schema 也接受该字段。此差异保留给首次审核核对，不通过修改宿主 CLI/SDK 消除警告。没有创建 tag，所以 tag/version 对齐尚未由 GitHub 发布工作流检查。
+
+当前仍需完成：持续自主获取可吃口粮并恢复生命、减少高耗能的无效觅食与危险路线、普通使用者的完整安装/观战配置验收，以及明确所列渲染缺口的发布范围。准备包可用于内测，尚不作为 stable 发布依据。
 
 首次投稿以 [插件市场上传入口](https://market.project-neko.cn/#/upload) 当前表单为准，仓库名为 `jcs130/n.e.k.o_plugin_minecraft_autonomous`；文案见 [投稿文本](market-submission-20261015.md)。首次仓库审核通过后，才由保留的官方 Release 工作流生成安装包、检查报告和 `market-evidence.json`。`neko-plugin publish` 默认发布 stable；需要 beta 时先按官方文档生成 GitHub Release，再在 Market 选择 beta，并填写更新说明。当前生存与安装验收未通过前不要执行 publish，也不要将本地检查称作市场审核通过。
