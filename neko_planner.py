@@ -3,6 +3,7 @@
 import json
 import time
 
+from agent_mc_autonomy.decision_profiles import profile_view
 from agent_mc_autonomy.fast import CRITERIA, QUESTION
 from agent_mc_autonomy.perception import has_images, text_only
 from agent_mc_autonomy.planner import PlannerResponseError, decision
@@ -34,7 +35,16 @@ class NekoPlanner:
             self.client = await self.gateway.get_client()
         return self.client
 
-    async def decide(self, messages, tools):
+    async def decide_profile(self,messages,tools,profile):
+        maximum=profile['max_output_tokens']
+        if type(maximum) is not int or not 128<=maximum<=self.max_output_tokens:
+            raise ValueError('decision_profile_exceeds_reserved_output')
+        result=await self.decide(messages,tools,max_output_tokens=maximum)
+        result.setdefault('model_status',{})['decision_profile']=profile_view(profile,parameters_applied=not bool(profile['parameters']),
+            fallback='host_reasoning_parameters_unavailable' if profile['parameters'] else None)
+        return result
+
+    async def decide(self, messages, tools, *, max_output_tokens=None):
         started = time.monotonic()
         images = has_images(messages)
         route = "vision" if images and started >= self.vision_retry_after else "decision"
@@ -47,7 +57,7 @@ class NekoPlanner:
             try:
                 response = await client.chat.completions.create(
                     model=route, messages=messages if route == "vision" else text_only(messages),
-                    tools=tools, parallel_tool_calls=False, max_completion_tokens=self.max_output_tokens,
+                    tools=tools, parallel_tool_calls=False, max_completion_tokens=max_output_tokens or self.max_output_tokens,
                 )
                 choice = response.choices[0]
                 if choice.finish_reason not in {"stop", "tool_calls"}:

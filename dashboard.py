@@ -5,6 +5,7 @@ import uuid
 from dataclasses import asdict
 
 from agent_mc_autonomy.configuration import Settings
+from agent_mc_autonomy.decision_profiles import validate_policy
 from agent_mc_autonomy.host_context import HostContextPort
 from agent_mc_autonomy.model_config import HttpPlannerConfig, planner_settings
 from agent_mc_autonomy.viewer import viewer_observation
@@ -31,6 +32,7 @@ EDITABLE = {
     "autonomy": {"enabled", "min_decision_seconds", "idle_decision_seconds", "max_decisions", "max_tool_rounds", "context_tokens", "max_output_tokens", "model_timeout_seconds"},
     "server": {"host", "port", "username", "auth", "version", "connection_type"},
     "operator": {"port"},
+    "decision_policy": {"enabled","routine_output_tokens","complex_output_tokens","routine_parameters","complex_parameters"},
     "runtime": {"mode", "data_directory"},
     "backend": {"node", "directory"},
     "viewer": {"url", "auto_open", "renderer_directory", "catalog_file", "bundled_appearance_catalog_file", "listen_port"},
@@ -49,6 +51,7 @@ def public_config(settings):
         "autonomy": {key: getattr(settings, "enabled" if key == "enabled" else key) for key in EDITABLE["autonomy"]},
         "server": {key: getattr(settings, key, "local" if settings.host in {"", "localhost", "127.0.0.1", "::1"} else "custom") for key in EDITABLE["server"]},
         "operator": {"port": settings.console_port},
+        "decision_policy": asdict(settings.decision_policy),
         "runtime": {"mode": settings.runtime_mode, "data_directory": settings.data_directory},
         "backend": {"node": settings.node, "directory": settings.backend_directory},
         "viewer": {"url": settings.external_viewer_url, "auto_open": settings.viewer_auto_open,
@@ -190,6 +193,7 @@ class Dashboard:
             direct = planner_settings(merged.get("planner", {}))
             if direct:
                 direct.validate_budget(parsed.max_output_tokens)
+                validate_policy(parsed.decision_policy,direct,parsed.max_output_tokens)
             PresentationSettings.parse(merged)
             HeartbeatSettings.parse(merged)
             HostContextSettings.parse(merged)

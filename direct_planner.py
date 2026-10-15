@@ -34,6 +34,12 @@ class DirectWithHostFast:
     async def decide(self, messages, tools):
         return await self.planner.decide(messages, tools)
 
+    def validate_profiles(self,policy):
+        self.planner.validate_profiles(policy)
+
+    async def decide_profile(self,messages,tools,profile):
+        return await self.planner.decide_profile(messages,tools,profile)
+
     async def select_fast(self, state):
         return await self.host.select_fast(state)
 

@@ -11,6 +11,8 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<any>(null)
   const [parametersText, setParametersText] = useState("{}")
+  const [routineParameters, setRoutineParameters] = useState("{}")
+  const [complexParameters, setComplexParameters] = useState("{}")
   const [goal, setGoal] = useState("")
   const [mode, setMode] = useState("append")
   const [requestId, setRequestId] = useState("")
@@ -49,8 +51,9 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const saveDraft = async () => {
     try {
       const parameters = JSON.parse(parametersText)
-      if (!parameters || Array.isArray(parameters) || typeof parameters !== "object") throw new Error()
-      if (await call("save_settings",{settings:{...draft,planner:{...draft.planner,parameters}}})) setEditing(false)
+      const routine = JSON.parse(routineParameters), complex = JSON.parse(complexParameters)
+      if ([parameters,routine,complex].some(value=>!value || Array.isArray(value) || typeof value !== "object")) throw new Error()
+      if (await call("save_settings",{settings:{...draft,planner:{...draft.planner,parameters},decision_policy:{...draft.decision_policy,routine_parameters:routine,complex_parameters:complex}}})) setEditing(false)
     } catch { setFailure(true); setNotice("模型参数须为有效的 JSON 对象，请检查格式。") }
   }
 
@@ -148,7 +151,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       </Stack></Card>
       <Card title="插件设置"><Stack gap={12}>
         <Text>保存不会启动或重启游戏。嵌入式运行参数须先显式停止再修改，观战地址可在上方单独保存。外部模式下，这些设置只改变 Neko 观察入口；独立运行的模型与策略请同步到 standalone 配置。</Text>
-        {!editing && <Button onClick={() => { setDraft(JSON.parse(JSON.stringify(settings))); setParametersText(JSON.stringify(settings.planner?.parameters || {},null,2)); setEditing(true) }}>编辑设置</Button>}
+        {!editing && <Button onClick={() => { setDraft(JSON.parse(JSON.stringify(settings))); setParametersText(JSON.stringify(settings.planner?.parameters || {},null,2)); setRoutineParameters(JSON.stringify(settings.decision_policy?.routine_parameters || {},null,2));setComplexParameters(JSON.stringify(settings.decision_policy?.complex_parameters || {},null,2));setEditing(true) }}>编辑设置</Button>}
         {editing && draft && <Stack gap={12}>
           <Field label="连接类型"><Select value={draft.server.connection_type || "local"} options={[{value:"local",label:"原版 / 本地服务器（默认）"},{value:"custom",label:"自定义 / 公共服务器"}]} onChange={v=>setDraft({...draft,server:{...draft.server,connection_type:v,...(v === "local" ? {host:"127.0.0.1",port:25565} : {})}})} /></Field>
           {draft.server.connection_type === "custom" && <Button onClick={()=>setDraft(applyConnectionPreset(draft,"qiandeng"))}>填入千灯纪预设（仅草稿）</Button>}
@@ -243,6 +246,17 @@ export default function Panel(props: PluginSurfaceProps<any>) {
               </Stack>}
             </Stack>}
             <Text>基础检索只增强本机游戏笔记；经验整理可召回专用范围内的历史经验。换电脑时要迁移本地笔记与提交回执；历史库存和地点仍须现场复核。</Text>
+          </Stack></Accordion>
+          <Accordion title="自适应规划深度（可选）"><Stack gap={10}>
+            <Switch label="按新任务、失败和死亡证据选择规划预算" checked={draft.decision_policy?.enabled === true} onChange={v=>change("decision_policy","enabled",v)} />
+            <Text>默认关闭并保持原模型配置。原生反射与队列持续执行动作；需要规划时才调用现有模型。常规回合用较短预算，新意图、风险、失败恢复和新死亡复盘用复杂预算，均不得超过总输出预算。</Text>
+            {draft.decision_policy?.enabled && <Stack gap={10}>
+              <Grid cols={2}>{field("decision_policy","routine_output_tokens","常规回合输出预算","number")}{field("decision_policy","complex_output_tokens","复杂回合输出预算","number")}</Grid>
+              <Field label="常规回合参数（所选协议支持的 JSON）"><Textarea value={routineParameters} onChange={setRoutineParameters} /></Field>
+              <Field label="复杂回合参数（所选协议支持的 JSON）"><Textarea value={complexParameters} onChange={setComplexParameters} /></Field>
+              <Text>参数仅用于明确配置的直连模型，不改变模型或端点。Neko 模型槽沿用主程序配置，SDK 未提供的推理参数会明确回退，只调整本次输出预算；不会额外调用一个模型分析深度。</Text>
+            </Stack>}
+            {runtime.model_status?.decision_profile && <JsonView data={runtime.model_status.decision_profile} />}
           </Stack></Accordion>
           <Accordion title="调用预算"><Grid cols={2}>
             {field("autonomy","context_tokens","上下文窗口","number")}{field("autonomy","max_output_tokens","输出预算","number")}

@@ -33,6 +33,18 @@ def gateway(create):
     return SimpleNamespace(get_client=AsyncMock(return_value=SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))), aclose=AsyncMock())
 
 
+def test_host_profile_uses_one_existing_model_call_and_reports_unsupported_depth_parameters(plugin_module, run_async):
+    create=AsyncMock(return_value=model_response())
+    planner=module(plugin_module,'neko_planner').NekoPlanner(gateway(create),1024)
+    profile={'profile':'routine','reason':'routine_current_goal','max_output_tokens':256,'parameters':{'reasoning_effort':'low'}}
+    result=run_async(planner.decide_profile([{'role':'user','content':'facts'}],[],profile))
+    assert create.await_count==1 and create.call_args.kwargs['max_completion_tokens']==256
+    assert 'reasoning_effort' not in create.call_args.kwargs
+    assert result['model_status']['decision_profile']['fallback']=='host_reasoning_parameters_unavailable'
+    assert result['model_status']['decision_profile']['parameters_applied'] is False
+    assert planner.max_output_tokens==1024
+
+
 def test_neko_image_slot_falls_back_without_provider_details(plugin_module, run_async):
     planner = module(plugin_module, "neko_planner")
     error = APIStatusError("private provider detail", response=httpx.Response(409, request=httpx.Request("POST", "http://unused")),
