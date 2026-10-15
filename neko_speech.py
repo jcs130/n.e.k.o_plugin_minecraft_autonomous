@@ -27,11 +27,17 @@ def sanitize_speech(value):
                    r"(?:[\s-]+(?:is[\s-]+)?needed)?(?:[\s-]+(?:for[\s-]+)?this[\s-]+round)?"
                    r"|本轮(?:无需|不需要|没有)口播|保持安静|无需回复|最终口播正文为空")
     # Normalize wrappers only for recognition, before accepting any speech.
-    # Whole-line matching keeps meaningful quoted/game text intact; repeated
-    # outer delimiters cannot hide a placeholder from the owned output boundary.
+    # Unicode whitespace can alternate with nested delimiters. Check the full
+    # message before individual lines so internal newlines cannot leave a
+    # speakable fragment behind. Only recognition uses this normalized view.
     wrappers = " \t\r\n[]【】<>〈〉《》()（）{}「」『』\"'‘’“”`*.!。！"
-    value = "\n".join(line for line in value.splitlines()
-                      if not re.fullmatch(placeholder, line.strip(wrappers), flags=re.I))
+    edges = r"[\s" + re.escape(wrappers) + "]"
+    def placeholder_only(text):
+        normalized = re.sub("^" + edges + "+|" + edges + "+$", "", text)
+        return re.fullmatch(placeholder, normalized, flags=re.I) is not None
+    if placeholder_only(value):
+        return ""
+    value = "\n".join(line for line in value.splitlines() if not placeholder_only(line))
     value = value.strip(" \t\r\n[]【】<>")
     return value if any(c.isalnum() for c in value) else ""
 

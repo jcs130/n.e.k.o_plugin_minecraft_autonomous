@@ -22,6 +22,14 @@ PLACEHOLDERS = [
     "【No new commentary needed for this round.】",
     "[tts_style:neutral] [No new comments this round.]",
     "[[本轮无需口播。]]", "（无需回复）",
+    "\u3000No commentary needed this round.\u3000",
+    "\u00a0No commentary needed this round.\u00a0",
+    "\u3000[\u00a0No commentary needed this round.\u3000]\u00a0",
+    "[neko_emotion:neutral]\u00a0【\u3000无需回复\u00a0】\u3000",
+    "No commentary needed\nthis round.",
+    "No\ncommentary needed this round.",
+    "\u3000[[No\ncommentary needed\nthis round.]]\u00a0",
+    "[tts_style:neutral] (No new\r\ncomment this round.)",
 ]
 
 
@@ -43,6 +51,10 @@ def test_wrapped_placeholder_is_empty(plugin_module, text):
     ("No new comments from the villagers yet.", "No new comments from the villagers yet."),
     ("‘Minecraft is lovely tonight.’", "‘Minecraft is lovely tonight.’"),
     ("[No commentary needed this round.]\nLet's find a tree.", "Let's find a tree."),
+    ("\u3000No commentary needed this round.\u00a0\nLet's find a tree.", "Let's find a tree."),
+    ("\u3000‘Minecraft 今晚真漂亮。’\u00a0", "\u3000‘Minecraft 今晚真漂亮。’\u00a0"),
+    ("No\ncommentary about that creeper could do it justice.", "No\ncommentary about that creeper could do it justice."),
+    ("‘桦木林真安静。’\nLet's build here.", "‘桦木林真安静。’\nLet's build here."),
 ])
 def test_owned_boundary_preserves_speech_and_removes_controls(plugin_module, text, expected):
     mod = importlib.import_module(plugin_module.__name__ + ".neko_speech")
