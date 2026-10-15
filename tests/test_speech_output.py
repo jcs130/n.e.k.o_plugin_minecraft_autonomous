@@ -70,6 +70,7 @@ def prepare(plugin, monkeypatch):
     monkeypatch.setattr(plugin.config, "dump", AsyncMock(return_value=raw))
     port.observe(snapshot)
     review = port.offer()["review"]
+    port.decide(review["id"], "inspect")
     return mod, port, snapshot, review, raw
 
 
@@ -153,6 +154,7 @@ def test_idle_chat_and_strategy_turns_have_natural_roles(plugin_instance, run_as
     port.configure(ReviewPolicy(enabled=True))
     port.observe(snapshot)
     first = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
+    run_async(plugin_instance.minecraft_autonomy_review(first, "inspect"))
     run_async(plugin_instance.minecraft_autonomy_review(first, "continue", "Useful work"))
     port.now = lambda: 10045
     snapshot["updated_at"] = datetime.fromtimestamp(10045, timezone.utc).isoformat()

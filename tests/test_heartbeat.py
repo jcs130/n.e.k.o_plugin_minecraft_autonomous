@@ -41,6 +41,7 @@ def test_delivered_pending_review_refreshes_commentary_for_new_material_episode(
     port, snapshot, push = setup(plugin_instance, monkeypatch)
     port.observe(snapshot)
     first = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
+    run_async(plugin_instance.minecraft_autonomy_review(first, "inspect"))
     run_async(plugin_instance.minecraft_autonomy_review(first, "continue", "continue useful work"))
     port.now = lambda: 10180
     snapshot["updated_at"] = datetime.fromtimestamp(10180, timezone.utc).isoformat()
@@ -64,9 +65,9 @@ def test_delivered_pending_review_refreshes_commentary_for_new_material_episode(
     assert port.state()["review"]["id"] == pending_id
     detail = run_async(plugin_instance.minecraft_autonomy_review(pending_id, "inspect"))
     note = detail["commentary"]
-    assert note["allowed"] and note["本轮重点证据"]["body_feedback"]
+    assert note["allowed"] and (detail["native_outcomes"] or detail["body_events"])
     evidence_key = "native_outcomes" if phase == "blocked" else "body_events"
-    assert note["本轮重点证据"]["body_feedback"][evidence_key][-1]["phase"] == phase
+    assert detail[evidence_key][-1]["phase"] == phase
     acknowledged = run_async(plugin_instance.minecraft_autonomy_review(pending_id, "continue", "use the new episode"))
     assert acknowledged["commentary"] == note and not note.get("playback_verified", False)
     port.now = lambda: 10341
@@ -133,14 +134,15 @@ def test_actual_blocked_outcome_has_bounded_preview_and_unverified_reaction(plug
     assert not detail["native_outcomes"][0]["goal_verified"]
     note = run_async(plugin_instance.minecraft_autonomy_review(result["heartbeat_id"], "continue", "Change strategy using actual receipt"))["commentary"]
     assert note["allowed"] and not result["playback_verified"]
-    assert note["本轮重点证据"]["body_feedback"]["native_outcomes"][0]["phase"] == "blocked"
-    assert not note["本轮重点证据"]["progress"]
+    assert detail["native_outcomes"][0]["phase"] == "blocked"
+    assert "本轮重点证据" not in note
 
 
 def test_body_restriction_only_wakes_main_once_and_keeps_reason_inspectable(plugin_instance, run_async, monkeypatch):
     port, snapshot, push = setup(plugin_instance, monkeypatch)
     port.observe(snapshot)
     first = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
+    run_async(plugin_instance.minecraft_autonomy_review(first, "inspect"))
     run_async(plugin_instance.minecraft_autonomy_review(first, "continue", "keep useful work"))
     port.now = lambda: 10060
     snapshot["updated_at"] = datetime.fromtimestamp(10060, timezone.utc).isoformat()
@@ -170,6 +172,7 @@ def test_frontend_only_transports_framework_reviews(plugin_instance, run_async, 
     assert "minecraft_autonomy_review" in text and "口粮0个" in text and len(text.encode()) < 650
     assert "inspect" in text[:130] and "spoken_text" in text and "调用工具前不说话" not in text
     review_id = result["heartbeat_id"]
+    run_async(plugin_instance.minecraft_autonomy_review(review_id, "inspect"))
     acknowledged = run_async(plugin_instance.minecraft_autonomy_review(review_id, "continue", "继续当前工作"))
     assert acknowledged["acknowledged"] and not acknowledged["dispatched"]
     assert {k: acknowledged[k] for k in port.state()["review"]["result"]} == port.state()["review"]["result"]
@@ -180,6 +183,7 @@ def test_review_tool_routes_once_to_framework_mailbox(plugin_instance, run_async
     port, snapshot, _ = setup(plugin_instance, monkeypatch)
     port.observe(snapshot)
     review_id = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
+    run_async(plugin_instance.minecraft_autonomy_review(review_id, "inspect"))
     args = (review_id, "insert", "缺口粮", "收集食物")
     first = run_async(plugin_instance.minecraft_autonomy_review(*args))
     assert first == run_async(plugin_instance.minecraft_autonomy_review(*args))
@@ -209,6 +213,7 @@ def test_routine_reviews_keep_strategy_but_do_not_require_spoken_readouts(plugin
     port, snapshot, push = setup(plugin_instance, monkeypatch)
     port.observe(snapshot)
     first = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
+    run_async(plugin_instance.minecraft_autonomy_review(first, "inspect"))
     run_async(plugin_instance.minecraft_autonomy_review(first, "continue", "正常工作"))
     port.now = lambda: 10180
     snapshot["updated_at"] = datetime.fromtimestamp(10180, timezone.utc).isoformat()
@@ -238,6 +243,7 @@ def test_revision_routes_through_framework_without_plugin_queue_policy(plugin_in
     port, snapshot, _ = setup(plugin_instance, monkeypatch)
     port.observe(snapshot)
     first_id = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
+    run_async(plugin_instance.minecraft_autonomy_review(first_id, "inspect"))
     first = run_async(plugin_instance.minecraft_autonomy_review(first_id, "insert", "需要工具", "做好工具再找食物"))
     port.mailbox.activate_feedback(port.mailbox.claim())
     port.now = lambda: 10180

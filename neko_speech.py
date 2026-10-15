@@ -98,6 +98,7 @@ def _current(plugin, port, generation, receipt):
 async def _deliver(plugin, base, target, port, generation, line, receipt, path):
     status, accepted, reason = "unknown", False, "transport_unknown"
     sent = False
+    public = {}
     try:
         if not _current(plugin, port, generation, receipt):
             status, reason = "rejected", "stopped_or_superseded"
@@ -119,6 +120,13 @@ async def _deliver(plugin, base, target, port, generation, line, receipt, path):
                 "mirror_text": True, "playback_gain": 1.0})
             result = response.json()
             accepted = response.status_code == 200 and result.get("ok") is True
+            if isinstance(result, dict):
+                speech_id = result.get("speech_id")
+                if isinstance(speech_id, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,160}", speech_id):
+                    public["speech_id"] = speech_id
+                for field in ("audio_queued", "audio_completed"):
+                    if type(result.get(field)) is bool:
+                        public[field] = result[field]
             if accepted:
                 status, reason = "accepted", "host_output_accepted"
             elif result.get("ok") is False:
@@ -135,7 +143,8 @@ async def _deliver(plugin, base, target, port, generation, line, receipt, path):
         state = load_commentary(path)
         records = state.get("records", {})
         records[receipt["opportunity_id"]] = {**receipt, "status": status, "reason": reason,
-            "transport_accepted": accepted, "updated_at": port.now(), "playback_verified": False}
+            "transport_accepted": accepted, "updated_at": port.now(), **public,
+            "playback_verified": False}
         try:
             save_commentary(path, {"records": dict(list(records.items())[-32:])})
         except OSError:

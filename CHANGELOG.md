@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.47 — Internal candidate
+
+- Use autonomy 0.1.67 compact inspection and bounded original evidence pages. Final decisions use a short same-brain contract with optional natural speech and validated compact death references; ordinary Neko finals require a fresh inspection.
+- Bind the configured public character during inspection independently of strategic acknowledgement. Preserve fresh explicit persona, current intent and selected memory; static identity never represents memory recall or revives expired intent.
+- Retain validated public speech ID/audio queue/completion metadata alongside the text hash. Queued output is not playback. Core .9 remains pinned and live model/speech acceptance is still separate.
+
 ## 0.5.46 — Internal candidate
 
 - Pin autonomy 0.1.66 at `fd205ba5f3cb8957a70a3709fa42c0beef6c2fd4` with unchanged checked core 0.5.7-dev.20261016.9 inputs. Pending death decisions require an inspected evidence-based lesson or explicit justified deferral before acknowledgement, speech or goal delivery; missing reflection can be corrected on the same heartbeat.

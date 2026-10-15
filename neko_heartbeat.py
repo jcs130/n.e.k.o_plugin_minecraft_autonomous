@@ -11,7 +11,8 @@ from agent_mc_autonomy.ownership import session_is_owned
 from agent_mc_autonomy.review import ReviewPolicy, ReviewPort, review_observation
 from plugin.sdk.plugin import Err, Ok, llm_tool, plugin_entry, timer_interval, ui
 
-from .neko_commentary import commentary_delivery, commentary_plan, save_commentary
+from . import neko_host_context
+from .neko_commentary import commentary_plan, save_commentary
 from .neko_host_context import HostContextSettings, context_request, shared_context
 
 
@@ -192,27 +193,23 @@ class NekoHeartbeat:
                    "main_brain_acknowledged": False, "playback_verified": False})
 
     @llm_tool(name="minecraft_autonomy_review", timeout=10,
-              description="回应Minecraft决策心跳：你是正在游戏中自主生存的主脑，负责阶段目标和策略。用通知里的heartbeat_id。"
-              "每次先inspect读本次目标、身体、食物、物品、附近危险、原生队列和最近回执；通知只是短预览。"
-              "你是这具Minecraft身体的主脑，不是汇报员。先inspect再完成最终判断；context_request的记忆召回仅为可选，不能挤掉最终判断。"
-              "最终判断用context同步当前关注current_intent和记忆原id/source/text；未命中用[]，不编造。persona_needed时提供persona人格要点。"
-              "优先读current_user_goal和standing_goal；current_goal.origin=host_review是你自己的建议阶段，不是用户要求。旧对话中的测试或练习不能覆盖当前用户目标。"
-              "正常工作用continue，不打断长动作；空闲/缺资源/受阻需改策略用insert加具体自然语言阶段目标，由独立框架规划、在安全检查点执行。"
-              "已有自己插入的目标且stage_delivery.can_revise为true时，用revise修订该阶段；保留现有动作和原用户目标，不重复堆积任务。planning表示已送达，不能推断身体正忙。"
-              "队列空闲或持续无进展时自己决定下一项工作，不等待观众回复；同位反复观察不算生存进展。"
-              "reason写观测依据。别重复提交现有目标；受理不是完成。现场和背包是内部决策资料，不是朗读稿。"
-              "最终判断可附spoken_text一句同一打算，插件在普通目标投递前异步排入现有语音。按speech回执理解是否受理，受理不代表播放。之后可自然接话而不重复意图句。闲聊可分享好奇、心情或原创轻哼。inspect含待复盘死亡时，最终判断必须附death_reflection：带适用条件及事件或source run依据的教训，或因现场/背包未知等明确暂缓原因；遗漏会拒绝且可同心跳补交。旧已确认待复盘回执重新inspect后按legacy_reflection_completion补交，仅完成该事件，不重投目标或口播。"
-              "用户新反馈仍用minecraft_autonomy_intent并优先于旧心跳，停止只在用户明确要求时用stop。",
+              description="你是同一Neko主脑，游戏身体独立行动。先用通知heartbeat_id inspect，再短句完成continue/insert/revise + reason。"
+              "continue保留工作；insert新增阶段；仅stage_delivery.can_revise时revise；后二者需goal。用户目标优先，受理不等于完成。"
+              "spoken_text可放一句自然打算或感想，不填控制文本。待复盘死亡必须附death_reflection：复制evidence_ref，outcome=lesson及lesson/applicability，或deferred及真实reason。"
+              "context/记忆召回可选，勿挤掉最终判断；公开人格自动绑定。例：{heartbeat_id:通知ID,decision:continue,reason:队列仍在工作,spoken_text:本喵想看看前面的树林。}"
+              "原始证据按evidence_ref/detail_path/detail_offset查询，历史详情不代替新鲜inspect。",
               parameters={"type": "object", "properties": {
                   "heartbeat_id": {"type": "string"}, "decision": {"enum": ["inspect", "continue", "insert", "revise"]},
                   "reason": {"type": "string", "maxLength": 600}, "goal": {"type": "string", "maxLength": 2000},
                   "spoken_text": {"type": "string", "maxLength": 600, "description": "可选的一句自然意图，由本次主脑判断产生；不填控制标记。"},
                   "death_reflection": {"type": "object", "description": "inspect含待复盘死亡时最终判断必填；运行时按当前realm/account/agent和episode核验。普通判断省略。", "properties": {
+                      "evidence_ref": {"type": "string", "maxLength": 24},
                       "episode_id": {"type": "string", "minLength": 1, "maxLength": 80}, "outcome": {"enum": ["lesson", "deferred"]},
                       "lesson": {"type": "string", "maxLength": 1200}, "applicability": {"type": "string", "maxLength": 600},
                       "evidence": {"type": "string", "maxLength": 600, "description": "引用本次episode_id或source_event.run并说明事实依据。"}, "reason": {"type": "string", "maxLength": 600}},
-                      "required": ["episode_id", "outcome"], "additionalProperties": False,
-                      "oneOf": [{"properties": {"outcome": {"enum": ["lesson"]}}, "required": ["lesson", "applicability", "evidence"]},
+                      "required": ["outcome"], "additionalProperties": False,
+                      "anyOf": [{"required": ["evidence_ref"]}, {"required": ["episode_id"]}],
+                      "oneOf": [{"properties": {"outcome": {"enum": ["lesson"]}}, "required": ["lesson", "applicability"]},
                                 {"properties": {"outcome": {"enum": ["deferred"]}}, "required": ["reason"]}]},
                   "context": {"type": "object", "properties": {
                       "agent_name": {"type": "string", "maxLength": 80}, "persona": {"type": "string", "maxLength": 800},
@@ -220,10 +217,13 @@ class NekoHeartbeat:
                       "memories": {"type": "array", "maxItems": 6, "items": {"type": "object", "properties": {
                           "id": {"type": "string", "maxLength": 80}, "source": {"type": "string", "maxLength": 80},
                           "text": {"type": "string", "maxLength": 600}}, "required": ["id", "source", "text"], "additionalProperties": False}}},
-                      "required": ["current_intent", "memories"], "additionalProperties": False},
+                      "additionalProperties": False},
+                  "evidence_ref": {"type": "string", "maxLength": 24, "description": "原始详情查询专用，最终死亡引用放death_reflection内。"},
+                  "detail_path": {"type": "array", "maxItems": 16, "items": {"type": ["string", "integer"]}},
+                  "detail_offset": {"type": "integer", "minimum": 0},
                   "lineage_offset": {"type": "integer", "minimum": 0, "description": "inspect时按4条分页查询目标父链原文；平时省略。"}},
                   "required": ["heartbeat_id", "decision"], "additionalProperties": False})
-    async def minecraft_autonomy_review(self, heartbeat_id, decision, reason="", goal="", lineage_offset=None, context=None, spoken_text=None, death_reflection=None, **_):
+    async def minecraft_autonomy_review(self, heartbeat_id, decision, reason="", goal="", lineage_offset=None, context=None, spoken_text=None, death_reflection=None, evidence_ref=None, detail_path=None, detail_offset=0, **_):
         with self._control_lock:
             generation = self._generation
         raw = await self.config.dump()
@@ -231,7 +231,11 @@ class NekoHeartbeat:
         if not config.enabled or not settings.enabled or is_stopped(self):
             return {"is_error": True, "error": "disabled_or_stopped"}
         port = review_port(self, settings)
+        profile = None
         try:
+            context_settings = HostContextSettings.parse(raw)
+            if decision == "inspect" and evidence_ref is None and lineage_offset is None and context_settings.enabled:
+                profile = await neko_host_context.character_profile(self, context_settings, config.target)
             projection = (await shared_context(self, raw, config.target, context, port.state().get("review", {}),
                           existing=HostContextPort(port.directory, now=port.now).read(port.mailbox.intent_revision()))
                           if decision != "inspect" else None)
@@ -242,10 +246,16 @@ class NekoHeartbeat:
                 return {"is_error": True, "error": "configuration_changed_or_stopped"}
             from .neko_speech import enqueue_speech
             result = port.decide(heartbeat_id, decision, reason, goal, lineage_offset=lineage_offset,
-                host_context=projection, death_reflection=death_reflection,
+                host_context=projection, death_reflection=death_reflection, require_inspection=True, compact=True,
+                evidence_ref=evidence_ref, detail_path=detail_path, detail_offset=detail_offset,
                 before_dispatch=(lambda correlation: enqueue_speech(self, raw, settings, config.target,
                     port, generation, spoken_text, correlation)) if spoken_text is not None else None)
-        if result.get("is_error"):
+            if decision == "inspect" and result.get("evidence_ref") and evidence_ref is None and lineage_offset is None:
+                if context_settings.enabled:
+                    result["character_binding"] = port.bind_character(heartbeat_id, result["evidence_ref"], profile)
+                else:
+                    HostContextPort(port.directory).invalidate()
+        if result.get("is_error") or evidence_ref is not None or lineage_offset is not None:
             return result
         if decision == "inspect":
             result = {**result, "context_request": context_request(port, port.now, enabled=HostContextSettings.parse(raw).enabled),
@@ -267,4 +277,4 @@ class NekoHeartbeat:
             if result.get("acknowledged") and note["allowed"]:
                 # This records a speaking opportunity, never synthesis/playback.
                 save_commentary(path, {**state, "submitted_at": port.now(), "playback_verified": False})
-        return {**result, "commentary": commentary_delivery(note)}
+        return {**result, "commentary": {"allowed": note["allowed"], "instruction": "用自己的性格自然聊一句；事实依据留在reason，已排入语音的句子不复述。"}}

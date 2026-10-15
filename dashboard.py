@@ -7,6 +7,7 @@ from dataclasses import asdict
 from agent_mc_autonomy.configuration import Settings
 from agent_mc_autonomy.decision_profiles import validate_policy
 from agent_mc_autonomy.host_context import HostContextPort
+from agent_mc_autonomy.host_context import metadata as host_context_metadata
 from agent_mc_autonomy.model_config import HttpPlannerConfig, planner_settings
 from agent_mc_autonomy.readiness import installation_readiness, validation_feedback
 from agent_mc_autonomy.viewer import viewer_observation
@@ -164,11 +165,17 @@ class Dashboard:
                                "has_more": len(str(p.get("text", ""))) > 900} for p in snapshot.get("facts", {}).get("parts", [])[:24]]
             state["pending"] = [{k: p.get(k) for k in ("kind", "id", "phase", "terminal")} for p in snapshot.get("pending", [])[:16]]
             heartbeat = HeartbeatSettings.parse(raw)
-            review_state = review_port(self, settings).state()
+            port = review_port(self, settings)
+            review_state = port.state()
+            state["host_context"] = host_context_metadata(HostContextPort(directory, now=port.now).read(port.mailbox.intent_revision()))
             review = review_state.get("review", {})
             heartbeat_state = {"enabled": heartbeat.enabled, "explicit_stop": is_stopped(self), "last_decision": review_state.get("last_decision"),
                                "submitted_at": review_state.get("submitted_at"), "retry_after": review_state.get("retry_after"),
-                               "review": {key: review.get(key) for key in ("id", "trigger", "attempts", "result", "opportunity", "notification_status", "inspected_at", "reflection")}}
+                               "review": {key: review.get(key) for key in ("id", "trigger", "attempts", "result", "opportunity", "notification_status", "inspected_at", "reflection", "inspected_evidence_ref")}}
+            heartbeat_state["inspection"] = {"default": "compact", "original_query": "minecraft_autonomy_review: evidence_ref/detail_path/detail_offset"}
+            heartbeat_state["delivery_failure"] = (review.get("result") or {}).get("error")
+            heartbeat_state["delivery_state"] = ("final_decision" if (review.get("result") or {}).get("acknowledged") else "inspected_awaiting_final" if review.get("inspected_at") else "notification_" + str(review.get("notification_status", "not_delivered")))
+            heartbeat_state["next"] = "主脑尚未完成最终判断；重新检查当前心跳后提交简短判断。" if heartbeat_state["delivery_failure"] else None
             return {"settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
                                  "heartbeat": asdict(heartbeat), "host_context": asdict(HostContextSettings.parse(raw)), "planner": public_planner(raw.get("planner", {}))}, "heartbeat": heartbeat_state, "runtime": state, "audit": audit_sample(directory),
                     "model_slots": ["decision", "vision", "fast"],
