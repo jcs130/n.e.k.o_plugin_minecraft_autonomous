@@ -64,12 +64,29 @@ def heartbeat_text(review, commentary=None):
     readings = "；".join(brief(facts.get(key, ""), size) for key, size in (
         ("queue", 55), ("body", 50), ("foodReserve", 40)))
     reads = sum(evidence.get("read_activity", {}).values())
+    failure = evidence.get("tool_failure") or {}
+    native = failure.get("native_execution") or {}
+    outcome = next((row for row in reversed(evidence.get("native_outcomes", []))
+                    if not row.get("observation_only") and row.get("phase") in {"blocked", "rejected", "partial"}), {})
+    body = next(iter(reversed(evidence.get("body_events", []))), {})
+    reference = failure.get("native_event") or outcome.get("original_event") or body.get("original_event") or failure.get("receipt") or {}
+    problem = (evidence.get("runtime_error") or failure.get("error") or outcome.get("receipt")
+               or facts.get("bodyRestriction") or body.get("text"))
+    cue = ""
+    if problem:
+        origin = (failure.get("tool") or outcome.get("tool") or body.get("type") or "runtime")
+        phase = native.get("phase") or outcome.get("phase") or body.get("phase") or evidence.get("phase", "")
+        ref = (str(reference.get("run", "")) + ":" + str(reference["cursor"]) if "cursor" in reference else
+               reference.get("request_id") or reference.get("archive") or "status")
+        cue = "实际反馈:" + brief(origin, 25) + "/" + brief(phase, 25) + " " + brief(problem, 75) + " 引用:" + brief(ref, 40) + "；"
+        readings = ""  # Keep the causal cue within the host preview budget.
     speech = ("无新重点，正常玩，本轮无需口播。" if commentary and not commentary["allowed"] else
               "以自己的性格边玩边聊1—2句，分享自然反应或小打算，不作汇报、不念背包。")
     if review.get("attempts", 0) > 1:
         speech = "本轮重试确认，只调用工具，不重复解说。"
     return ("Minecraft " + review["id"] + "。" + speech + "调用工具前不说话。先minecraft_autonomy_review inspect，"
-            "再continue/insert/revise。无新用户指令，勿重发旧目标。" + intent + "；" + readings + f"；连续查询{reads}次。")
+            "再continue/insert/revise。无新用户指令，勿重发旧目标。" + cue + intent + "；" + readings
+            + f"；连续查询{reads}次。" + (f"未行动回复{evidence['unactioned_replies']}次。" if evidence.get("unactioned_replies") else ""))
 
 
 class NekoHeartbeat:

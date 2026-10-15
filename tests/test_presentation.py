@@ -1,8 +1,13 @@
+import base64
+import dataclasses
 import importlib
 import json
+import struct
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
+import pytest
 from plugin.sdk.plugin import Ok
 
 
@@ -25,6 +30,88 @@ def configure(plugin_instance, monkeypatch, now, *, enabled=True):
 
 def test_disabled_timer_has_no_model_or_game_io(plugin_instance, run_async):
     assert run_async(plugin_instance.observe_game_changes()).value["reason"] == "disabled"
+
+
+def test_failure_inhibition_recovery_offer_one_opportunity_with_original_evidence(plugin_instance):
+    mod = importlib.import_module(plugin_instance.__class__.__module__ + ".neko_commentary")
+    settings = importlib.import_module("agent_mc_autonomy.configuration").Settings.parse({})
+    observe = importlib.import_module("agent_mc_autonomy.commentary").commentary_observation
+    path, state, _ = mod.commentary_plan(plugin_instance, settings, "TestRole", observe(snapshot(10000), 10000), 10000, 90)
+    mod.save_commentary(path, {**state, "submitted_at": 10000})
+    changes = [("task_failure", {"native_outcomes": [{"tool": "mc_do", "execution_id": "task-7", "phase": "blocked",
+                "receipt": "path_stalled", "original_event": {"run": "run-1", "cursor": 8}}]}),
+               ("body_inhibited", {"body_events": [{"type": "minecraft.body", "run": "run-1", "cursor": 9,
+                    "text": "[身体受限] server restraint"}]}),
+               ("body_recovered", {"body_events": [{"type": "minecraft.body", "run": "run-1", "cursor": 10,
+                    "text": "[身体恢复] actual receipt"}]})]
+    for index, (topic, extra) in enumerate(changes, 1):
+        now = 10000 + index * 100
+        event = observe({**snapshot(now), **extra}, now)
+        _, state, note = mod.commentary_plan(plugin_instance, settings, "TestRole", event, now, 90, review_id=f"review-{index}")
+        assert note["allowed"] and topic in note["topics"]
+        assert not note["evidence"]["progress"] and note["evidence"]["task_outcome"] is None
+        assert note["evidence"]["body_feedback"] and not note["playback_verified"]
+        mod.save_commentary(path, {**state, "submitted_at": now})
+        _, _, repeat = mod.commentary_plan(plugin_instance, settings, "TestRole", event, now + 100, 90, review_id=f"repeat-{index}")
+        assert not repeat["allowed"]
+
+
+@pytest.mark.parametrize("fallback", [False, True])
+def test_fake_controller_visual_help_invoke_uses_vision_or_honest_text_fallback(plugin_module, tmp_path, run_async, fallback):
+    from agent_mc_autonomy.configuration import Settings
+    from agent_mc_autonomy.context import RULES
+    from agent_mc_autonomy.controller import Controller, model_tools
+    from agent_mc_autonomy.perception import has_images
+    planner = importlib.import_module(plugin_module.__name__ + ".neko_planner")
+    calls, captures, published = [], [], []
+    async def create(**request):
+        calls.append(request)
+        if len(calls) <= 2:
+            name, args = (("mc_tool_help", {"name": "mc_visual"}) if len(calls) == 1 else
+                          ("mc_invoke", {"name": "mc_visual", "arguments": {"mode": "first", "raw": True}}))
+            message = {"tool_calls": [{"id": str(len(calls)), "type": "function", "function": {
+                "name": name, "arguments": json.dumps(args)}}]}
+        else:
+            if request["model"] == "vision":
+                assert has_images(request["messages"])
+                if fallback:
+                    raise ValueError("fake unavailable image response")
+            else:
+                assert not has_images(request["messages"])
+            message = {"content": "Continue using actual text facts.", "tool_calls": []}
+        return SimpleNamespace(choices=[SimpleNamespace(finish_reason="tool_calls" if message.get("tool_calls") else "stop",
+            message=SimpleNamespace(model_dump=lambda **_: message))], usage=None)
+    gateway = SimpleNamespace(get_client=AsyncMock(return_value=SimpleNamespace(chat=SimpleNamespace(
+        completions=SimpleNamespace(create=create)))))
+    brain = planner.NekoPlanner(gateway, 512)
+    class Body:
+        tools = [{"name": "mc_visual", "description": "Actual scene PNG, synchronous raw image.",
+            "inputSchema": {"type": "object", "properties": {"mode": {"enum": ["first"]}, "raw": {"type": "boolean"}}},
+            "_meta": {"agent-mc/v1": {"tags": ["read"]}}}]
+        async def call(self, name, args, **_):
+            if name == "mc_visual":
+                captures.append(args)
+                # A fake transport header only; no rendered game image is claimed.
+                png = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", 128, 128)
+                return {"structuredContent": {"protocol": "agent-mc/v1", "text": "fake capture receipt"},
+                    "content": [{"type": "image", "mimeType": "image/png", "data": base64.b64encode(png).decode()}]}
+            value = ({"parts": [{"key": "body", "text": "生命20/20"}, {"key": "gear", "text": "empty"}]}
+                     if name == "mc_protocol" and args["action"] == "facts" else
+                     {"run": "fake-run", "nextCursor": 0, "events": []} if name == "mc_events" else
+                     {"handle": "fake:receipt"} if name == "mc_artifact" else {})
+            return {"content": [{"type": "text", "text": json.dumps({"protocol": "agent-mc/v1", **value})}]}
+    body = Body()
+    settings = dataclasses.replace(Settings(), vision_enabled=True, max_tool_rounds=3)
+    controller = Controller(body, brain.decide, settings, tmp_path, lambda **value: published.append(value), lambda: False)
+    run_async(controller.turn_once("survive", RULES, model_tools(body.tools)))
+    assert captures == [{"mode": "first", "raw": True}] and controller.frame is None
+    assert [row["model"] for row in calls] == ["decision", "decision", "vision"] + (["decision"] if fallback else [])
+    status = next(row["model_status"] for row in reversed(published) if "model_status" in row)
+    assert status["image_used"] is (not fallback)
+    if fallback:
+        assert status["fallback"] == "invalid_vision_response"
+        assert "only attached fresh images prove sight" in calls[-1]["messages"][0]["content"]
+        assert "private" not in json.dumps(status)
 
 
 def test_fresh_progress_uses_public_role_aware_push_and_deduplicates(plugin_instance, run_async, monkeypatch):

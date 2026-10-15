@@ -44,6 +44,7 @@ def commentary_plan(plugin, settings, target, event, now, interval, *, review_id
     note = {"allowed": allowed, "topics": changed["topics"], "urgent": changed["urgent"],
             "evidence": {"progress": event["payload"].get("progress", ""),
                          "task_outcome": event["payload"].get("task_outcome"),
+                         "body_feedback": event["payload"].get("body_feedback", {}),
                          **({"death_episode": episode} if new_death else {})},
             "reason": "highlight" if allowed else ("unchanged" if not manual and not changed["topics"]
                                                      else "rate_limited"),

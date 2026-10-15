@@ -36,6 +36,47 @@ def test_disabled_never_reads_game(plugin_instance, run_async, monkeypatch):
     assert run_async(plugin_instance.game_decision_heartbeat()).value["reason"] == "disabled"
 
 
+def test_actual_blocked_outcome_has_bounded_preview_and_unverified_reaction(plugin_instance, run_async, monkeypatch):
+    port, snapshot, push = setup(plugin_instance, monkeypatch)
+    snapshot["native_outcomes"] = [{"tool": "mc_do", "execution_id": "task-7", "phase": "blocked",
+        "receipt": "path_stalled: no route " * 200, "observation_only": False, "goal_verified": False,
+        "original_event": {"run": "run-1", "cursor": 8}}]
+    snapshot["unactioned_replies"] = 3
+    (port.directory / "status.json").write_text(json.dumps(snapshot), encoding="utf-8")
+    port.observe(snapshot)
+    result = run_async(plugin_instance.game_decision_heartbeat()).value
+    cue = push.call_args.kwargs["parts"][0]["text"]
+    assert push.call_args.kwargs["ai_behavior"] == "respond"
+    assert "mc_do/blocked" in cue and "path_stalled" in cue and "run-1:8" in cue
+    assert cue.index("path_stalled") < cue.index("长期目标") and len(cue.encode()) < 750
+    assert "未行动回复3次" in cue
+    detail = run_async(plugin_instance.minecraft_autonomy_review(result["heartbeat_id"], "inspect"))
+    assert not detail["native_outcomes"][0]["goal_verified"]
+    note = run_async(plugin_instance.minecraft_autonomy_review(result["heartbeat_id"], "continue", "Change strategy using actual receipt"))["commentary"]
+    assert note["allowed"] and not result["playback_verified"]
+    assert note["本轮重点证据"]["body_feedback"]["native_outcomes"][0]["phase"] == "blocked"
+    assert not note["本轮重点证据"]["progress"]
+
+
+def test_body_restriction_only_wakes_main_once_and_keeps_reason_inspectable(plugin_instance, run_async, monkeypatch):
+    port, snapshot, push = setup(plugin_instance, monkeypatch)
+    port.observe(snapshot)
+    first = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
+    run_async(plugin_instance.minecraft_autonomy_review(first, "continue", "keep useful work"))
+    port.now = lambda: 10060
+    snapshot["updated_at"] = datetime.fromtimestamp(10060, timezone.utc).isoformat()
+    snapshot["facts"]["parts"].append({"key": "bodyRestriction", "text": "native inhibition reason"})
+    (port.directory / "status.json").write_text(json.dumps(snapshot), encoding="utf-8")
+    port.observe(snapshot)
+    changed = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert changed["submitted"] and push.call_count == 2
+    assert push.call_args.kwargs["ai_behavior"] == "respond"
+    assert "native inhibition reason" in push.call_args.kwargs["parts"][0]["text"]
+    detail = run_async(plugin_instance.minecraft_autonomy_review(changed["heartbeat_id"], "inspect"))
+    assert detail["facts"]["bodyRestriction"] == "native inhibition reason"
+    assert not run_async(plugin_instance.game_decision_heartbeat()).value["submitted"] and push.call_count == 2
+
+
 def test_frontend_only_transports_framework_reviews(plugin_instance, run_async, monkeypatch):
     port, snapshot, push = setup(plugin_instance, monkeypatch)
     assert not run_async(plugin_instance.game_decision_heartbeat()).value["submitted"]
