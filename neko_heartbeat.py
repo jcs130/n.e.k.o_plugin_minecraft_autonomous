@@ -154,8 +154,8 @@ class NekoHeartbeat:
     @llm_tool(name="minecraft_autonomy_review", timeout=10,
               description="回应Minecraft决策心跳：你是正在游戏中自主生存的主脑，负责阶段目标和策略。用通知里的heartbeat_id。"
               "每次先inspect读本次目标、身体、食物、物品、附近危险、原生队列和最近回执；通知只是短预览。"
-              "你是这具Minecraft身体的主脑，不是汇报员。inspect的context_request若needed，复用已有recall_memory召回少量相关记忆。"
-              "最终判断用context同步当前关注current_intent和记忆原id/source/text；未命中用[]，不编造。未配置档案时可提供persona人格要点。"
+              "你是这具Minecraft身体的主脑，不是汇报员。inspect的context_request若memory_needed，复用已有recall_memory召回少量相关记忆。"
+              "最终判断用context同步当前关注current_intent和记忆原id/source/text；未命中用[]，不编造。persona_needed时提供persona人格要点。"
               "优先读current_user_goal和standing_goal；current_goal.origin=host_review是你自己的建议阶段，不是用户要求。旧对话中的测试或练习不能覆盖当前用户目标。"
               "正常工作用continue，不打断长动作；空闲/缺资源/受阻需改策略用insert加具体自然语言阶段目标，由独立框架规划、在安全检查点执行。"
               "已有自己插入的目标且stage_delivery.can_revise为true时，用revise修订该阶段；保留现有动作和原用户目标，不重复堆积任务。planning表示已送达，不能推断身体正忙。"

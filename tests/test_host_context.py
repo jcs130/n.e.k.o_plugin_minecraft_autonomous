@@ -41,6 +41,42 @@ def test_profile_whitelists_one_character_and_uses_no_translation_or_memory_api(
     assert client.get.await_count == 1
 
 
+def test_default_structured_neko_traits_are_shared_without_voice_or_reserved_data(plugin_instance, monkeypatch, run_async):
+    module = adapter(plugin_instance)
+    response = SimpleNamespace(raise_for_status=Mock(), json=lambda: {"猫娘": {"TestRole": {
+        "核心特质": "温和，好奇", "行为特点": "先照顾眼前的事", "性格": ["开朗", "自信"], "自称": "我",
+        "voice_id": "private_voice", "lighting": "private_setting", "_reserved": {"api_key": "private_key"}}}})
+    manager = AsyncMock()
+    manager.__aenter__.return_value = SimpleNamespace(get=AsyncMock(return_value=response))
+    monkeypatch.setattr(module.httpx, "AsyncClient", Mock(return_value=manager))
+    config = module.HostContextSettings(character_api_url="http://127.0.0.1:48911/api/characters")
+    result = run_async(module.character_profile(plugin_instance, config, "TestRole"))
+    assert "温和，好奇" in result["persona"] and "先照顾眼前的事" in result["persona"]
+    assert "开朗；自信" in result["persona"]
+    assert "private_" not in json.dumps(result)
+
+
+@pytest.mark.parametrize("profile", [None, {}, {"system_prompt": ""}, {"system_prompt": "   "}])
+def test_absent_or_empty_profile_is_not_a_shared_personality(plugin_instance, monkeypatch, run_async, profile):
+    module = adapter(plugin_instance)
+    roles = {} if profile is None else {"TestRole": profile}
+    response = SimpleNamespace(raise_for_status=Mock(), json=lambda: {"猫娘": roles})
+    manager = AsyncMock()
+    manager.__aenter__.return_value = SimpleNamespace(get=AsyncMock(return_value=response))
+    monkeypatch.setattr(module.httpx, "AsyncClient", Mock(return_value=manager))
+    settings = module.HostContextSettings(character_api_url="http://127.0.0.1:48911/api/characters")
+    assert run_async(module.character_profile(plugin_instance, settings, "TestRole")) == {}
+
+
+def test_personality_and_memory_requests_are_independent(plugin_instance, monkeypatch):
+    port, _, _ = setup(plugin_instance, monkeypatch)
+    HostContextPort(port.directory, now=port.now).publish({"agent_name": "TestRole", "persona": "", "memories": []},
+        session="123:", revision=port.mailbox.intent_revision())
+    request = adapter(plugin_instance).context_request(port, port.now)
+    assert request["needed"] and request["persona_needed"]
+    assert not request["memory_needed"]
+
+
 def test_main_brain_selected_context_reaches_framework_and_is_not_public(plugin_instance, monkeypatch, run_async):
     port, snapshot, _ = setup(plugin_instance, monkeypatch)
     port.observe(snapshot)
