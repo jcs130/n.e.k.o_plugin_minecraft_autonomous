@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.53 — Internal candidate
+
+- Pin reviewed canonical autonomy 0.1.77 at `ed94de1277ff0bf61182733374ec8ac8db7e8413` (final recovery fix2), retaining exact checked core .39 / `3ee62ca2` and packaged viewer c799.
+- Consume bounded private first-error diagnostics and the pending operator-acknowledgement startup fence. Recovery remains an explicit offline operator CLI action; the adapter adds no recovery tool, automatic acknowledgement or replay. Accepted-only old native work remains unknown.
+- Preserve recent-context filtering, profile leases, speech admission, native queue ownership and disabled automatic startup. Source/package checks do not cure the original PermissionError or establish live recovery. See `docs/integration-0.5.53-20261017.md` for provenance and deployment order.
+
 ## 0.5.52 — Internal candidate
 
 - Refresh bounded public same-character conversation context and independently fresh configured persona through the existing observer, including when no review is pending. Canonical autonomy reads the private file at every body model round; historical language is never a new command or verified world fact.
