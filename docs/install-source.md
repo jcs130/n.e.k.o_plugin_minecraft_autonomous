@@ -1,12 +1,12 @@
 # 从公开源码安装
 
-这是当前源码的安装入口。版本以本次 checkout 的 `plugin.toml` / `pyproject.toml` 为准；核心和观战的不可变来源以同步后 `vendor/agent_mc_autonomy/core_distribution/source.json` 为准。历史候选记录不替代这些输入。源码验证、包安装和真实游戏验收分别记录。
+这是源码开发者的安装入口。普通接收者按 [完整离线包安装](../README.md#完整离线包安装) 解压、准备并导入，无需此处的构建工具。版本以本次 checkout 的 `plugin.toml` / `pyproject.toml` 为准；核心和观战的不可变来源以同步后 `vendor/agent_mc_autonomy/core_distribution/source.json` 为准。历史候选记录不替代这些输入。源码验证、包安装和真实游戏验收分别记录。
 
 ## 1. 准备独立构建环境和源码
 
 需要 Git、uv、与目标宿主匹配的 Python，以及后端使用的 Node.js >=22。当前官方 N.E.K.O 源码环境要求 Python 3.11；Windows CPython 3.11 宿主应在 Windows、相同架构的 CPython 3.11 上构建。冻结版 EXE 不是可用于 pip/sync 的普通 Python 解释器，不向其共享环境全局安装依赖，也不手写 `dist-info`。
 
-普通用户使用下面的“构建 → 插件中心导入”。在宿主之外新建构建目录，按 [N.E.K.O 官方源码环境说明](https://github.com/Project-N-E-K-O/N.E.K.O#readme) 准备真实 SDK（不要复制或伪造 SDK）。下面的路径都是自行选择的构建目录示例，不是运行目录：
+源码开发者使用下面的“构建 → 插件中心导入”。在宿主之外新建构建目录，按 [N.E.K.O 官方源码环境说明](https://github.com/Project-N-E-K-O/N.E.K.O#readme) 准备真实 SDK（不要复制或伪造 SDK）。下面的路径都是自行选择的构建目录示例，不是运行目录：
 
 ```powershell
 $env:PYTHONUTF8 = '1'
@@ -135,7 +135,7 @@ $catalog = @{ schemaVersion = 1; packs = @(@{
 [System.IO.File]::WriteAllText("$work/viewer-catalog.json", $catalog, [System.Text.UTF8Encoding]::new($false))
 ```
 
-插件配置 `viewer.renderer_directory` 为 `$viewer/packages/modern-viewer/renderer-src`，`viewer.catalog_file` 为 `$work/viewer-catalog.json`；两者一起填写或一起留空。当前固定框架的只读准备提示有已知路径误报：它检查 `host/native-world-preview-host.mjs`，而固定共享源码的文件在 `tools/native-world-preview-host.mjs`，实际集成使用后者。因此面板可能显示 renderer 缺失，不能据此判定 Git 资源不存在；请保留提示供维护者修正，不手写别名或跳过实际启动校验。此处只证明资源准备，尚未证明该新目录可现场渲染。
+自定义安装时，插件配置 `viewer.renderer_directory` 为 `$viewer/packages/modern-viewer/renderer-src`，`viewer.catalog_file` 为 `$work/viewer-catalog.json`；两者一起填写。当前框架的有限元数据检查与实际集成都使用 `tools/native-world-preview-host.mjs`。使用完整离线包时留空即可选择已准备缓存；此处只证明资源准备，尚未证明该新目录可现场渲染。
 
 声音资源可选，浏览器还需要用户点击等手势解除自动播放限制；启用资源不代表实际听到了声音或音乐。YUI/YSM 已在插件包中，无需外部下载。未配置或画面不匹配时保留文字状态回退。首次显式启动观战可能构建浏览器资源；完整场景、身体绑定和实际音效须另行验收。
 

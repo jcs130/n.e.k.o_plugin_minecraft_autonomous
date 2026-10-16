@@ -22,3 +22,12 @@ test('local metadata stays separate from external renderer acceptance', () => {
   assert.match(panel, /本地渲染资源：\{installation.localResources\}/);
   assert.doesNotMatch(panel, /\{state.installation\?\.(backend|viewer)\b/);
 });
+
+test('prepared runtime guidance keeps one preparation step and custom modes', () => {
+  for (const prepared_runtime of ['missing','incompatible']) {
+    assert.match(installationGuidance({prepared_runtime},false,'').preparedRuntime, /prepare.cmd/);
+  }
+  assert.match(installationGuidance({prepared_runtime:'prepared'},false,'').preparedRuntime, /显式启动.*完整性/);
+  assert.match(installationGuidance({prepared_runtime:'custom'},false,'').preparedRuntime, /自定义.*不会混入/);
+  assert.match(installationGuidance({prepared_runtime:'external'},true,'').preparedRuntime, /独立执行器/);
+});

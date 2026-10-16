@@ -13,7 +13,6 @@ from agent_mc_autonomy.readiness import installation_readiness, validation_feedb
 from agent_mc_autonomy.viewer import viewer_observation
 from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
 
-from .bundled_appearance import default_bundled_appearance_settings
 from .direct_planner import public_planner
 from .model_check import check_model
 from .neko_heartbeat import HeartbeatSettings, is_stopped, review_port
@@ -21,6 +20,7 @@ from .neko_host_context import HostContextSettings
 from .neko_presentation import PresentationSettings
 from .neko_speech import output_settings
 from .neko_tools import unwrap
+from .prepared_runtime import resolve_host_runtime
 
 try:
     from agent_mc_autonomy.operator import operator_link
@@ -37,7 +37,7 @@ EDITABLE = {
     "server": {"host", "port", "username", "auth", "version", "connection_type"},
     "operator": {"port"},
     "decision_policy": {"enabled","routine_output_tokens","complex_output_tokens","routine_parameters","complex_parameters"},
-    "runtime": {"mode", "data_directory"},
+    "runtime": {"mode", "data_directory", "bundle_root", "bundle_manifest_sha256"},
     "backend": {"node", "directory"},
     "viewer": {"url", "auto_open", "renderer_directory", "catalog_file", "bundled_appearance_catalog_file", "default_appearance", "listen_port"},
     "perception": {"enabled"},
@@ -57,7 +57,8 @@ def public_config(settings):
         "server": {key: getattr(settings, key, "local" if settings.host in {"", "localhost", "127.0.0.1", "::1"} else "custom") for key in EDITABLE["server"]},
         "operator": {"port": settings.console_port},
         "decision_policy": asdict(settings.decision_policy),
-        "runtime": {"mode": settings.runtime_mode, "data_directory": settings.data_directory},
+        "runtime": {"mode": settings.runtime_mode, "data_directory": settings.data_directory,
+                    "bundle_root": settings.bundle_root, "bundle_manifest_sha256": settings.bundle_manifest_sha256},
         "backend": {"node": settings.node, "directory": settings.backend_directory},
         "viewer": {"url": settings.external_viewer_url, "auto_open": settings.viewer_auto_open,
                    "renderer_directory": settings.viewer_renderer_directory, "catalog_file": settings.viewer_catalog_file,
@@ -154,9 +155,8 @@ class Dashboard:
     async def dashboard(self):
         try:
             raw = await self.config.dump()
-            settings = Settings.parse(raw)
-            if settings.runtime_mode == "embedded":
-                settings = Settings.parse(default_bundled_appearance_settings(raw))
+            effective, prepared = resolve_host_runtime(raw)
+            settings = Settings.parse(effective)
             result = unwrap(await self.status(metadata_only=True))
             if result.get("is_error"):
                 return {"error": "configuration_or_observation_unavailable"}
@@ -183,7 +183,7 @@ class Dashboard:
             return {"settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
                                  "heartbeat": asdict(heartbeat), "host_context": asdict(HostContextSettings.parse(raw)), "planner": public_planner(raw.get("planner", {}))}, "heartbeat": heartbeat_state, "runtime": state, "audit": audit_sample(directory),
                     "model_slots": ["decision", "vision", "fast"],
-                    "installation": installation_readiness(settings, self.cache_path()),
+                    "installation": {**installation_readiness(settings, self.cache_path()), "prepared_runtime": prepared},
                     "operator": operator_link(settings, settings.data_root(self.data_path())) if operator_link else OPERATOR_UNAVAILABLE,
                     **viewer_observation(settings, snapshot)}
         except (OSError, ValueError, KeyError):

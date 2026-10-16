@@ -44,7 +44,8 @@ def test_stop_persists_and_wins_over_inflight_start(plugin_instance, run_async, 
         async def delayed(**_):
             entered.set()
             await release.wait()
-            return {"autonomy": {"enabled": True}, "server": {"host": "example.test", "username": "Alice"}}
+            return {"autonomy": {"enabled": True}, "server": {"host": "example.test", "username": "Alice"},
+                    "backend": {"directory": "explicit-test-backend"}}
 
         monkeypatch.setattr(plugin_instance.config, "dump", delayed)
         module = __import__(plugin_instance.__class__.__module__)

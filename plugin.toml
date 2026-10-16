@@ -1,7 +1,7 @@
 [plugin]
 id = "minecraft_autonomous"
 name = "Minecraft Autonomous / 我的世界自主生存 / マインクラフト自律サバイバル"
-version = "0.5.53"
+version = "0.5.54"
 type = "plugin"
 entry = "plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin"
 description = "默认通过 Mineflayer 接入 Minecraft Java 1.21.1，独立框架负责队列与自主规划；N.E.K.O 提供目标、反馈与解说。按实际收到的数据启用服务器扩展。开发版，长期生存与完整观战仍待验收。"

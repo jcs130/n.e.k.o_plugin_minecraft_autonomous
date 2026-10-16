@@ -13,8 +13,16 @@ const viewer = {
   metadata_matches_ready_to_attempt_rendering: '本地元数据匹配；实际画面仍待核验',
 };
 const known = (table, code) => Object.hasOwn(table, code) ? table[code] : '状态暂不可用，请检查配置与安装说明';
+const prepared = {
+  prepared: '完整离线运行环境已准备；显式启动时校验完整性。',
+  missing: '离线运行环境尚未准备。解压完整离线包，双击 prepare.cmd，然后返回此页。',
+  incompatible: '离线运行环境不匹配或已损坏。重新解压匹配的完整离线包，双击 prepare.cmd。',
+  custom: '正在使用明确配置的自定义运行环境；不会混入离线包默认路径。',
+  external: '外部观察模式：运行环境由独立执行器管理。',
+};
 export function installationGuidance(installation, external, viewerUrl) {
   return {
+    preparedRuntime: known(prepared, installation?.prepared_runtime),
     backend: known(backend, installation?.backend),
     localResources: known(viewer, installation?.viewer),
     externalView: external || !!viewerUrl

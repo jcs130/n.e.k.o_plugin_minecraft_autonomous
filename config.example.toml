@@ -23,8 +23,8 @@ version = "1.21.1"
 login_config_file = "" # Optional private login configuration; never commit it.
 
 [backend]
-node = "node"
-directory = "" # Set an absolute verified installation path; version is checked against the pinned manifest.
+node = "" # Empty: select the prepared offline runtime. Explicit custom paths bypass all implicit runtime defaults.
+directory = "" # Empty: select the same prepared runtime; custom installations must match the pinned core.
 
 [viewer]
 default_appearance = "bundled:yui-ysm" # Web only; saved per-server/account browser choices, including server-follow, win.

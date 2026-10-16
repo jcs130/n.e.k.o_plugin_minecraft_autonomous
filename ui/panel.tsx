@@ -49,9 +49,16 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       return false
     } finally { setBusy(false) }
   }
-  const change = (section: string, key: string, value: any) => setDraft({ ...draft, [section]: { ...draft[section], [key]: value,
-    ...(section === "memory" && ((key === "mode" && value !== "remote") || (key === "provider" && !["powercontext","http"].includes(value))) ? {learning_enabled:false} : {}),
-  } })
+  const change = (section: string, key: string, value: any) => {
+    const next = { ...draft, [section]: { ...draft[section], [key]: value,
+      ...(section === "memory" && ((key === "mode" && value !== "remote") || (key === "provider" && !["powercontext","http"].includes(value))) ? {learning_enabled:false} : {}),
+    } }
+    if (value !== draft[section]?.[key] && ((section === "backend" && ["node","directory"].includes(key)) ||
+        (section === "viewer" && ["renderer_directory","catalog_file","bundled_appearance_catalog_file"].includes(key)))) {
+      next.runtime = {...draft.runtime, bundle_root:"", bundle_manifest_sha256:""}
+    }
+    setDraft(next)
+  }
   const field = (section: string, key: string, label: string, type = "text") =>
     <Field label={label}><Stack gap={4}><Input type={type} value={draft?.[section]?.[key] ?? ""} placeholder={section === "server" && key === "host" ? "本机填写 127.0.0.1；远程填写域名或 IP" : ""} onChange={v => change(section, key, type === "number" ? Number(v) : v)} />{fieldError?.field === `${section}.${key}` && <Text>{fieldError.message}</Text>}</Stack></Field>
   const authField = (key: string, label: string) => <Field label={label}><Input value={draft?.planner?.auth?.[key] || ""}
@@ -159,6 +166,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>这些选择只影响网页显示，不会修改服务器角色皮肤、Microsoft 全局皮肤或其他玩家看到的外观。服务器皮肤取决于服务器与已授权账号；本插件没有通用的服务器皮肤修改接口。</Text>
       </Stack></Card>
       <Card title="安装元数据（只读）"><Stack gap={8}>
+        <Text>{installation.preparedRuntime}</Text>
         <Text>后端目录：{state.installation?.backend_directory || "暂不可用"}</Text>
         <Text>要求核心：{state.installation?.required_core_version || "暂不可用"}；本地后端：{installation.backend}</Text>
         <Text>本地渲染资源：{installation.localResources}</Text>

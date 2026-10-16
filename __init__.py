@@ -13,12 +13,13 @@ from agent_mc_autonomy.worker import Worker
 from plugin.sdk.plugin import Err, NekoPluginBase, Ok, TransportError, lifecycle, neko_plugin, plugin_entry
 
 from .backend.install import verify_runtime
-from .bundled_appearance import default_bundled_appearance_settings
+from .bundled_appearance import default_bundled_appearance_settings as default_bundled_appearance_settings
 from .dashboard import Dashboard
 from .direct_planner import create_planner
 from .neko_heartbeat import NekoHeartbeat
 from .neko_presentation import NekoPresentation
 from .neko_tools import NekoAutonomyTools
+from .prepared_runtime import require_prepared_runtime, resolve_host_runtime
 
 
 @neko_plugin
@@ -61,7 +62,8 @@ class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoHeartbeat, Nek
                 state.update(self._worker.snapshot())
         ready, reason, viewer = False, "backend_missing", ""
         try:
-            settings = Settings.parse(await self.config.dump())
+            effective, prepared = resolve_host_runtime(await self.config.dump())
+            settings = Settings.parse(effective)
             if settings.runtime_mode == "external":
                 if not settings.data_directory:
                     return Err({"code": "external_data_directory_required", "message": "填写与 standalone 相同的 runtime.data_directory。"})
@@ -70,18 +72,22 @@ class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoHeartbeat, Nek
                 return Ok({"mode": "external", "minecraft_version": "1.21.1", "observation": snapshot,
                            **viewer_observation(settings, snapshot)})
             viewer = settings.external_viewer_url
-            if metadata_only:
+            if prepared in {"missing", "incompatible"}:
+                reason = "backend_missing" if prepared == "missing" else "runtime_bundle_incompatible"
+            elif metadata_only:
                 reason = "metadata_only_not_runtime_verified"
             else:
-                verify_runtime(settings.runtime_directory(self.cache_path()))
-                ready, reason = True, "ready_for_explicit_start"
+                from agent_mc_autonomy.readiness import installation_readiness
+                metadata = installation_readiness(settings, self.cache_path())
+                ready = metadata["backend"] == "version_matches_not_integrity_verified"
+                reason = "metadata_matches_not_integrity_verified" if ready else "backend_missing"
         except (OSError, ValueError, KeyError):
             pass
         except TransportError:
             reason = "configuration_unavailable"
         return Ok({"plugin_id": "minecraft_autonomous", "mode": "autonomous", "stage": "development",
                    "minecraft_version": "1.21.1", "backend_ready": ready, "reason": reason,
-                   "viewer_url": viewer, "viewer_body_binding_verified": False, **state,
+                   "viewer_url": viewer, "viewer_body_binding_verified": False, "runtime_integrity_verified": False, **state,
                    **(viewer_observation(settings, state) if ready else {})})
 
     @plugin_entry(
@@ -98,13 +104,14 @@ class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoHeartbeat, Nek
         try:
             if not isinstance(goal, str) or not goal.strip() or len(goal) > 4000:
                 raise ValueError("invalid_goal: goal must contain 1..4000 characters")
-            planner_raw = default_bundled_appearance_settings(await self.config.dump())
+            planner_raw, prepared = resolve_host_runtime(await self.config.dump())
             settings = Settings.parse(planner_raw)
             if settings.runtime_mode == "external":
                 return Err({"code": "external_runtime", "message": "此入口只观察和投递任务。请显式启动 standalone.py run；Neko 不接管外部运行进程。"})
             if not settings.enabled:
                 return Err({"code": "autonomy_disabled", "message": "先在配置中启用 autonomy；插件不会自动进入游戏。"})
             settings.require_server()
+            require_prepared_runtime(prepared)
             entry = verify_runtime(settings.runtime_directory(self.cache_path()))
             data_root = settings.data_root(self.data_path())
             data = data_root / "sessions" / settings.identity / "host"
