@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.49 — Internal candidate
+
+- Pin reviewed autonomy 0.1.70 at `ec20aef983cdd25fe6e124adf7a95ad2040bca15`, retaining immutable engine-only core .13 and shared viewer `567d95e6`.
+- Inspect exposes the evidence-bound minimal final completion contract. Finish the same-brain tool transaction before optional narration; preserve authored reasons, goals, death lesson/deferral, public character context and optional speech-before-dispatch without audio waits or replay.
+- Keep startup/gameplay disabled by default. Offline package/SDK checks do not establish natural provider final ACK, playback, complete scene fidelity or sustained survival. No release tag or Market publication.
+
 ## 0.5.48 — Internal candidate
 
 - Pin reviewed autonomy 0.1.69 at `2b0db6308c93a5b155e17abe0ed5d4708424fe20` and immutable engine-only core 0.5.7-dev.20261016.13. Consume reviewed fresh-connection/current-death recovery and strategic applicability repairs without copying gameplay policy into the adapter.

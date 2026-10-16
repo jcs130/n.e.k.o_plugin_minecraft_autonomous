@@ -7,16 +7,16 @@ Neko 提供高层目标、策略、角色演出与语音；独立框架细化规
 可配置其他人的兼容服务器，不要求在本机开服。
 Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minecraft-ai-friend` 项目。
 
-0.5.48 内部候选固定规范框架 0.1.69 与已审核核心 .13，接入新连接与历史死亡恢复的区分、当前死亡证据选择和过期阶段重新评估。保留紧凑 inspect、原始证据分页、主脑人格与同次 `spoken_text`/`death_reflection`；公开语音回执记录 speech_id 与排队/完成标志，仍不等于独立播放核验。适配器新增仅含标识与类别的 review 调用完成诊断，不自动确认、重放动作或语音，也不代表已修复主脑漏交最终判断。详见 [0.5.48 集成说明](docs/integration-0.5.48-20261016.md)。
+0.5.49 内部候选固定规范框架 0.1.70 与已审核核心 .13。检查返回最短最终判断所需的真实标识、可选决策和条件字段；主脑先完成工具事务，再按需自然接话。保留原始证据分页、人格、目标、死亡教训与暂缓、可选 `spoken_text` 和所有原有验证及防重边界。离线候选不证明自然最终判断、播放或长期生存通过。详见 [0.5.49 集成说明](docs/integration-0.5.49-20261016.md)。
 
-inspect 含待复盘死亡事件时，同次最终判断可引用检查返回的短 evidence_ref，必须提供有依据及适用条件的教训，或明确暂缓原因；遗漏时不确认、不投递、不口播，可在同一心跳补交。旧 episode-only 教训还须提供 evidence，短引用路径保留。独立 body 也须正常收尾后升至匹配的 0.1.69；仅重载适配器不更新旧 producer。教训仍是假设，改善与现场播放另行验证。
+inspect 含待复盘死亡事件时，同次最终判断可引用检查返回的短 evidence_ref，必须提供有依据及适用条件的教训，或明确暂缓原因；遗漏时不确认、不投递、不口播，可在同一心跳补交。旧 episode-only 教训还须提供 evidence，短引用路径保留。独立 body 也须正常收尾后升至匹配的 0.1.70；仅重载适配器不更新旧 producer。教训仍是假设，改善与现场播放另行验证。
 
 
 可显式配置 `[speech_output] enabled=true`、本机 Neko `base_url` 和 `heartbeat.target`，启用已公开的输出接口。接口能力通过 `/openapi.json` 核对，仅发送 `/api/game/minecraft_autonomous/speak`，不建立游戏聊天会话或接管路由。插件清理主脑通过工具参数给出的意图句，在目标投递前持久记录关联并异步排入语音；目标、原生行动与播放独立推进。`speech-output.json` 区分排队、受理、拒绝和未知，未知发送不会重放，受理不代表听到声音。
 
 公共 SDK 不支持拦截主脑普通最终回复，`task_result` 固定使用 `direct_reply=False`。本插件的清理仅覆盖自己提交的 `spoken_text`；不能保证之后的主脑回复不会重复或包含控制文字。最终回复采用自然接话指导，实际声线、音量、重复情况与听感仍须现场验收。`inspect` 只读取事实和刷新检查记录；最终判断同次携带死亡教训（引用 episode_id 或 source_event.run）或明确暂缓原因，通知受理不会自动完成复盘。
 
-**0.5.48 内部候选版：默认使用 Mineflayer，主力优化与验收版本为 Java 1.21.1。固定独立框架 0.1.69、经校验开发核心 0.5.7-dev.20261016.13 和共享 viewer 567d95e6；源码与候选校验不代表已部署或发布。主脑负责人格、策略与语音，独立框架负责原生队列与游戏回执。不修改 Neko 主程序或 SDK。完整实体/场景、自然语音、游泳和长期自主生存仍须分别验收。**
+**0.5.49 内部候选版：默认使用 Mineflayer，主力优化与验收版本为 Java 1.21.1。固定独立框架 0.1.70、经校验开发核心 0.5.7-dev.20261016.13 和共享 viewer 567d95e6；源码与候选校验不代表已部署或发布。主脑负责人格、策略与语音，独立框架负责原生队列与游戏回执。不修改 Neko 主程序或 SDK。完整实体/场景、自然语音、游泳和长期自主生存仍须分别验收。**
 默认关闭自主游玩，必须显式执行独立 `run` 或内嵌 `start`。普通源码更新不自动开始游戏；Release/Market 仍需单独发布。
 YUI 普通 slim 皮肤和原始 YSM 模型随插件附带。Neko 内嵌运行的 Web 默认值为 `bundled:yui-ysm`；配置中的明确默认值与观战页已保存的选择都会保留，已保存的「跟随服务器」优先。选择只影响网页，不修改服务器或 Microsoft 皮肤。偏好按服务器/账号隔离；旧清单 URL 记录缺少服务器来源，保留原条目，升级后在「人物模型」重新选择一次。独立运行默认 `server`，可显式配置 `viewer.default_appearance` 与安装目录的 `assets/appearances/catalog.json`。外部运行的实际设置由 standalone 配置管理。
 实际结果及失败记录见 [原版服验收](docs/vanilla-live-acceptance-2026-10-13.md)。本次固定构建、配置页和性能证据见 [0.5.44 记录](docs/performance-release-20261016.md)。
@@ -27,7 +27,7 @@ YUI 普通 slim 皮肤和原始 YSM 模型随插件附带。Neko 内嵌运行的
 | SDK 入口 | `plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin` |
 | 环境 | Python 3.11+；Node 22+；N.E.K.O 为可选前端 |
 | 游戏协议 | **Java 1.21.1（767）**，拒绝 `auto` 和其他版本 |
-| 自主框架 | `agent-mc-autonomy@0.1.69`，固定来源 `minecraft-ai-friend@2b0db6308c93a5b155e17abe0ed5d4708424fe20` |
+| 自主框架 | `agent-mc-autonomy@0.1.70`，固定来源 `minecraft-ai-friend@ec20aef983cdd25fe6e124adf7a95ad2040bca15` |
 | 执行核心 | `agent-mc-world@0.5.7-dev.20261016.13`，来源提交 `2dfad5f7968bf50a00f9b27e4c077eba41dcabd5` |
 | 共享观战输入 | `mc-visual-console@567d95e6a9d7a1124204819e4991311b9741d25d`；独立源码归档与原始资源，实际消费端须重建核验 |
 | 构建 | 固定源码，直接运行核心官方 `build:engine`；无插件专用补丁或第二份编译实现 |
