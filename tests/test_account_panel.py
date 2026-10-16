@@ -2,7 +2,20 @@ import importlib
 import json
 from unittest.mock import AsyncMock
 
+import pytest
 from plugin.sdk.plugin import Err, Ok
+
+
+@pytest.mark.parametrize("limit", [32768, 65536, 98304, 131072])
+def test_context_limit_save_and_public_roundtrip_preserves_explicit_value(plugin_instance, plugin_module, run_async, monkeypatch, limit):
+    dashboard = importlib.import_module(plugin_module.__name__ + ".dashboard")
+    patch = {"autonomy": {"context_tokens": limit}}
+    update = AsyncMock(return_value={})
+    monkeypatch.setattr(plugin_instance.config, "update", update)
+    assert isinstance(run_async(plugin_instance.save_settings(patch)), Ok)
+    update.assert_awaited_once_with(patch)
+    assert dashboard.public_config(plugin_module.Settings.parse(patch))["autonomy"]["context_tokens"] == limit
+    assert dashboard.public_config(plugin_module.Settings.parse({}))["autonomy"]["context_tokens"] == 65536
 
 
 def test_account_settings_save_only_and_native_link_contains_no_account_payload(plugin_instance, plugin_module, run_async, monkeypatch, tmp_path):

@@ -277,11 +277,11 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             </Stack>}
             {runtime.model_status?.decision_profile && <JsonView data={runtime.model_status.decision_profile} />}
           </Stack></Accordion>
-          <Accordion title="调用预算"><Grid cols={2}>
+          <Accordion title="调用预算"><Stack gap={10}><Text>上下文默认 65536（64K）；服务实际支持时可设为 131072（128K）。保留已设置的其他有效值；32K 服务应使用 32768，此设置不会扩大模型服务容量。</Text><Grid cols={2}>
             {field("autonomy","context_tokens","上下文窗口","number")}{field("autonomy","max_output_tokens","输出预算","number")}
             {field("autonomy","min_decision_seconds","最小决策间隔（秒）","number")}{field("autonomy","max_decisions","最大轮次，0 为持续运行","number")}
             {field("autonomy","model_timeout_seconds","单次模型总超时（秒）","number")}{field("autonomy","max_tool_rounds","每轮最多连续工具回合","number")}
-          </Grid></Accordion>
+          </Grid></Stack></Accordion>
           <Inline><Button disabled={busy} tone="primary" onClick={saveDraft}>保存设置</Button>
             <Button onClick={()=>{setEditing(false)}}>取消编辑</Button></Inline>
         </Stack>}

@@ -10,7 +10,7 @@ min_decision_seconds = 10
 idle_decision_seconds = 60
 max_decisions = 100
 max_tool_rounds = 6
-context_tokens = 32768
+context_tokens = 65536 # 默认64K；服务实际支持时可选131072（128K），保留显式配置的其他有效值。
 max_output_tokens = 1024
 model_timeout_seconds = 180
 

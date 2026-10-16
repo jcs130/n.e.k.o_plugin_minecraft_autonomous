@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.51 — Internal candidate
+
+- Pin reachable canonical `6178073c38e671771a90cf507e492fe3b23841a0` / autonomy0.1.73 with exact corec9ac/.32 and shared viewerc799 source/build receipts. Preserve the bundled speaking skill, original YUI assets and reviewed GUI producer/abort/stow contracts.
+- Default public context settings to65536, document optional131072 on supporting services and preserve explicit other valid values. Current service capacity remains an independent configuration constraint.
+- Source-only incoming core.33 method capabilities are separate from the frozen.32 distribution. Offline candidate checks do not establish deployment, full scene/voice coverage or survival.
+
 ## 0.5.50 — Internal candidate
 
 - Pin reviewed autonomy 0.1.71 at `6cbff24070a2ff4ee224e6d5bf94e82cebe4a914`, with frozen engine-only core .24 from exact `2723d39f8129a6d2f87a773832289888dda1d51c` and unchanged viewer `567d95e6`.
