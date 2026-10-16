@@ -1,6 +1,7 @@
 """Keep the adapter deployable without patching or importing Neko internals."""
 
 import ast
+import importlib.util
 from pathlib import Path
 
 
@@ -37,3 +38,19 @@ def test_compatibility_namespaces_are_exports_from_the_independent_framework():
                    for node in ast.walk(tree)), relative
         assert not any(isinstance(node, ast.ImportFrom) and (node.module or "").startswith("plugin")
                        for node in ast.walk(tree)), relative
+
+
+def test_standalone_delegates_arguments_and_the_canonical_runtime_verifier(monkeypatch):
+    from agent_mc_autonomy.cli import main
+    from agent_mc_autonomy.core_distribution.install import verify_runtime
+
+    path = Path(__file__).resolve().parents[1] / "standalone.py"
+    spec = importlib.util.spec_from_file_location("standalone_ci_wrapper", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.framework_main is main
+    calls = []
+    monkeypatch.setattr(module, "framework_main", lambda argv, **options: calls.append((argv, options)) or 73)
+    argv = ["check", "--config", "fixture.toml"]
+    assert module.main(argv) == 73
+    assert calls == [(argv, {"entry_resolver": verify_runtime})]

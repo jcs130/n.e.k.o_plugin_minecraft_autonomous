@@ -8,6 +8,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1] / "assets" / "appearances"
 
 
+def test_original_packer_is_retained_as_an_exact_source_reference():
+    reference = ROOT / "sources/pack-neko-yui.py.txt"
+    data = reference.read_bytes()
+    assert len(data) == 1301
+    assert hashlib.sha256(data).hexdigest() == "c3b211a7cd1a20bf5f941c6fb607ff1fd6371f15ae1bca601823acdebb9f601c"
+    assert not (ROOT / "sources/pack-neko-yui.py").exists()
+
+
 def test_bundled_yui_source_bytes_and_provenance():
     catalog = json.loads((ROOT / "catalog.json").read_text(encoding="utf-8"))
     assert catalog["schema"] == "mc-bundled-appearances/v1"
