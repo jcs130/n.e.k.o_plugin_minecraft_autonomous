@@ -33,6 +33,10 @@ YUI 普通 slim 皮肤和原始 YSM 模型随插件附带。Neko 内嵌运行的
 | 构建 | 固定源码，直接运行核心官方 `build:engine`；无插件专用补丁或第二份编译实现 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT，归档保留其许可证和来源 |
 
+## 从源码安装
+
+普通用户请按 [当前源码安装指南](docs/install-source.md) 在独立构建环境执行 **SDK sync → check → build → 插件中心导入**，再准备精确后端。直接复制 Git 源码或只同步依赖不会生成完整包安装所需的静态入口元数据。冻结版宿主使用匹配 Python/平台的独立 builder，不向共享宿主全局 pip 安装。原版观战与可选声音资源已公开保存在固定共享 Git 来源中，无需私有 ZIP。
+
 ## 架构与版本选择
 
 动作规划默认使用 Neko 的模型绑定；也可在「模型 API 接入」中单独选择通义千问、DeepSeek、Kimi、智谱、豆包、硅基流动、OpenAI、Claude、Gemini 或兼容服务。厂商预设不代选模型。原生协议、思考内容回传、流式接收和参数校验均在共享 `agent-mc-autonomy`，插件只提供配置与模型入口。模型访问不进入 Minecraft 身体执行核心。
@@ -75,7 +79,7 @@ SQLite 只保存目标和跨进程指令投递、去重及回执；正在执行�
 
 ## 独立运行与 Neko 旁路接入
 
-先按下节安装固定后端，再把 `standalone.example.toml` 复制为忽略提交的 `config.local.toml`。
+先在独立 Python 环境安装下面声明依赖，再按 [源码安装指南的后端步骤](docs/install-source.md#3-准备精确后端) 准备固定后端，把 `standalone.example.toml` 复制为忽略提交的 `config.local.toml`。
 配置服务器、后端路径、共享 `runtime.data_directory`，以及显式的 `[planner]` 模型端点和模型名。
 密钥只填写环境变量名 `api_key_env`，不写进配置。独立模式只需要 Python 依赖，不需要 Neko SDK：
 
@@ -168,27 +172,7 @@ python standalone.py status --config config.local.toml
 ## 准备后端
 
 插件导入、状态查询、startup 均不会下载后端、连接游戏或调用模型。
-没有假设 GitHub 上存在对应发行包。先从固定源码构建，再显式安装到独立目录：
-
-```powershell
-git clone https://github.com/jcs130/minecraft-ai-friend.git ../minecraft-ai-friend
-$env:PYTHONPATH = (Resolve-Path ./vendor).Path
-$corePin = Get-Content ./vendor/agent_mc_autonomy/core_distribution/source.json -Raw | ConvertFrom-Json
-git -C ../minecraft-ai-friend fetch origin $corePin.source_revision
-# 这是新克隆的构建源目录；切到固定提交后，显式准备依赖缓存。
-git -C ../minecraft-ai-friend checkout --detach $corePin.source_revision
-pnpm --dir ../minecraft-ai-friend/packages/agent-mc-world fetch
-# 构建需要 pnpm 11.5.0 和 Node.js >=22；destination 必须为空。
-python backend/build.py --checkout ../minecraft-ai-friend --destination ../agent-mc-world-neko-build
-python backend/install.py --destination ./local/backend --archive "../agent-mc-world-neko-build/$($corePin.archive)"
-python backend/check_disconnected.py --directory ./local/backend
-```
-
-安装器检查 `agent_mc_autonomy/core_distribution/source.json`（来自固定版本框架依赖） 中的归档 SHA256、版本、源提交和编译文件清单，
-同时校验源码、运行文件、公开类型及入口的标准构建回执。
-使用固定 npm lockfile 和 `--ignore-scripts`。构建工具链差异导致哈希不符时会拒绝安装，
-需要重新核查构建产物，不能直接跳过校验。已准备运行目录不等于已登录游戏。
-发布到其他机器时，同样需要显式准备后端；`.neko-plugin` 不夹带 Node、账号或原生 SDK。若已有与固定清单匹配的 `agent-mc-world` 归档，只需执行 install/check 两步，不需要 Git 或 pnpm 构建。准备版的配套归档与校验值见发布准备文档。
+先同步声明依赖，再读取其 `agent_mc_autonomy/core_distribution/source.json`，从该精确提交构建并校验归档，显式安装到新的空目录。完整命令见 [当前源码安装指南](docs/install-source.md#3-准备精确后端)。已有完全匹配清单的归档可直接安装；没有假设存在对应 GitHub Release。Node、执行核心和可选观战原始资源在插件包之外分别准备。
 
 ## Neko 内嵌运行（可选）
 
@@ -310,4 +294,4 @@ Minecraft Java 1.21.1 の独立自律フレームワークです。N.E.K.O は�
 
 框架生成决策请求，Neko 定时器只转交待处理请求。主脑 inspect 后选择 continue 或 insert；插入仍交给框架原生检查点，用户的新反馈使旧决策失效。没有接入 Neko 时，显式配置的独立规划模型继续游戏。Cortico/其他宿主可以接相同的 Planner、ReviewPort 和 Mailbox，尚未声称已有这些宿主的完成适配或实测。
 
-当前内部候选的完整普通用户安装步骤、固定伴随资产名称与 SHA256 见 [0.5.47 安装说明](docs/install-candidate-20261016.md)。伴随资产尚未公开发布，没有可用下载链接。
+当前普通用户安装步骤见 [源码安装指南](docs/install-source.md)。[0.5.47 候选说明](docs/install-candidate-20261016.md) 是历史记录，其本地 ZIP 名称和旧依赖不作为当前安装要求。

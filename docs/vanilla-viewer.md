@@ -6,8 +6,7 @@
 
 ## 可选的同角色观战
 
-安装共享 `jcs130/mc-visual-console` 仓库及其 renderer-src 依赖，并按其中
-`renderer-src/docs/vanilla-1.21.1.md` 准备原版资源和本地 catalog。插件只做公共核心的
+按 [当前源码安装指南](install-source.md#4-可选公开的原版观战和声音资源) 从权威依赖清单读取共享 `jcs130/mc-visual-console` 的精确提交，在新的独立 checkout 安装 renderer-src 依赖，再校验 Git 中已有的原版资源并准备本地 catalog。插件只做公共核心的
 extension 装配，渲染代码与原始材质留在共享可视化项目，不复制到本插件运行包。
 
 在独立配置或 Neko 配置面板填写：
@@ -53,4 +52,4 @@ Neko 的 `viewer_body_binding_verified` 还要求新鲜读数与配置账号相�
 
 当前阶段保持开发版，不将上述尚未通过的项目描述为已完成，也不发布 Market 版本。
 
-当前固定 1.21.1 伴随资源、共享仓库根目录准备命令与完整 catalog 示例见 [0.5.43 内部候选安装](install-candidate-20261016.md)。
+当前固定 1.21.1 公开资源、共享仓库根目录准备命令与 catalog 示例见 [源码安装指南](install-source.md)。可选声音还需要浏览器用户手势；资源存在不等于实际播放。
