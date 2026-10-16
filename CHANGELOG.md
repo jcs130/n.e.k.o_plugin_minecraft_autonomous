@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.52 — Internal candidate
+
+- Refresh bounded public same-character conversation context and independently fresh configured persona through the existing observer, including when no review is pending. Canonical autonomy reads the private file at every body model round; historical language is never a new command or verified world fact.
+- Suppress exact explicit-output repeats within 300 seconds for positively bound ordinary automatic opportunities. Keep same-opportunity receipts, urgent/manual/unknown paths and independent action dispatch. Accepted or unknown output never proves playback.
+- Pin reviewed autonomy 0.1.76 at `bb538c7bc1e1b4bc33e8b38aceaf27079a6ab0df`, including exact checked core .39 / `3ee62ca2`. Default external viewer c799 remains separate. Source/package checks do not establish live acceptance.
+
 ## 0.5.51 — Internal candidate
 
 - Pin reachable canonical `6178073c38e671771a90cf507e492fe3b23841a0` / autonomy0.1.73 with exact corec9ac/.32 and shared viewerc799 source/build receipts. Preserve the bundled speaking skill, original YUI assets and reviewed GUI producer/abort/stow contracts.

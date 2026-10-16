@@ -6,6 +6,7 @@ generated final answer is outside this plugin's public API boundary.
 
 import asyncio
 import hashlib
+import json
 import re
 from urllib.parse import urlsplit
 
@@ -56,30 +57,52 @@ def output_settings(raw, target):
     return base
 
 
-def enqueue_speech(plugin, raw, settings, target, port, generation, text, correlation):
+def enqueue_speech(plugin, raw, settings, target, port, generation, text, correlation, *, admission=None):
     """Reserve locally before the goal mailbox; HTTP/audio never blocks it.
 
     Durable reservations survive crashes as unknown and are never replayed.
     At most one output request is active per plugin; busy is an honest refusal.
     """
-    base = output_settings(raw, target)
     common = {**correlation, "playback_verified": False}
-    if not base:
-        return {**common, "status": "disabled"}
-    line = sanitize_speech(text)
-    if not line:
-        return {**common, "status": "empty_or_control_only"}
     path = port.directory / "speech-output.json"
     state = load_commentary(path)
     key = correlation["opportunity_id"]
     records = state.get("records", {})
     if key in records:
         return records[key]
+    base = output_settings(raw, target)
+    if not base:
+        return {**common, "status": "disabled"}
+    line = sanitize_speech(text)
+    if not line:
+        return {**common, "status": "empty_or_control_only"}
+    digest = hashlib.sha256(line.encode()).hexdigest()
+    binding = json.loads(admission.binding_json) if admission and admission.matches(correlation) else None
+    if binding is not None:
+        from .neko_recent_context import owned_runtime
+        if owned_runtime(plugin, settings, target, port, generation) != binding:
+            binding = None
+    if binding is not None and admission.ordinary:
+        for prior in reversed(list(records.values())):
+            bound = prior.get("runtime_binding")
+            if (isinstance(bound, dict) and all(bound.get(k) == binding[k] for k in ("actor", "identity", "session", "run", "scope"))
+                    and prior.get("status") in {"accepted", "queued", "reserved_unknown", "unknown"}
+                    and prior.get("text_sha256") == digest and type(prior.get("offered_at")) in {int, float}
+                    and 0 <= port.now() - prior["offered_at"] <= 300):
+                receipt = {**common, "status": "repeat_suppressed", "text_sha256": digest,
+                           "runtime_binding": binding, "offered_at": port.now(), "transport_accepted": False,
+                           "prior_opportunity_id": prior["opportunity_id"], "prior_speech_id": prior.get("speech_id"),
+                           "audio_queued": False, "audio_completed": False}
+                records[key] = receipt
+                save_commentary(path, {"records": dict(list(records.items())[-32:])})
+                return receipt
     tasks = getattr(plugin, "_speech_output_tasks", set())
     if tasks:
         return {**common, "status": "busy"}
-    receipt = {**common, "status": "reserved_unknown", "text_sha256": hashlib.sha256(line.encode()).hexdigest(),
+    receipt = {**common, "status": "reserved_unknown", "text_sha256": digest,
                "offered_at": port.now(), "transport_accepted": False}
+    if binding is not None:
+        receipt["runtime_binding"] = binding
     records[key] = receipt
     save_commentary(path, {"records": dict(list(records.items())[-32:])})
     task = asyncio.create_task(_deliver(plugin, base, target, port, generation, line, receipt, path))
@@ -91,8 +114,14 @@ def enqueue_speech(plugin, raw, settings, target, port, generation, text, correl
 
 def _current(plugin, port, generation, receipt):
     from .neko_heartbeat import is_stopped
-    return (plugin._generation == generation and not plugin._configuration_writes and not is_stopped(plugin)
-            and port.speech_current(receipt))
+    current = (plugin._generation == generation and not plugin._configuration_writes and not is_stopped(plugin)
+               and port.speech_current(receipt))
+    if current and receipt.get("runtime_binding"):
+        from agent_mc_autonomy.mailbox import observation
+        snapshot, bound = observation(port.directory), receipt["runtime_binding"]
+        current = all(snapshot.get(k) == bound[v] for k, v in (
+            ("runtime_session", "session"), ("native_run", "run"), ("settings_identity", "identity"), ("game_identity", "scope")))
+    return current
 
 
 async def _deliver(plugin, base, target, port, generation, line, receipt, path):

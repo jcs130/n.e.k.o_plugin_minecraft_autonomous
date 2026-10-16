@@ -28,19 +28,19 @@ class HostContextSettings:
         return cls(_boolean(section, "enabled", True), url)
 
 
-async def character_profile(plugin, config, target):
-    if not config.character_api_url:
+async def character_profile(plugin, config, target, *, fresh=False, timeout=3):
+    if not config.character_api_url or not target:
         return {}
     key = (config.character_api_url, target)
     cache = getattr(plugin, "_host_profile_cache", None)
-    if target and cache and cache[0] == key and time.monotonic() - cache[1] < 60:
+    if not fresh and target and cache and cache[0] == key and time.monotonic() - cache[1] < 60:
         return cache[2]
     try:
-        async with httpx.AsyncClient(timeout=3, trust_env=False, follow_redirects=False) as client:
+        async with httpx.AsyncClient(timeout=timeout, trust_env=False, follow_redirects=False) as client:
             response = await client.get(config.character_api_url, params={"language": "zh-CN"})
             response.raise_for_status()
             raw = response.json()
-        actor = target or raw.get("当前猫娘")
+        actor = target
         profile = raw.get("猫娘", {}).get(actor, {})
         persona = profile.get("system_prompt", "")
         if not isinstance(actor, str) or not actor or len(actor.encode("utf-8")) > 160 or not isinstance(persona, str):
@@ -63,7 +63,8 @@ async def character_profile(plugin, config, target):
         # runtime-reflected persona. Never forward the whole character object.
         persona = persona.encode("utf-8")[:2400].decode("utf-8", errors="ignore")
         result = {"agent_name": actor, "persona": persona, "persona_source": "character_profile"}
-        plugin._host_profile_cache = (key, time.monotonic(), result)
+        if not fresh:
+            plugin._host_profile_cache = (key, time.monotonic(), result)
         return result
     except (httpx.HTTPError, ValueError, TypeError, AttributeError):
         return {}

@@ -1,12 +1,12 @@
 [project]
 name = "minecraft_autonomous"
-version = "0.5.51"
+version = "0.5.52"
 description = "Thin N.E.K.O adapter for the host-neutral Minecraft autonomy framework"
 requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"
 dependencies = [
-  "agent-mc-autonomy @ git+https://github.com/jcs130/minecraft-ai-friend.git@6178073c38e671771a90cf507e492fe3b23841a0#subdirectory=packages/agent-mc-autonomy",
+  "agent-mc-autonomy @ git+https://github.com/jcs130/minecraft-ai-friend.git@bb538c7bc1e1b4bc33e8b38aceaf27079a6ab0df#subdirectory=packages/agent-mc-autonomy",
   "mcp==2.1.1", "httpx>=0.27,<1", "openai>=1,<3"
 ]
 
@@ -15,9 +15,9 @@ Repository = "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous"
 Issues = "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/issues"
 
 [tool.neko.build]
-exclude_dirs = ["tests", "docs", "tasks", "local", "runtime", "logs", ".superpowers"]
+exclude_dirs = ["tests", "test", "_tests", "docs", "tasks", "local", "runtime", "logs", ".superpowers", "vendor/*/benchmarks", "vendor/*/samples", "vendor/*/[dD]emos"]
 exclude_files = ["AGENTS.md", "CONTRIBUTING.md", "ruff.toml", ".gitignore", ".gitattributes", ".editorconfig"]
-exclude = [".env", ".env.*", "*.key", "*.log", "*.local.toml"]
+exclude = [".env", ".env.*", "*.key", "*.log", "*.local.toml", "vendor/annotated_types/test_cases.py", "vendor/win32com/servers/test_pycomtest.py", "vendor/win32/scripts/pywin32_testall.py"]
 
 # Official excludes run before includes. These suffix-complement patterns keep
 # every non-PEM path plus exactly Certifi's public CA trust store; arbitrary

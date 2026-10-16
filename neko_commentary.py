@@ -58,6 +58,8 @@ def speech_contract(receipt):
         guidance = "已排入语音，无需另写口播，不复述那一句；受理不等于已播放。"
     elif status in {"unknown", "reserved_unknown"}:
         guidance = "语音投递未知，不重投或复述那一句，也不声称已播放；可推进话题。"
+    elif status == "repeat_suppressed":
+        guidance = "这句与近期已受理或投递未知的自动口播完全相同，本次未排入语音；不重投、不复述、不念抑制标记，无需另起决策；行动照常。"
     else:
         guidance = "未排入则用正常最终回复自然说一句；busy/rejected/disabled或缺省不表示已播放。"
     return {"status": status, "playback_verified": False, "instruction": prefix + guidance + "不以静默或No commentary替代实质判断。"}

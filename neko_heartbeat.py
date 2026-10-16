@@ -1,5 +1,6 @@
 """Thin Neko transport for strategic reviews owned by agent-mc-autonomy."""
 
+import asyncio
 import json
 from dataclasses import dataclass
 
@@ -141,15 +142,17 @@ class NekoHeartbeat:
     @timer_interval(id="game_decision_heartbeat", seconds=10, name="转交自主框架决策请求",
                     description="仅转交独立框架生成的有效决策请求，不在插件中调度游戏。")
     async def game_decision_heartbeat(self, **_):
-        return await self._review_game()
+        return await self._review_game(origin="automatic")
 
     @ui.action(label="请主脑判断当前局面", tone="default")
     @plugin_entry(id="review_game", name="转交待处理的游戏决策", kind="service",
                   description="转交自主框架待处理的复盘；保持框架限频，不启动游戏。")
     async def review_game(self, **_):
-        return await self._review_game()
+        return await self._review_game(origin="manual")
 
-    async def _review_game(self):
+    async def _review_game(self, *, origin="unknown"):
+        with self._control_lock:
+            generation = self._generation
         raw = await self.config.dump()
         config, settings = HeartbeatSettings.parse(raw), Settings.parse(raw)
         if not config.enabled or not settings.enabled:
@@ -157,9 +160,15 @@ class NekoHeartbeat:
         if is_stopped(self):
             return Ok({"submitted": False, "reason": "explicit_stop"})
         port = review_port(self, settings)
+        from .neko_recent_context import refresh_recent
+        from .neko_repeat_admission import record_origin
+        await refresh_recent(self, raw, settings, config.target, port, generation)
+        if generation != self._generation or self._configuration_writes or is_stopped(self):
+            return Ok({"submitted": False, "reason": "configuration_changed_or_stopped"})
         port.configure(config.policy())
         offered = port.offer()
         if not offered["offered"]:
+            record_origin(self, settings, config.target, port, generation, port.state().get("review", {}), origin)
             return Ok({"submitted": False, "reason": offered["reason"]})
         review = offered["review"]
         # Presentation is host-specific; the framework supplies the signal and
@@ -177,6 +186,7 @@ class NekoHeartbeat:
         with self._control_lock:
             path, state, note = commentary_plan(self, settings, config.target, event, port.now(),
                 PresentationSettings.parse(raw).min_interval_seconds, review_id=review["id"])
+            record_origin(self, settings, config.target, port, generation, review, origin, note)
         passive = not note["allowed"] and review["trigger"] == "periodic_review"
         text = ("游戏仍在自主运行。以下内部观测静默留给下次交流，无需回复或口播："
                 + str(review["evidence"]["facts"].get("body", ""))[:100]
@@ -243,7 +253,11 @@ class NekoHeartbeat:
         try:
             context_settings = HostContextSettings.parse(raw)
             if decision == "inspect" and evidence_ref is None and lineage_offset is None and context_settings.enabled:
-                profile = await neko_host_context.character_profile(self, context_settings, config.target)
+                try:
+                    profile = await asyncio.wait_for(neko_host_context.character_profile(
+                        self, context_settings, config.target, fresh=True, timeout=0.35), 0.5)
+                except TimeoutError:
+                    profile = None
             projection = (await shared_context(self, raw, config.target, context, port.state().get("review", {}),
                           existing=HostContextPort(port.directory, now=port.now).read(port.mailbox.intent_revision()))
                           if decision != "inspect" else None)
@@ -252,21 +266,27 @@ class NekoHeartbeat:
         with self._control_lock:
             if generation != self._generation or self._configuration_writes or is_stopped(self):
                 return {"is_error": True, "error": "configuration_changed_or_stopped"}
+            from .neko_repeat_admission import classification
             from .neko_speech import enqueue_speech
+            admission = classification(self, settings, config.target, port, generation) if spoken_text is not None else None
             result = port.decide(heartbeat_id, decision, reason, goal, lineage_offset=lineage_offset,
                 host_context=projection, death_reflection=death_reflection, require_inspection=True, compact=True,
                 evidence_ref=evidence_ref, detail_path=detail_path, detail_offset=detail_offset,
                 before_dispatch=(lambda correlation: enqueue_speech(self, raw, settings, config.target,
-                    port, generation, spoken_text, correlation)) if spoken_text is not None else None)
+                    port, generation, spoken_text, correlation, admission=admission)) if spoken_text is not None else None)
             if decision == "inspect" and result.get("evidence_ref") and evidence_ref is None and lineage_offset is None:
-                if context_settings.enabled:
+                if context_settings.enabled and profile:
                     result["character_binding"] = port.bind_character(heartbeat_id, result["evidence_ref"], profile)
-                else:
+                elif context_settings.enabled:
+                    result["character_binding"] = {"available": False, "reason": "public_profile_unavailable"}
+                elif not context_settings.enabled:
                     HostContextPort(port.directory).invalidate()
         if result.get("is_error") or evidence_ref is not None or lineage_offset is not None:
             return result
         if decision == "inspect":
             result = {**result, "context_request": context_request(port, port.now, enabled=HostContextSettings.parse(raw).enabled)}
+            from .neko_recent_context import historical_hint
+            result["recent_language_hint"] = historical_hint(self, settings, config.target, port, generation)
         from .neko_commentary import load_commentary
         opportunity = port.state().get("review", {}).get("opportunity", {}).get("id", heartbeat_id)
         latest = load_commentary(port.directory / "speech-output.json").get("records", {}).get(opportunity)
