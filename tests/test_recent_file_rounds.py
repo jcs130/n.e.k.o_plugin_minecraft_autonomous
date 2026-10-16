@@ -2,6 +2,7 @@
 
 import copy
 import json
+from types import SimpleNamespace
 
 from agent_mc_autonomy import controller as framework
 from agent_mc_autonomy.ownership import session_lease
@@ -40,7 +41,7 @@ class Body:
 
 def test_two_actual_canonical_rounds_read_updated_file_and_local_originals(plugin_instance, monkeypatch, run_async):
     port, snapshot, raw, settings, clock, save, host, _ = prepare(plugin_instance, monkeypatch)
-    monkeypatch.setattr(framework.time, 'time', lambda: clock[0])
+    monkeypatch.setattr(framework, 'time', SimpleNamespace(**(vars(framework.time) | {'time': lambda: clock[0]})))
     body, captured, published = Body(), [], []
     attach_bus(plugin_instance, [record('First committed wording')])
     def publish(**values):

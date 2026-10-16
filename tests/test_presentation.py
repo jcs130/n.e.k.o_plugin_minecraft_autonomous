@@ -19,7 +19,7 @@ def snapshot(now, health="生命 20/20"):
 
 def configure(plugin_instance, monkeypatch, now, *, enabled=True):
     module = importlib.import_module(plugin_instance.__class__.__module__ + ".neko_presentation")
-    monkeypatch.setattr(module.time, "time", lambda: now)
+    monkeypatch.setattr(module, "time", SimpleNamespace(time=lambda: now))
     monkeypatch.setattr(plugin_instance.config, "dump", AsyncMock(return_value={
         "presentation": {"enabled": enabled, "target": "TestRole"}}))
     monkeypatch.setattr(plugin_instance, "status", AsyncMock(return_value=Ok(snapshot(now))))

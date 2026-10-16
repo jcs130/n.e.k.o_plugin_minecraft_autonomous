@@ -5,6 +5,13 @@ import importlib.util
 from pathlib import Path
 
 
+def test_framework_is_loaded_from_this_plugins_synced_vendor():
+    import agent_mc_autonomy
+
+    root = Path(__file__).resolve().parents[1]
+    assert Path(agent_mc_autonomy.__file__).resolve().is_relative_to(root / "vendor")
+
+
 def test_production_adapter_only_imports_the_public_host_sdk():
     root = Path(__file__).resolve().parents[1]
     paths = [*root.glob("*.py"), *root.glob("autonomy/*.py"), *root.glob("backend/*.py")]

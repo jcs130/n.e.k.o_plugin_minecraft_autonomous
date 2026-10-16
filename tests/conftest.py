@@ -13,6 +13,11 @@ from types import SimpleNamespace
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+VENDOR = ROOT / "vendor"
+if not (VENDOR / "agent_mc_autonomy/__init__.py").is_file():
+    raise pytest.UsageError("Run the real SDK's neko-plugin sync for this plugin before testing.")
+# SDK release checks launch plain pytest, outside the runtime dependency loader.
+sys.path.insert(0, str(VENDOR))
 SDK_ROOTS = [*([Path(os.environ["NEKO_ROOT"])] if os.environ.get("NEKO_ROOT") else []), *ROOT.parents]
 for candidate in SDK_ROOTS:
     if (candidate / "plugin/sdk/plugin/__init__.py").is_file():
