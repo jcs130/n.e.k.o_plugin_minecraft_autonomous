@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.50 — Internal candidate
+
+- Pin reviewed autonomy 0.1.71 at `6cbff24070a2ff4ee224e6d5bf94e82cebe4a914`, with frozen engine-only core .24 from exact `2723d39f8129a6d2f87a773832289888dda1d51c` and unchanged viewer `567d95e6`.
+- Consume optional viewer-state persistence isolation: failed writes preserve the complete prior snapshot; normal publication recovers using current state, and obsolete/disposed attachments cannot publish. Preserve reviewed short-final, death, ownership and no-replay behavior.
+- Retain disabled startup/gameplay defaults, original bundled YUI assets, saved appearance choices and external configuration. Later incoming core source .25 is preserved in canonical history but excluded from this frozen core artifact; its delivery remains required follow-up. Exact hashes distinguish concurrent .24 source labels.
+- Offline checks do not establish natural ACK, playback, busy-file live continuity, all animations or sustained survival. No release tag or Market publication.
+
 ## 0.5.49 — Internal candidate
 
 - Pin reviewed autonomy 0.1.70 at `ec20aef983cdd25fe6e124adf7a95ad2040bca15`, retaining immutable engine-only core .13 and shared viewer `567d95e6`.
