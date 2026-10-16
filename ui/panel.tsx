@@ -85,7 +85,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       <Card title="观战与状态"><Stack gap={10}>
         <Text>在上方「观战与状态」页查看生命、饥饿、原生任务队列、决策耗时与中间结果，也可独立打开。</Text>
         <FileDownload href={`${props.host?.origin || ""}/plugin/minecraft_autonomous/ui/`} label="打开观战与状态" tone="primary" openExternal />
-        <Field label="现代可视化页面地址"><Input value={viewerDraft ?? state.viewer_url ?? ""} placeholder="http://你的观战主机:端口/dungeon/" onChange={v=>setViewerDraft(v)} /></Field>
+        <Field label="现代可视化页面地址"><Input value={viewerDraft ?? state.viewer_url ?? ""} placeholder="http://你的观战主机:端口/3dview/" onChange={v=>setViewerDraft(v)} /></Field>
         <Button disabled={busy || viewerDraft === null} onClick={async()=>{
           const url = viewerDraft ?? ""
           if(await call("save_settings",{settings:{viewer:{url}}})) {
@@ -154,7 +154,8 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>当前认证：{settings.server?.auth === "microsoft" ? "Microsoft 授权账号" : "离线昵称"}。离线昵称不能登录要求正版验证的服务器。Microsoft 授权后的实际角色名以本机账户页为准。</Text>
         {state.operator?.available ? <FileDownload href={state.operator.url} label="打开本机账户页：授权、状态与取消" openExternal /> : <Alert tone="info" message={state.operator?.guidance || "账户接口暂不可用。启用本机账户端口并显式启动匹配的执行器；Java 客户端请使用自身登录入口。"} />}
         <Text>入口属于运行机器的 127.0.0.1，只能在该机器浏览器打开。执行器更换后请刷新入口。开启页面不自动连接；授权码、实际账号与过期状态仅在独立的本机页面显示，不进入观战流。</Text>
-        <Text>Web 观战外观：在「观战与状态」打开画面后选择随包 YUI slim、YSM 或跟随服务器。随包目录可在下方配置；未安装匹配资源时不可用。</Text>
+        <Text>Web 默认外观：{settings.viewer?.default_appearance === "server" ? "跟随服务器" : settings.viewer?.default_appearance === "bundled:yui-ysm" ? "随包原始 YUI YSM" : settings.viewer?.default_appearance === "bundled:yui-slim" ? "随包 YUI slim" : "已配置的其他 Web 模型"}。画面中已保存的明确选择优先；未安装匹配资源时不可用。</Text>
+        <Text>外观选择按服务器和账号隔离，同一账号重连、重生与刷新后保留。旧观战页记录没有服务器来源，升级后请在「人物模型」重新选择一次（也可选跟随服务器）；旧条目保留，不跨服猜测迁移。</Text>
         <Text>这些选择只影响网页显示，不会修改服务器角色皮肤、Microsoft 全局皮肤或其他玩家看到的外观。服务器皮肤取决于服务器与已授权账号；本插件没有通用的服务器皮肤修改接口。</Text>
       </Stack></Card>
       <Card title="安装元数据（只读）"><Stack gap={8}>
@@ -183,6 +184,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             {field("runtime","data_directory","共享数据目录")}{field("backend","directory","已验证后端目录")}{field("viewer","url","外部观战地址")}
             {field("viewer","renderer_directory","共享渲染器目录（可选）")}{field("viewer","catalog_file","版本资源目录 JSON（可选）")}{field("viewer","listen_port","本机观战端口","number")}
             {field("viewer","bundled_appearance_catalog_file","随包 Web 外观目录（YUI slim / YSM，可选）")}
+            <Field label="Web 默认人物模型（只影响观战，下次显式启动生效）"><Select value={draft.viewer.default_appearance ?? "bundled:yui-ysm"} options={[{value:"bundled:yui-ysm",label:"原始 YUI YSM（Neko 默认）"},{value:"bundled:yui-slim",label:"YUI slim 皮肤"},{value:"server",label:"跟随服务器"},...(![undefined,"bundled:yui-ysm","bundled:yui-slim","server"].includes(draft.viewer.default_appearance) ? [{value:draft.viewer.default_appearance,label:"已保存的其他 Web 模型"}] : [])]} onChange={v=>change("viewer","default_appearance",v)} /></Field>
           </Grid>
           <Switch checked={draft.autonomy.enabled} label="允许显式启动自主游玩" onChange={v=>change("autonomy","enabled",v)} />
           <Switch checked={draft.viewer.auto_open !== false} label="进入游戏后自动打开观战界面" onChange={v=>change("viewer","auto_open",v)} />

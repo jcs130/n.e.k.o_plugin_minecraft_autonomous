@@ -38,12 +38,17 @@ capability returns unavailable guidance rather than an invented login result.
 Codes and control tokens stay in the native human page, outside Neko model tools,
 reviews, metrics and public viewer streams.
 
-The panel exposes the bundled appearance catalog path and points to the viewer's
-YUI slim, YSM and server-follow controls. These affect Web presentation. They do
+The panel exposes the bundled appearance catalog path, Web default model and
+the viewer's YUI slim, YSM and server-follow controls. Neko embedded presentation
+defaults to original YUI YSM; a saved browser choice, including server-follow,
+wins. Preferences use the unchanged opaque server/account identity and survive
+reconnect/respawn. Old URL-only preferences remain stored and require one-time
+reselection because their server provenance is unknown. Standalone defaults to
+server-follow and owns its own external runtime settings. These affect Web presentation. They do
 not set a global Microsoft skin or establish what another server/player sees.
 Actual server appearance remains server/account-authoritative; unsupported server
 skin control is reported as unavailable.
 
-Deployments require a core and autonomy package containing this contract. This
-source change deliberately does not repin, rebuild a distribution or restart a
-runtime. Offline tests do not prove real Microsoft login or server-visible skins.
+The 0.5.48 candidate pins reviewed autonomy .69/core .13 and shared viewer
+567d95e6. Updating source or a package does not restart the runtime or prove real
+Microsoft login, server-visible skins or the installed Web scene.

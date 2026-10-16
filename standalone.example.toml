@@ -23,6 +23,7 @@ node = "node"
 directory = "" # Absolute verified backend installation directory.
 
 [viewer]
+default_appearance = "server" # Neutral standalone default. Set bundled:yui-ysm explicitly for local Web presentation.
 renderer_directory = ""
 catalog_file = ""
 listen_port = 28985

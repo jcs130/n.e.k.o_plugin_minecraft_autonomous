@@ -33,6 +33,17 @@ def metadata(plugin):
     return next(meta for meta, _ in collect_llm_tool_methods(plugin) if meta.name == "minecraft_autonomy_review")
 
 
+def test_public_sdk_legacy_lesson_requires_evidence_but_short_reference_and_deferral_remain_valid(plugin_instance):
+    schema = metadata(plugin_instance).parameters
+    base = {"heartbeat_id": "a" * 12, "decision": "continue", "reason": "Recovery"}
+    lesson = {"episode_id": "original-episode", "outcome": "lesson", "lesson": "Inspect resources", "applicability": "After respawn"}
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({**base, "death_reflection": lesson}, schema)
+    jsonschema.validate({**base, "death_reflection": {**lesson, "evidence": "original-episode; actual synchronized inventory"}}, schema)
+    jsonschema.validate({**base, "death_reflection": {key: value for key, value in {**lesson, "evidence_ref": "b" * 24}.items() if key != "episode_id"}}, schema)
+    jsonschema.validate({**base, "death_reflection": {"episode_id": "original-episode", "outcome": "deferred", "reason": "Cause unavailable"}}, schema)
+
+
 @pytest.mark.parametrize("outcome", ["lesson", "deferred"])
 def test_sdk_schema_forwarding_reflection_and_same_brain_speech_order(plugin_instance, run_async, monkeypatch, outcome):
     speech, port, review, episode = setup_death(plugin_instance, monkeypatch)

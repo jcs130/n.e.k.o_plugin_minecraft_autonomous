@@ -208,3 +208,37 @@ def test_bundled_catalog_setting_roundtrips_without_starting_game(plugin_instanc
     state = module(plugin_module, "dashboard").public_config(plugin_module.Settings.parse(patch))
     assert state["viewer"]["bundled_appearance_catalog_file"] == patch["viewer"]["bundled_appearance_catalog_file"]
     assert plugin_instance._worker is None
+
+
+@pytest.mark.parametrize("appearance", ["server", "bundled:yui-ysm", "bundled:yui-slim", "native:misc/3_default_boy:red"])
+def test_web_default_roundtrips_without_start_or_account_change(plugin_instance, plugin_module, run_async, monkeypatch, appearance):
+    raw = {"server": {"host": "fixture.test", "username": "Alice", "version": "1.21.1"}}
+    original_identity = plugin_module.Settings.parse(raw).identity
+    writes = []
+
+    async def update(patch):
+        writes.append(patch)
+        raw.update({key: {**raw.get(key, {}), **value} for key, value in patch.items()})
+
+    monkeypatch.setattr(plugin_instance.config, "dump", AsyncMock(side_effect=lambda: raw))
+    monkeypatch.setattr(plugin_instance.config, "update", update)
+    patch = {"viewer": {"default_appearance": appearance}}
+    result = run_async(plugin_instance.save_settings(patch))
+    assert isinstance(result, Ok) and result.value["running_session_changed"] is False
+    state = run_async(plugin_instance.dashboard())
+    assert state["settings"]["viewer"]["default_appearance"] == appearance
+    assert state["settings"]["server"] == {**raw["server"], "port": 25565, "auth": "offline", "connection_type": "custom"}
+    assert plugin_module.Settings.parse(raw).identity == original_identity
+    assert writes == [patch] and plugin_instance._worker is None
+    assert isinstance(run_async(plugin_instance.save_settings({"viewer": {"default_appearance": 'server"<private>'}})), Err)
+    assert writes == [patch]
+
+
+def test_new_install_dashboard_shows_neko_web_default_and_external_runtime_stays_neutral(plugin_instance, run_async, monkeypatch, tmp_path):
+    embedded = run_async(plugin_instance.dashboard())
+    assert embedded["settings"]["viewer"]["default_appearance"] == "bundled:yui-ysm"
+    assert embedded["settings"]["autonomy"]["enabled"] is False and plugin_instance._worker is None
+    monkeypatch.setattr(plugin_instance.config, "dump", AsyncMock(return_value={"runtime": {"mode": "external", "data_directory": str(tmp_path)}}))
+    external = run_async(plugin_instance.dashboard())
+    assert external["settings"]["viewer"]["default_appearance"] == "server"
+    assert plugin_instance._worker is None

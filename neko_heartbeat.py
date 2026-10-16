@@ -14,6 +14,7 @@ from plugin.sdk.plugin import Err, Ok, llm_tool, plugin_entry, timer_interval, u
 from . import neko_host_context
 from .neko_commentary import commentary_plan, save_commentary
 from .neko_host_context import HostContextSettings, context_request, shared_context
+from .review_diagnostics import review_completion
 
 
 @dataclass(frozen=True)
@@ -209,7 +210,8 @@ class NekoHeartbeat:
                       "evidence": {"type": "string", "maxLength": 600, "description": "引用本次episode_id或source_event.run并说明事实依据。"}, "reason": {"type": "string", "maxLength": 600}},
                       "required": ["outcome"], "additionalProperties": False,
                       "anyOf": [{"required": ["evidence_ref"]}, {"required": ["episode_id"]}],
-                      "oneOf": [{"properties": {"outcome": {"enum": ["lesson"]}}, "required": ["lesson", "applicability"]},
+                      "oneOf": [{"properties": {"outcome": {"enum": ["lesson"]}}, "required": ["lesson", "applicability"],
+                                 "anyOf": [{"required": ["evidence_ref"]}, {"required": ["evidence"]}]},
                                 {"properties": {"outcome": {"enum": ["deferred"]}}, "required": ["reason"]}]},
                   "context": {"type": "object", "properties": {
                       "agent_name": {"type": "string", "maxLength": 80}, "persona": {"type": "string", "maxLength": 800},
@@ -223,6 +225,7 @@ class NekoHeartbeat:
                   "detail_offset": {"type": "integer", "minimum": 0},
                   "lineage_offset": {"type": "integer", "minimum": 0, "description": "inspect时按4条分页查询目标父链原文；平时省略。"}},
                   "required": ["heartbeat_id", "decision"], "additionalProperties": False})
+    @review_completion
     async def minecraft_autonomy_review(self, heartbeat_id, decision, reason="", goal="", lineage_offset=None, context=None, spoken_text=None, death_reflection=None, evidence_ref=None, detail_path=None, detail_offset=0, **_):
         with self._control_lock:
             generation = self._generation

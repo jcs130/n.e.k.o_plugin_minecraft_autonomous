@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.48 — Internal candidate
+
+- Pin reviewed autonomy 0.1.69 at `2b0db6308c93a5b155e17abe0ed5d4708424fe20` and immutable engine-only core 0.5.7-dev.20261016.13. Consume reviewed fresh-connection/current-death recovery and strategic applicability repairs without copying gameplay policy into the adapter.
+- Default Neko embedded Web appearance to original bundled YUI YSM; preserve explicit defaults and saved browser choices, including server-follow. Expose Web-only choice/status and canonical `/3dview/` links. Shared viewer `567d95e6` carries validated defaults and opaque server/account scopes; ambiguous old preferences require one-time reselection, not guessed migration.
+- Require evidence for legacy episode-only lessons while retaining compact evidence references and honest deferral. Log only categorical review entry/completion/exception diagnostics with plugin `call_id`, validated review/command IDs and evidence-reference presence. Preserve original results, exceptions, acknowledgement and speech/action dispatch semantics.
+- Retain public speech-ID/audio flags with playback unverified. Full entity rendering, natural host speech/final-ACK compliance, swimming and sustained survival remain acceptance work. New upstream core .21 is separately scheduled for final integration; this candidate deliberately keeps the reviewed .13 artifact. No release tag or Market publication.
+
 ## 0.5.47 — Internal candidate
 
 - Use autonomy 0.1.67 compact inspection and bounded original evidence pages. Final decisions use a short same-brain contract with optional natural speech and validated compact death references; ordinary Neko finals require a fresh inspection.

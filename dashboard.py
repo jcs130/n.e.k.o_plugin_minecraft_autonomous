@@ -13,6 +13,7 @@ from agent_mc_autonomy.readiness import installation_readiness, validation_feedb
 from agent_mc_autonomy.viewer import viewer_observation
 from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
 
+from .bundled_appearance import default_bundled_appearance_settings
 from .direct_planner import public_planner
 from .model_check import check_model
 from .neko_heartbeat import HeartbeatSettings, is_stopped, review_port
@@ -38,7 +39,7 @@ EDITABLE = {
     "decision_policy": {"enabled","routine_output_tokens","complex_output_tokens","routine_parameters","complex_parameters"},
     "runtime": {"mode", "data_directory"},
     "backend": {"node", "directory"},
-    "viewer": {"url", "auto_open", "renderer_directory", "catalog_file", "bundled_appearance_catalog_file", "listen_port"},
+    "viewer": {"url", "auto_open", "renderer_directory", "catalog_file", "bundled_appearance_catalog_file", "default_appearance", "listen_port"},
     "perception": {"enabled"},
     "presentation": {"enabled", "target", "min_interval_seconds"},
     "heartbeat": {"enabled", "target", "min_interval_seconds", "review_interval_seconds", "idle_presence_seconds"},
@@ -61,6 +62,7 @@ def public_config(settings):
         "viewer": {"url": settings.external_viewer_url, "auto_open": settings.viewer_auto_open,
                    "renderer_directory": settings.viewer_renderer_directory, "catalog_file": settings.viewer_catalog_file,
                    "bundled_appearance_catalog_file": settings.viewer_bundled_appearance_catalog_file,
+                   "default_appearance": settings.viewer_default_appearance,
                    "listen_port": settings.viewer_listen_port},
         "perception": {"enabled": settings.vision_enabled},
         "fast": asdict(settings.fast),
@@ -153,6 +155,8 @@ class Dashboard:
         try:
             raw = await self.config.dump()
             settings = Settings.parse(raw)
+            if settings.runtime_mode == "embedded":
+                settings = Settings.parse(default_bundled_appearance_settings(raw))
             result = unwrap(await self.status(metadata_only=True))
             if result.get("is_error"):
                 return {"error": "configuration_or_observation_unavailable"}

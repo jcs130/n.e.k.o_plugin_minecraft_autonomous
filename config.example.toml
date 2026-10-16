@@ -27,11 +27,13 @@ node = "node"
 directory = "" # Set an absolute verified installation path; version is checked against the pinned manifest.
 
 [viewer]
+default_appearance = "bundled:yui-ysm" # Web only; saved per-server/account browser choices, including server-follow, win.
+bundled_appearance_catalog_file = "" # Empty: use this plugin's original YUI catalog when explicitly starting embedded play.
 renderer_directory = ""
 catalog_file = ""
 listen_port = 28985
 auto_open = true # Open once after an explicitly started session joins the game.
-url = "" # Optional existing viewer, e.g. https://viewer.example.org/dungeon/.
+url = "" # Optional existing viewer, e.g. https://viewer.example.org/3dview/.
 port = 0
 console_port = 0
 

@@ -43,15 +43,19 @@ def test_bundled_original_zip_and_seven_sources_match():
             assert hashlib.sha256(data).hexdigest() == entry["sha256"]
 
 
-def test_embedded_catalog_default_preserves_user_settings_and_does_not_select_appearance(plugin_module):
+def test_embedded_web_defaults_preserve_user_settings_and_disabled_start(plugin_module):
     helper = plugin_module.default_bundled_appearance_settings
     raw = {"viewer": {"enabled": True}, "autonomy": {"enabled": False}}
     selected = helper(raw)
     assert selected["viewer"]["bundled_appearance_catalog_file"] == str(ROOT.resolve() / "catalog.json")
     assert raw == {"viewer": {"enabled": True}, "autonomy": {"enabled": False}}
     assert selected["autonomy"]["enabled"] is False
-    assert "appearance" not in selected["viewer"]
+    assert selected["viewer"]["default_appearance"] == "bundled:yui-ysm"
+    assert plugin_module.Settings.parse(selected).identity == plugin_module.Settings.parse(raw).identity
     explicit = {"viewer": {"bundled_appearance_catalog_file": "explicit/catalog.json"}}
-    assert helper(explicit) is explicit
+    assert helper(explicit)["viewer"] == {**explicit["viewer"], "default_appearance": "bundled:yui-ysm"}
+    for appearance in ("server", "bundled:yui-slim", "native:misc/3_default_boy:red"):
+        configured = {"viewer": {"bundled_appearance_catalog_file": "explicit/catalog.json", "default_appearance": appearance}}
+        assert helper(configured) is configured
     malformed = {"viewer": "invalid"}
     assert helper(malformed) is malformed
