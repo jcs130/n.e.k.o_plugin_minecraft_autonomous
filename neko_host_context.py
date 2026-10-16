@@ -77,7 +77,7 @@ def context_request(port, now, *, enabled=True):
     memory_needed = existing is None or not existing["dynamic"].get("memories_selected")
     return {**metadata(existing), "needed": persona_needed or memory_needed,
             "persona_needed": persona_needed, "memory_needed": memory_needed,
-            "instructions": "同一主脑，先完成最终判断与自然spoken_text。context完全可选；只传你明确选择的当前关注、人格或记忆原id/source/text。公开角色资料不是记忆召回；[]仅表示明确选择为空。"}
+            "instructions": "先提交最终判断。context完全可选，needed仅表示可补充，非完成条件；只传你明确选择的当前关注、人格或记忆原id/source/text。公开角色资料不是记忆召回；[]仅表示明确选择为空。"}
 
 
 

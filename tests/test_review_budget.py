@@ -108,13 +108,16 @@ def test_compact_same_brain_final_contract_and_optional_local_token_budget(plugi
     _, port, review, _ = setup_death(plugin_instance, monkeypatch)
     inspected = run_async(plugin_instance.minecraft_autonomy_review(review["id"], "inspect"))
     assert len(json.dumps(inspected, ensure_ascii=False).encode()) < 14000
+    contract = inspected["completion_contract"]
+    assert contract["required"]["heartbeat_id"] == review["id"]
+    assert contract["death_reflection"]["required"]["evidence_ref"] == inspected["evidence_ref"]
     reflection = {"evidence_ref": inspected["evidence_ref"], "outcome": outcome}
     if outcome == "lesson":
         reflection.update(lesson="复活后重查资源", applicability="重返旧路线前")
     else:
         reflection["reason"] = "死因不明，暂不推断教训"
     payload = {"heartbeat_id": review["id"], "decision": "continue", "reason": "重生后背包为空",
-               "spoken_text": "本喵想先在附近找点木头。", "death_reflection": reflection}
+               "death_reflection": reflection}
     jsonschema.validate(payload, metadata(plugin_instance).parameters)
     # Optional local tokenizer; no model/provider calls. The persisted regression
     # still tests the actual SDK schema and final path when this is not installed.
@@ -159,3 +162,21 @@ def test_public_speech_metadata_is_bounded_and_queue_is_not_playback(plugin_inst
     assert {key: receipt[key] for key in ("speech_id", "audio_queued", "audio_completed") if key in receipt} == expected
     assert receipt["playback_verified"] is False  # Endpoint report is not independent playback proof.
     assert "not stored" not in json.dumps(receipt) and "附近真安静" not in json.dumps(receipt, ensure_ascii=False)
+
+
+def test_sdk_minimal_ordinary_final_and_control_only_cues(plugin_instance, monkeypatch, run_async):
+    port, snapshot, _ = setup(plugin_instance, monkeypatch)
+    port.observe(snapshot)
+    rid = port.offer()["review"]["id"]
+    inspected = run_async(plugin_instance.minecraft_autonomy_review(rid, "inspect"))
+    assert "先提交最终判断" in inspected["speech_contract"]
+    assert "未排入则用正常最终回复" in inspected["speech_contract"]
+    assert "非完成条件" in inspected["context_request"]["instructions"]
+    assert set(inspected["completion_contract"]["required"]) == {"heartbeat_id", "decision", "reason"}
+    payload = {"heartbeat_id": rid, "decision": "insert", "reason": "口粮为空，先补充食物", "goal": "在附近寻找可采集的食物"}
+    jsonschema.validate(payload, metadata(plugin_instance).parameters)
+    result = run_async(plugin_instance.minecraft_autonomy_review(**payload))
+    assert result["acknowledged"] and result["delivery"] == "queued" and not result["verified"]
+    assert "speech" not in result and not getattr(plugin_instance, "_speech_output_tasks", None)
+    assert "已排入语音，无需另写口播" in result["commentary"]["instruction"]
+    assert "例：" not in metadata(plugin_instance).description
