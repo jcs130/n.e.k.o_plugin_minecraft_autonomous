@@ -35,7 +35,7 @@ YUI 普通 slim 皮肤和原始 YSM 模型随插件附带。Neko 内嵌运行的
 
 ## 完整离线包安装
 
-已有 Neko 的普通用户使用完整离线 ZIP，无需安装 Git、Python builder、SDK、npm 或手动准备 vendor。候选包由维护者本地交付；此仓库尚未发布公开 Release 下载链接。
+已有 Neko 的普通用户使用完整离线 ZIP，无需安装 Git、Python builder、SDK、npm 或手动准备 vendor。下载以 [仓库 Releases](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases) 实际列出的同版附件或维护者提供的文件为准，请核对版本和校验值。
 
 1. 将完整 ZIP 解压到任意目录，双击最外层 `prepare.cmd`，等待准备成功。它只校验并复制运行资源到当前用户的版本化本地缓存，不启动游戏、模型或 Neko 服务。
 2. 打开 **Neko 插件中心 → 导入**，选择同目录的 `minecraft_autonomous.neko-plugin`，完成安装或升级。
