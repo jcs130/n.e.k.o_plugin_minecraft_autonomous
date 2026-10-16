@@ -42,14 +42,12 @@ def test_dashboard_metadata_does_not_hash_backend(plugin_instance, plugin_module
     ({"operator": {"port": 80}}, "operator.port"),
     ({"viewer": {"renderer_directory": "SECRET"}}, "viewer.renderer_directory"),
 ])
-def test_hosted_rejection_survives_real_host_serialization(plugin_instance, run_async, monkeypatch, patch, field):
+def test_hosted_rejection_survives_real_host_serialization(plugin_instance, run_async, monkeypatch, patch, field, sdk_root):
     import ast
-    import os
-    from pathlib import Path
 
     # Execute the actual read-only host result-normalization branch without
     # starting its child process, service, watchdog or network transport.
-    host_source = Path(os.environ["NEKO_ROOT"]) / "plugin/core/host.py"
+    host_source = sdk_root / "plugin/core/host.py"
     tree = ast.parse(host_source.read_text(encoding="utf-8"))
     branches = [node for node in ast.walk(tree) if isinstance(node, ast.If)
                 and ast.unparse(node.test) == "hasattr(result, 'is_ok') and callable(result.is_ok)"

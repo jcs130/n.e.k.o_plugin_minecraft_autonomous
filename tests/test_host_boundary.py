@@ -5,6 +5,12 @@ import importlib.util
 from pathlib import Path
 
 
+def test_discovered_sdk_root_matches_the_real_loaded_public_api(sdk_root):
+    import plugin.sdk.plugin
+
+    assert Path(plugin.sdk.plugin.__file__).resolve().parents[3] == sdk_root
+
+
 def test_framework_is_loaded_from_this_plugins_synced_vendor():
     import agent_mc_autonomy
 

@@ -21,10 +21,16 @@ sys.path.insert(0, str(VENDOR))
 SDK_ROOTS = [*([Path(os.environ["NEKO_ROOT"])] if os.environ.get("NEKO_ROOT") else []), *ROOT.parents]
 for candidate in SDK_ROOTS:
     if (candidate / "plugin/sdk/plugin/__init__.py").is_file():
-        sys.path.insert(0, str(candidate))
+        SDK_ROOT = candidate.resolve()
+        sys.path.insert(0, str(SDK_ROOT))
         break
 else:
     raise pytest.UsageError("Set NEKO_ROOT to a N.E.K.O source checkout containing plugin/sdk/plugin.")
+
+
+@pytest.fixture
+def sdk_root():
+    return SDK_ROOT
 
 
 @pytest.fixture

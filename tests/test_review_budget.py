@@ -134,7 +134,14 @@ def test_compact_same_brain_final_contract_and_optional_local_token_budget(plugi
     except ImportError:
         pass
     else:
-        assert len(tiktoken.get_encoding("o200k_base").encode(json.dumps(payload, ensure_ascii=False))) < 260
+        # A real byte-only encoder gives a conservative upper bound for o200k's
+        # merged tokens, without fetching its vocabulary on a cold cache.
+        encoder = tiktoken.Encoding(name="unit_utf8_upper_bound", pat_str=r"(?s).",
+                                    mergeable_ranks={bytes([byte]): byte for byte in range(256)}, special_tokens={})
+        text = json.dumps(payload, ensure_ascii=False)
+        tokens = encoder.encode(text)
+        assert len(tokens) == len(text.encode("utf-8"))
+        assert len(tokens) < 260
     accepted = run_async(plugin_instance.minecraft_autonomy_review(**payload))
     assert accepted["acknowledged"] and not accepted["reflection_pending"]
     assert port.state()["review"]["reflection"]["outcome"] == outcome
