@@ -169,8 +169,8 @@ def test_sdk_minimal_ordinary_final_and_control_only_cues(plugin_instance, monke
     port.observe(snapshot)
     rid = port.offer()["review"]["id"]
     inspected = run_async(plugin_instance.minecraft_autonomy_review(rid, "inspect"))
-    assert "先提交最终判断" in inspected["speech_contract"]
-    assert "未排入则用正常最终回复" in inspected["speech_contract"]
+    assert "先提交最终判断" in inspected["speech_contract"]["instruction"]
+    assert "未排入则用正常最终回复" in inspected["speech_contract"]["instruction"]
     assert "非完成条件" in inspected["context_request"]["instructions"]
     assert set(inspected["completion_contract"]["required"]) == {"heartbeat_id", "decision", "reason"}
     payload = {"heartbeat_id": rid, "decision": "insert", "reason": "口粮为空，先补充食物", "goal": "在附近寻找可采集的食物"}
@@ -178,5 +178,6 @@ def test_sdk_minimal_ordinary_final_and_control_only_cues(plugin_instance, monke
     result = run_async(plugin_instance.minecraft_autonomy_review(**payload))
     assert result["acknowledged"] and result["delivery"] == "queued" and not result["verified"]
     assert "speech" not in result and not getattr(plugin_instance, "_speech_output_tasks", None)
-    assert "已排入语音，无需另写口播" in result["commentary"]["instruction"]
+    assert result["speech_contract"]["status"] == "absent"
+    assert "未排入则用正常最终回复" in result["speech_contract"]["instruction"]
     assert "例：" not in metadata(plugin_instance).description

@@ -12,7 +12,7 @@ from agent_mc_autonomy.review import ReviewPolicy, ReviewPort, review_observatio
 from plugin.sdk.plugin import Err, Ok, llm_tool, plugin_entry, timer_interval, ui
 
 from . import neko_host_context
-from .neko_commentary import commentary_plan, save_commentary
+from .neko_commentary import commentary_delivery, commentary_plan, save_commentary, speaking_skill, speech_contract
 from .neko_host_context import HostContextSettings, context_request, shared_context
 from .review_diagnostics import review_completion
 
@@ -84,6 +84,8 @@ def heartbeat_text(review, commentary=None):
                     {"archive": evidence.get("fact_originals", {}).get("bodyRestriction")})
     elif body:
         selected = (body.get("type", "minecraft.body"), body.get("phase", "observed"), body.get("text", ""), body.get("original_event") or {})
+    elif outcome:
+        selected = (outcome.get("tool", ""), outcome.get("phase", "observed"), outcome.get("receipt", ""), outcome.get("original_event") or {})
     cue = ""
     if selected:
         origin, phase, problem, reference = selected
@@ -96,9 +98,11 @@ def heartbeat_text(review, commentary=None):
         speech = "轻松聊一句自己的好奇、心情或小打算；有兴致也可轻哼原创小调。"
     if review.get("attempts", 0) > 1:
         speech = "延续刚才的话题，补齐策略判断。"
+    elif commentary is not None and not commentary["allowed"]:
+        speech = "延续当前交流，不强行另起口播。"
     return ("Minecraft " + review["id"] + "。先minecraft_autonomy_review inspect，再continue/insert/revise完成判断。"
-            + "控制指令不口播；inspect后先按completion_contract提交最短完整判断，再" + speech
-            + "spoken_text可选；已排入语音则不重复，未排入则用正常最终回复说。"
+            + "按completion_contract先提交最短判断；表达沿用工具内边玩边聊技能。" + speech
+            + "spoken_text可选，按语音回执接话；控制指令不口播。"
             + cue + intent + "；" + readings
             + f"；连续查询{reads}次。" + (f"未行动回复{evidence['unactioned_replies']}次。" if evidence.get("unactioned_replies") else ""))
 
@@ -199,7 +203,7 @@ class NekoHeartbeat:
               "continue保留工作；insert新增阶段；仅stage_delivery.can_revise时revise；后二者需goal。用户目标优先，受理不等于完成。"
               "spoken_text可放一句自然打算或感想，不填控制文本。待复盘死亡必须附death_reflection：复制evidence_ref，outcome=lesson及lesson/applicability，或deferred及真实reason。"
               "inspect后按completion_contract先提交最短完整判断，无需解释工具过程。context/记忆召回可选；公开人格自动绑定。"
-              "原始证据按evidence_ref/detail_path/detail_offset查询，历史详情不代替新鲜inspect。",
+              "原始证据按evidence_ref/detail_path/detail_offset查询，历史详情不代替新鲜inspect。\n\n" + speaking_skill(),
               parameters={"type": "object", "properties": {
                   "heartbeat_id": {"type": "string"}, "decision": {"enum": ["inspect", "continue", "insert", "revise"]},
                   "reason": {"type": "string", "maxLength": 600}, "goal": {"type": "string", "maxLength": 2000},
@@ -262,11 +266,19 @@ class NekoHeartbeat:
         if result.get("is_error") or evidence_ref is not None or lineage_offset is not None:
             return result
         if decision == "inspect":
-            result = {**result, "context_request": context_request(port, port.now, enabled=HostContextSettings.parse(raw).enabled),
-                      "speech_contract": "控制指令不口播。先提交最终判断；spoken_text可选，填写时只放自己想说的一句中文。已排入语音则不再复述；未排入则用正常最终回复自然说一句。无需再报状态、解释流程或念人格资料。"}
-            from .neko_commentary import load_commentary
-            opportunity = port.state().get("review", {}).get("opportunity", {}).get("id", heartbeat_id)
-            result["speech_delivery"] = load_commentary(port.directory / "speech-output.json").get("records", {}).get(opportunity)
+            result = {**result, "context_request": context_request(port, port.now, enabled=HostContextSettings.parse(raw).enabled)}
+        from .neko_commentary import load_commentary
+        opportunity = port.state().get("review", {}).get("opportunity", {}).get("id", heartbeat_id)
+        latest = load_commentary(port.directory / "speech-output.json").get("records", {}).get(opportunity)
+        # A durable reservation is deliberately unknown before the asynchronous
+        # send; the current decision can additionally know it scheduled a task.
+        if (latest and latest.get("status") == "reserved_unknown" and result.get("speech", {}).get("status") == "enqueued"
+                and getattr(self, "_speech_output_tasks", None)):
+            latest = result["speech"]
+        if decision == "inspect" or latest:
+            result["speech_delivery"] = latest
+        receipt = latest or result.get("speech")
+        result["speech_contract"] = speech_contract(receipt)
         from .neko_presentation import PresentationSettings
         review = port.state().get("review", {})
         event = commentary_observation({**review.get("evidence", {}), "session": review.get("session", "")}, port.now())
@@ -281,4 +293,4 @@ class NekoHeartbeat:
             if result.get("acknowledged") and note["allowed"]:
                 # This records a speaking opportunity, never synthesis/playback.
                 save_commentary(path, {**state, "submitted_at": port.now(), "playback_verified": False})
-        return {**result, "commentary": {"allowed": note["allowed"], "instruction": "先完成最终工具判断，再用自己的性格自然聊一句；若已排入语音，无需另写口播，不复述。控制指令和事实分析留在工具内。"}}
+        return {**result, "commentary": commentary_delivery(note, include_evidence=decision == "inspect")}

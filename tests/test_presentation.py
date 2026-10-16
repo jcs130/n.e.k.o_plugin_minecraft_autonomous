@@ -224,7 +224,7 @@ def test_death_speaking_opportunity_uses_real_episode_once_and_loads_bundled_ski
     assert note["allowed"] and note["urgent"]
     delivered = mod.commentary_delivery(note)
     assert delivered["本轮重点证据"]["death_episode"]["source_event"]["cursor"] == 7
-    assert "沿用自己的人格" in delivered["表达技能"]
+    assert delivered["skill_source"] == "registered_tool_description" and "表达技能" not in delivered
     mod.save_commentary(path, {**state, "submitted_at": 10001})
     _, _, repeated = mod.commentary_plan(plugin_instance, settings, "TestRole", event, 10002, 90, review_id="later-review")
     assert not repeated["allowed"]

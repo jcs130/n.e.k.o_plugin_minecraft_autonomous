@@ -69,7 +69,8 @@ def test_delivered_pending_review_refreshes_commentary_for_new_material_episode(
     evidence_key = "native_outcomes" if phase == "blocked" else "body_events"
     assert detail[evidence_key][-1]["phase"] == phase
     acknowledged = run_async(plugin_instance.minecraft_autonomy_review(pending_id, "continue", "use the new episode"))
-    assert acknowledged["commentary"] == note and not note.get("playback_verified", False)
+    assert acknowledged["commentary"] == {key: value for key, value in note.items() if key != "本轮重点证据"}
+    assert not note.get("playback_verified", False)
     port.now = lambda: 10341
     snapshot["updated_at"] = datetime.fromtimestamp(10341, timezone.utc).isoformat()
     (port.directory / "status.json").write_text(json.dumps(snapshot), encoding="utf-8")
@@ -98,7 +99,7 @@ def test_resolved_failure_does_not_override_current_preview(plugin_module, body_
     elif body_phase:
         assert "minecraft.body/" + body_phase in text and "current " + body_phase in text and "r:13" in text
     else:
-        assert "useful work" in text
+        assert "known task completed" in text and "r:12" in text
 
 
 @pytest.mark.parametrize("runtime_error", [None, "outcome_unknown"])

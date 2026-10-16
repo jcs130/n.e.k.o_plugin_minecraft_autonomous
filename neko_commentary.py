@@ -6,6 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from agent_mc_autonomy.commentary import commentary_changes
+from agent_mc_autonomy.review_evidence import preview
 
 SPEAK = ("你正亲自在玩Minecraft，用自己的角色性格用中文边玩边聊1—2句。"
          "分享自然反应、好奇、心情或小打算；平静时也能轻松闲聊，不作汇报。"
@@ -20,11 +21,46 @@ def speaking_skill():
     return Path(__file__).with_name("skills").joinpath("gameplay-speaking.md").read_text(encoding="utf-8")
 
 
-def commentary_delivery(note):
-    """Load the bundled speaking skill into the existing main-brain tool turn."""
-    return {"allowed": note["allowed"], "instruction": note["instruction"],
-            "表达技能": speaking_skill(),
-            **({"本轮重点证据": note["evidence"]} if note["allowed"] else {})}
+def commentary_delivery(note, *, include_evidence=True):
+    """Dynamic presentation only; the skill lives in the registered tool description."""
+    delivery = {"allowed": note["allowed"],
+                "instruction": "沿用工具内边玩边聊技能，可分享一个感受或打算。" if note["allowed"] else QUIET,
+                "skill_source": "registered_tool_description"}
+    if not include_evidence or not note["allowed"]:
+        return delivery
+    evidence = note["evidence"]
+    feedback = evidence.get("body_feedback") or {}
+    # Select one actual conversational anchor, not another strategy report.
+    # Detailed validation and originals remain in inspect/detail queries.
+    episode = evidence.get("death_episode")
+    outcome = next((row for row in reversed(feedback.get("native_outcomes", [])) if not row.get("observation_only")), {})
+    body = next(iter(reversed(feedback.get("body_events", []))), {})
+    if episode:
+        selected = {"death_episode": {key: episode[key] for key in ("id", "source_event") if key in episode}}
+    elif evidence.get("progress"):
+        selected = {"progress": evidence["progress"], "task_outcome": evidence.get("task_outcome")}
+    elif outcome:
+        selected = {"native_outcome": {key: outcome[key] for key in ("phase", "receipt", "original_event", "goal_verified") if key in outcome}}
+    elif body:
+        selected = {"body_event": {key: body[key] for key in ("type", "phase", "text", "original_event") if key in body}}
+    else:
+        selected = {}  # Ordinary curiosity needs no invented event or filler.
+    if selected:
+        delivery["本轮重点证据"] = preview(selected, 600)
+    return delivery
+
+
+def speech_contract(receipt):
+    """Interpret explicit output receipts without implying audible playback."""
+    status = (receipt or {}).get("status", "absent")
+    prefix = "控制指令不口播。先提交最终判断；spoken_text可选。"
+    if status in {"enqueued", "accepted"}:
+        guidance = "已排入语音，无需另写口播，不复述那一句；受理不等于已播放。"
+    elif status in {"unknown", "reserved_unknown"}:
+        guidance = "语音投递未知，不重投或复述那一句，也不声称已播放；可推进话题。"
+    else:
+        guidance = "未排入则用正常最终回复自然说一句；busy/rejected/disabled或缺省不表示已播放。"
+    return {"status": status, "playback_verified": False, "instruction": prefix + guidance + "不以静默或No commentary替代实质判断。"}
 
 
 def commentary_plan(plugin, settings, target, event, now, interval, *, review_id="", manual=False):
