@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.8 — Development candidate
+
+- Consume native observed-effect evidence in the independent autonomy framework.
+  Accepted actions and build previews no longer erase read history; real changes
+  can reset it. Repeated identical ineffective work receives a bounded recovery
+  response and the failed skill's native help instead of another body dispatch.
+- Preserve original receipts and unknown-delivery fences. Core/viewer pins and
+  Neko main/SDK remain unchanged; live survival still requires separate acceptance.
+
 ## 0.6.7 — Development candidate
 
 - Use original compass frames from observed own-player state and original inactive crossbow GUI textures.
