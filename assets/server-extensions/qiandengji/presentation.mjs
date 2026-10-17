@@ -1,0 +1,104 @@
+/** Passive, host-neutral Qiandengji presentation for the caller's own bot.
+ * No planner, task queue, chat commands, login or second Minecraft connection.
+ * Ordinary servers stay inactive. State expires and is cleared on disconnect.
+ */
+const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const ID=/^[a-z0-9_:.-]{1,80}$/;
+const finite=(v,lo,hi)=>typeof v==='number'&&Number.isFinite(v)&&v>=lo&&v<=hi;
+const record=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
+const text=(v,n)=>typeof v==='string'&&v.length>0&&v.length<=n?v:null;
+const channels=['mcviewer:state','mcagent:state'];
+function skills(raw, observedAt, channel) {
+  if(!record(raw)||raw.schemaVersion!==1||!Array.isArray(raw.skills??[])||!Array.isArray(raw.abilities??[])
+    ||(raw.skills?.length??0)>64||(raw.abilities?.length??0)>64)return null;
+  let mana=null;
+  if(raw.mana!=null){if(!record(raw.mana)||!finite(raw.mana.current,0,1e6)||!finite(raw.mana.max,1,1e6)||raw.mana.current>raw.mana.max)return null;
+    mana={current:raw.mana.current,max:raw.mana.max};}
+  const rows=[]; for(const row of raw.skills??[]){
+    if(!record(row)||!ID.test(row.id??'')||!text(row.name,80)||!finite(row.level,0,1e5))return null;
+    rows.push({id:row.id,name:row.name,level:row.level,xp:finite(row.xp,0,1e9)?row.xp:null,requiredXp:finite(row.requiredXp,0,1e9)?row.requiredXp:null});
+  }
+  const abilities=[];for(const row of raw.abilities??[]){
+    if(!record(row)||!ID.test(row.id??'')||!text(row.name,80))return null;
+    abilities.push({id:row.id,name:row.name,level:finite(row.level,0,1e5)?row.level:null,
+      manaCost:finite(row.manaCost,0,1e6)?row.manaCost:null,
+      cooldownMs:channel==='mcviewer:state'?null:finite(row.cooldownMs,0,864e5)?row.cooldownMs:null,
+      ...(channel==='mcviewer:state'?{cooldownRemainingMs:finite(row.cooldownMs,0,864e5)?row.cooldownMs:null}:{}),
+      ...(text(row.icon,128)&&/^[a-z0-9_:./-]+$/.test(row.icon)?{icon:row.icon}:{})});
+  }
+  return {schemaVersion:1,mana,skills:rows,abilities,source:'plugin',observedAt};
+}
+function vitals(raw, playerUuid) {
+  if(!record(raw)||!finite(raw.health,0,1024)||!finite(raw.maxHealth,1,1024)||raw.health>raw.maxHealth)return null;
+  const result={playerUuid,health:raw.health,maxHealth:raw.maxHealth};
+  for(const [key,max] of [['food',20],['armor',1024],['absorption',1024],['oxygen',20],['experienceLevel',2147483647],['experienceProgress',1]])
+    if(finite(raw[key],0,max))result[key]=raw[key];
+  if(typeof raw.inWater==='boolean')result.inWater=raw.inWater;
+  return result;
+}
+export function createPresentationObserver(bot,{now=Date.now,staleMs=12_000,autoDetect=true}={}) {
+  if(bot.version!=='1.21.1')throw Error('QIANDENGJI_PRESENTATION_VERSION_MISMATCH');
+  let current=null,closed=false,ended=false,serverSession=null,lastSequence=0,detected=!autoDetect;
+  const registered=[];
+  const own=()=>{const value=bot._client?.uuid;return UUID.test(value??'')?value.toLowerCase():null;};
+  const bind=(value,source,at)=>{current={...value,profile:'qiandengji_1.21.1',source,receivedAt:at,entityId:bot.entity?.id};};
+  const payload=packet=>{
+    if(closed||ended||!detected||!channels.includes(packet?.channel)||!Buffer.isBuffer(packet.data)||packet.data.length>65536)return;
+    let raw;try{raw=JSON.parse(packet.data.toString('utf8'));}catch{return;}
+    const id=own(),session=raw?.viewerSession;
+    // The same socket is insufficient when a server can send spectator data.
+    if(!id||!record(session)||session.mode!=='self'||session.attached!==true||
+      session.recipientUuid?.toLowerCase()!==id||session.playerUuid?.toLowerCase()!==id||session.entityId!==bot.entity?.id)return;
+    const at=now(),state=skills(raw,at,packet.channel),self=vitals(raw.vitals,id);
+    if(!state||!self)return;
+    bind({schemaVersion:1,playerUuid:id,self,skills:state},'qiandengji_same_player_plugin_state',at);
+  };
+  const message=(value,position,sender)=>{
+    if(closed||ended||position!=='system'||sender!=null)return;
+    let line;try{line=value.toString();}catch{return;}
+    if(typeof line!=='string'||Buffer.byteLength(line)>32768)return;
+    const match=/^(?:\[MC 系统\] )?(MC_GUIDE|MC_STATUS) (\{.*\})$/s.exec(line);if(!match)return;
+    let raw;try{raw=JSON.parse(match[2]);}catch{return;}
+    const id=own(),at=now();
+    if(!id||!record(raw)||raw.schemaVersion!==1||raw.scope!=='self'||raw.readOnly!==true||
+      raw.playerUuid?.toLowerCase()!==id||!UUID.test(raw.sessionId??'')||!Number.isSafeInteger(raw.sequence)||raw.sequence<1||
+      !finite(raw.observedAt,0,Number.MAX_SAFE_INTEGER)||Math.abs(at-raw.observedAt)>30000)return;
+    if(match[1]==='MC_GUIDE'){
+      if(raw.kind!=='guidance'||!text(raw.guideVersion,80)||raw.stateCommand!=='/mycli status'||raw.capabilitiesCommand!=='/mycli capabilities')return;
+      if(serverSession===raw.sessionId&&raw.sequence<=lastSequence)return;
+      serverSession=raw.sessionId;lastSequence=raw.sequence;detected=true;if(bot._client.state==='play')register();return;
+    }
+    if(raw.kind!=='state'||raw.sessionId!==serverSession||raw.sequence<=lastSequence)return;
+    const self=vitals(raw,id);if(!self)return;
+    let mana=null;if(raw.mana!=null||raw.maxMana!=null){
+      if(!finite(raw.mana,0,1e6)||!finite(raw.maxMana,1,1e6)||raw.mana>raw.maxMana)return;
+      mana={current:raw.mana,max:raw.maxMana};}
+    const prepared=raw.profession?.available===true&&Array.isArray(raw.profession.prepared)?raw.profession.prepared:[];
+    if(prepared.length>64||prepared.some(id=>typeof id!=='string'||!ID.test(id)))return;
+    lastSequence=raw.sequence;
+    // A fresh richer plugin reading takes precedence; guide text never creates
+    // fake levels, cooldowns, costs or permission to execute a spell.
+    if(current?.source==='qiandengji_same_player_plugin_state'&&at-current.receivedAt<=staleMs)return;
+    bind({schemaVersion:1,playerUuid:id,self,skills:{schemaVersion:1,mana,skills:[],
+      abilities:prepared.map(id=>({id,name:id,level:null,cooldownMs:null,manaCost:null})),source:'plugin',observedAt:raw.observedAt}},
+      'qiandengji_bound_system_status',at);
+  };
+  function clear(){current=null;serverSession=null;lastSequence=0;}
+  const end=()=>{ended=true;clear();};
+  bot._client.on('custom_payload',payload);bot.on('message',message);bot.on('end',end);bot.on('death',clear);
+  // Register an existing server protocol only. This sends channel metadata,
+  // never a gameplay command. Paper then sends fresh own-player state itself.
+  const register=()=>{if(closed||!detected||registered.length||typeof bot._client.registerChannel!=='function')return;
+    for(const channel of channels){bot._client.registerChannel(channel,['restBuffer'],true);registered.push(channel);}};
+  if(bot._client.state==='play')register();else bot.once('login',register);
+  const snapshot=()=>{
+    if(closed||ended||!current||current.playerUuid!==own()||current.entityId!==bot.entity?.id||now()-current.receivedAt<0||now()-current.receivedAt>staleMs)return null;
+    return structuredClone(current);
+  };
+  return {snapshot,capabilities:()=>{const value=snapshot();return {active:!!value,id:'qiandengji',minecraftVersion:bot.version,
+    source:value?.source??null,observedAt:value?.skills.observedAt??null,skills:!!value?.skills,mana:!!value?.skills.mana};},
+    close(){if(closed)return;closed=true;clear();bot._client.off('custom_payload',payload);bot.off('message',message);bot.off('end',end);bot.off('death',clear);bot.off('login',register);
+      // Do not unregister a protocol that another explicit extension may share.
+      // The connection owns registration; this observer owns only its listeners.
+    }};
+}

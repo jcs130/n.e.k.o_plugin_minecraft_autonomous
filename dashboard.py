@@ -13,6 +13,7 @@ from agent_mc_autonomy.readiness import installation_readiness, validation_feedb
 from agent_mc_autonomy.viewer import viewer_observation
 from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
 
+from .bundled_extension import bundled_extension_status, extension_mode
 from .direct_planner import public_planner
 from .model_check import check_model
 from .neko_heartbeat import HeartbeatSettings, is_stopped, review_port
@@ -44,6 +45,8 @@ EDITABLE = {
     "presentation": {"enabled", "target", "min_interval_seconds"},
     "heartbeat": {"enabled", "target", "min_interval_seconds", "review_interval_seconds", "idle_presence_seconds"},
     "speech_output": {"enabled", "base_url"},
+    "extension_pack": {"mode"},
+    "server_extension": {"presentation_module", "presentation_sha256"},
     "host_context": {"enabled", "character_api_url"},
     "fast": {"mode", "endpoint", "model", "api_key_env", "min_confidence"},
     "memory": {"mode", "endpoint", "model", "api_key_env", "timeout_ms", "provider", "library_id", "project_id", "scope_id", "search_mode", "learning_enabled", "read_preference"},
@@ -66,6 +69,8 @@ def public_config(settings):
                    "default_appearance": settings.viewer_default_appearance,
                    "listen_port": settings.viewer_listen_port},
         "perception": {"enabled": settings.vision_enabled},
+        "server_extension": {"presentation_module": getattr(settings, "server_presentation_module", ""),
+                             "presentation_sha256": getattr(settings, "server_presentation_sha256", "")},
         "fast": asdict(settings.fast),
         "memory": asdict(settings.memory),
     }
@@ -181,7 +186,9 @@ class Dashboard:
             heartbeat_state["delivery_state"] = ("final_decision" if (review.get("result") or {}).get("acknowledged") else "inspected_awaiting_final" if review.get("inspected_at") else "notification_" + str(review.get("notification_status", "not_delivered")))
             heartbeat_state["next"] = "主脑尚未完成最终判断；重新检查当前心跳后提交简短判断。" if heartbeat_state["delivery_failure"] else None
             return {"settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
-                                 "heartbeat": asdict(heartbeat), "host_context": asdict(HostContextSettings.parse(raw)), "planner": public_planner(raw.get("planner", {}))}, "heartbeat": heartbeat_state, "runtime": state, "audit": audit_sample(directory),
+                                 "heartbeat": asdict(heartbeat), "host_context": asdict(HostContextSettings.parse(raw)), "planner": public_planner(raw.get("planner", {})),
+                                 "extension_pack": {"mode": extension_mode(raw)}}, "heartbeat": heartbeat_state, "runtime": state, "audit": audit_sample(directory),
+                    "server_pack": {k:v for k,v in bundled_extension_status(raw).items() if k not in {"module", "sha256"}},
                     "model_slots": ["decision", "vision", "fast"],
                     "installation": {**installation_readiness(settings, self.cache_path()), "prepared_runtime": prepared},
                     "operator": operator_link(settings, settings.data_root(self.data_path())) if operator_link else OPERATOR_UNAVAILABLE,
@@ -204,6 +211,7 @@ class Dashboard:
             original = await self.config.dump()
             merged = {**original, **{key: {**original.get(key, {}), **value} for key, value in settings.items()}}
             parsed = Settings.parse(merged)
+            extension_mode(merged)
             direct = planner_settings(merged.get("planner", {}))
             if direct:
                 direct.validate_budget(parsed.max_output_tokens)
@@ -266,6 +274,61 @@ class Dashboard:
                   input_schema={"type": "object", "properties": {"goal": {"type": "string", "minLength": 1, "maxLength": 4000}}, "required": ["goal"]})
     async def panel_start(self, goal: str, **_):
         return await self.start(goal=goal)
+
+    @ui.action(label="保存并一键启动", tone="primary")
+    @plugin_entry(id="quick_start", name="保存连接并显式启动自主游玩", kind="service",
+                  description="保存常用连接，启用本次自主游玩和主脑参与，再通过正常启动流程运行。不会接管正在运行的外部执行器或自动重启Neko。",
+                  input_schema={"type": "object", "properties": {"connection": {"type": "object"},
+                      "goal": {"type": "string", "maxLength": 4000}, "use_neko_model": {"type": "boolean"},
+                      "appearance": {"type": "string"}, "extension_mode": {"enum": ["auto", "none", "custom"]},
+                      "character": {"type": "string", "maxLength": 80}}, "required": ["connection"]})
+    async def quick_start(self, connection: dict, goal: str = "", use_neko_model: bool = True,
+                          appearance: str | None = None, extension_mode: str | None = None, character: str | None = None, **_):
+        from agent_mc_autonomy.mailbox import Mailbox
+        from agent_mc_autonomy.ownership import session_is_owned
+        from agent_mc_autonomy.recovery import require_no_pending_acknowledgement
+
+        if (not isinstance(connection, dict) or not connection or set(connection) - EDITABLE["server"]
+                or not isinstance(goal, str) or len(goal) > 4000 or type(use_neko_model) is not bool):
+            return Err({"code": "invalid_quick_start", "message": "请填写有效连接；不要在连接字段中传入密码或其它控制参数。"})
+        try:
+            raw = await self.config.dump()
+            current = Settings.parse(raw)
+            directory = current.data_root(self.data_path()) / "sessions" / current.identity / "host"
+            if session_is_owned(directory) or self._worker and self._worker.snapshot().get("worker_alive"):
+                return Err({"code": "runtime_already_owned", "message": "当前角色正在游玩。请先停止并等动作排空，再修改连接或启动。"})
+            if directory.exists():
+                Mailbox(directory).check_uncertain()
+                require_no_pending_acknowledgement(directory)
+            desired = Settings.parse({**raw, "server": {**raw.get("server", {}), **connection}})
+            target = desired.data_root(self.data_path()) / "sessions" / desired.identity / "host"
+            if target != directory:
+                if session_is_owned(target):
+                    return Err({"code": "runtime_already_owned", "message": "目标账号已有执行器，请先在对应会话停止游玩。"})
+                if target.exists():
+                    Mailbox(target).check_uncertain()
+                    require_no_pending_acknowledgement(target)
+            patch = {"server": connection, "runtime": {"mode": "embedded"}, "autonomy": {"enabled": True},
+                     "heartbeat": {"enabled": True}, "host_context": {"enabled": True}, "presentation": {"enabled": True}}
+            if use_neko_model:
+                patch["planner"] = {"route": "host"}
+            if appearance is not None:
+                patch["viewer"] = {"default_appearance": appearance}
+            if extension_mode is not None:
+                patch["extension_pack"] = {"mode": extension_mode}
+            if character is not None:
+                if not isinstance(character, str) or len(character) > 80:
+                    raise ValueError("invalid_character")
+                patch["heartbeat"]["target"] = character
+                patch["presentation"]["target"] = character
+                if not character:
+                    patch["speech_output"] = {"enabled": False}
+            result = await self.save_settings(patch)
+            if isinstance(result, Err):
+                return result
+            return await self.start(goal=goal.strip() or "在 Minecraft 世界里自主生活，结合自己的兴趣和当前事实选择目标，兼顾生存并根据用户反馈调整。")
+        except (OSError, ValueError, KeyError, RuntimeError):
+            return Err({"code": "quick_start_not_ready", "message": "当前会话有未确认回执或配置尚未就绪；请先处理面板中的状态，未启动新角色。"})
 
     @ui.action(label="停止游玩", tone="danger", confirm="停止自主框架和它的游戏连接？服务器、模型与桌面保持运行。")
     @plugin_entry(id="panel_stop", name="控制台停止游玩", kind="service", description="显式停止本框架，保留账本。")

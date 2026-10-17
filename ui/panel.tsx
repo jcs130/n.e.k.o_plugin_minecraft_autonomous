@@ -23,10 +23,19 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const [fieldError, setFieldError] = useState<any>(null)
   const [modelCheck, setModelCheck] = useState<any>(null)
   const [viewerDraft, setViewerDraft] = useState<string | null>(null)
+  const [connectionDraft, setConnectionDraft] = useState<any>(null)
+  const [hostModel, setHostModel] = useState<boolean | null>(null)
+  const [appearanceDraft, setAppearanceDraft] = useState<string | null>(null)
+  const [extensionDraft, setExtensionDraft] = useState<string | null>(null)
+  const [characterDraft, setCharacterDraft] = useState<string | null>(null)
   const settings = state.settings || {}
   const runtime = state.runtime || {}
   const audit = state.audit || {}
   const external = settings.runtime?.mode === "external"
+  const connection = connectionDraft ?? settings.server ?? {host:"",port:25565,username:"",auth:"offline",version:"1.21.1",connection_type:"local"}
+  const setConnection = (key:string,value:any) => setConnectionDraft({...connection,[key]:value,
+    ...(key==="host"?{connection_type:["","127.0.0.1","localhost","::1"].includes(value)?"local":"custom"}:{})})
+  const usingHostModel = hostModel ?? settings.planner?.route !== "direct"
   const installation = installationGuidance(state.installation, external, state.viewer_url)
   const action = (id: string) => actions.find(a => a.entry_id === id || a.id === id)
   const call = async (id: string, args: any) => {
@@ -89,6 +98,47 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <StatCard label="最近样本 Token" value={audit.usage_recorded ? audit.sample_tokens : "未记录"} />
       </Grid>
       {notice && <Alert tone={failure ? "danger" : "info"} message={notice} />}
+      <Card title="连接与启动"><Stack gap={12}>
+        <Text>填写服务器和账号后即可从这里启动。标准 Minecraft 默认使用通用接口；已安装的扩展资料仅在匹配当前服务器数据后生效。</Text>
+        <Inline>
+          <Button disabled={busy||runtime.game_connected} onClick={()=>setConnectionDraft({...connection,host:"127.0.0.1",port:25565,version:"1.21.1",connection_type:"local"})}>本机原版</Button>
+          <Button disabled={busy||runtime.game_connected} onClick={()=>setConnectionDraft(applyConnectionPreset({server:connection},"qiandeng").server)}>千灯纪公网</Button>
+        </Inline>
+        <Grid cols={2}>
+          <Field label="服务器地址"><Input disabled={busy||runtime.game_connected} value={connection.host||""} placeholder="域名或 IP；本机填 127.0.0.1" onChange={v=>setConnection("host",v)} /></Field>
+          <Field label="端口"><Input disabled={busy||runtime.game_connected} type="number" value={connection.port??25565} onChange={v=>setConnection("port",Number(v))} /></Field>
+          <Field label={connection.auth==="microsoft"?"Microsoft 账户标识":"玩家昵称"}><Input disabled={busy||runtime.game_connected} value={connection.username||""} onChange={v=>setConnection("username",v)} /></Field>
+          <Field label="登录方式"><Select value={connection.auth||"offline"} options={[{value:"offline",label:"离线昵称"},{value:"microsoft",label:"Microsoft 正版账号"}]} onChange={v=>{if(!runtime.game_connected)setConnection("auth",v)}} /></Field>
+        </Grid>
+        <Text>Minecraft Java 1.21.1。正版账号首次启动后，在下方账户入口完成官方授权。</Text>
+        <Grid cols={2}>
+          <Field label="Web 角色外观"><Select value={appearanceDraft??settings.viewer?.default_appearance??"bundled:yui-ysm"} options={[{value:"bundled:yui-ysm",label:"自带 YUI YSM"},{value:"bundled:yui-slim",label:"自带 YUI 皮肤"},{value:"server",label:"跟随服务器"}]} onChange={setAppearanceDraft} /></Field>
+          <Field label="扩展资料"><Select value={extensionDraft??settings.extension_pack?.mode??"auto"} options={[{value:"auto",label:"自动识别已安装扩展"},{value:"none",label:"仅使用标准 Minecraft"},{value:"custom",label:"保留自定义扩展配置"}]} onChange={setExtensionDraft} /></Field>
+          <Field label="参与游戏的 Neko 角色"><Input value={characterDraft??settings.heartbeat?.target??""} placeholder="留空跟随当前 Neko 角色" onChange={setCharacterDraft} /></Field>
+        </Grid>
+        <Switch label="规划使用 Neko 中绑定的 decision 模型" checked={usingHostModel} onChange={setHostModel} />
+        {!usingHostModel&&<Text>保留已配置的独立规划模型；可在高级设置中修改。</Text>}
+        <Inline>
+          <Button tone="primary" disabled={busy||runtime.game_connected||!connection.host||!connection.username} onClick={async()=>{
+            if(await call("quick_start",{connection,goal,use_neko_model:usingHostModel,
+              appearance:appearanceDraft??settings.viewer?.default_appearance??"bundled:yui-ysm",
+              extension_mode:extensionDraft??settings.extension_pack?.mode??"auto",
+              character:characterDraft??settings.heartbeat?.target??""}))setConnectionDraft(null)
+          }}>{runtime.game_connected?"正在自主游玩":"保存并一键启动"}</Button>
+          <Button disabled={busy||runtime.game_connected||!connectionDraft} onClick={async()=>{
+            if(await call("save_settings",{settings:{server:connection}}))setConnectionDraft(null)
+          }}>仅保存连接</Button>
+          <ActionButton action={action("panel_stop")} />
+          {state.viewer_url&&<FileDownload href={state.viewer_url} label="打开 3D 观战" openExternal tone="primary" />}
+          {state.operator?.available&&<FileDownload href={state.operator.url} label="账户授权" openExternal />}
+        </Inline>
+        <Text>启动会启用本次自主游玩和 Neko 主脑参与；不会开启开机自启。正在运行时请先停止并等待动作结束，再切换连接。</Text>
+        <Inline><StatusBadge label={runtime.viewer?.available?"观战已连接":"观战待连接"} tone={runtime.viewer?.available?"success":"default"} />
+          <StatusBadge label={runtime.viewer?.server_extension?.active?"服务器扩展已识别":"标准 Mineflayer"} tone={runtime.viewer?.server_extension?.active?"success":"default"} />
+          <StatusBadge label={state.heartbeat?.enabled&&!state.heartbeat?.explicit_stop?"主脑参与已开启":"主脑参与未开启"} /></Inline>
+        {state.server_pack?.mode==="auto"&&!state.server_pack?.available&&<Text>可选扩展资料尚未安装或校验未通过，标准 Minecraft 可照常使用。</Text>}
+        {runtime.planner_error&&<Alert tone="warning" message={`规划暂未恢复：${runtime.planner_error}。下方运行详情保留错误和重试状态。`} />}
+      </Stack></Card>
       <Card title="观战与状态"><Stack gap={10}>
         <Text>在上方「观战与状态」页查看生命、饥饿、原生任务队列、决策耗时与中间结果，也可独立打开。</Text>
         <FileDownload href={`${props.host?.origin || ""}/plugin/minecraft_autonomous/ui/`} label="打开观战与状态" tone="primary" openExternal />
@@ -124,7 +174,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         {requestId && <Text>请求 ID：{requestId}。确认不明时保持相同内容重试。</Text>}
         <Text>受理、原生动作完成、规划器报告和实际目标达成是不同状态。主脑决定阶段目标，独立框架继续规划和执行；正常工作无需重新派发。</Text>
       </Stack></Card>
-      <Card title="Neko 主脑决策心跳"><Stack gap={10}>
+      <Accordion title="解说与主脑状态"><Stack gap={10}>
         <StatusBadge label={state.heartbeat?.explicit_stop ? "已停止" : state.heartbeat?.enabled ? "已启用" : "未启用"} tone={state.heartbeat?.enabled && !state.heartbeat?.explicit_stop ? "success" : "default"} />
         {external && state.heartbeat?.explicit_stop && <Stack gap={8}>
           <Text>独立框架重新启动后，需要显式恢复 Neko 反馈。下次正常心跳按原配置继续；此操作不启动游戏、不追加任务。</Text>
@@ -136,8 +186,8 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <JsonView data={state.heartbeat || {enabled:false}} />
         <Text>同一个主脑的人格、当前关注和相关记忆可共享给身体规划器；以下仅显示投影元数据，不展示私人正文。</Text>
         <JsonView data={runtime.host_context || {available:false}} />
-      </Stack></Card>
-      <Card title="模型与感知"><Stack gap={10}>
+      </Stack></Accordion>
+      <Accordion title="模型与感知详情"><Stack gap={10}>
         <Text>{external ? "当前由独立运行配置决定模型；本插件设置不覆盖外部进程。" : settings.planner?.route === "direct" ? "动作规划使用下方配置的模型服务。Neko 继续负责目标、人格和解说。" : "在 Neko 的模型 API 页面配置模型，并在本插件模型绑定中选择用途。凭据由宿主保管。"}</Text>
         <DataTable data={[
           {slot:"decision",purpose:"动作规划",fallback:"未配置时保留原生队列与规则反射，自然语言规划暂停"},
@@ -156,24 +206,24 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         {modelCheck && <JsonView data={modelCheck} />}
         <Text>此 headless 后端可读取背包地图图像；现代 3D 画面还需匹配的观战适配。没有真实图像时按文字运行。</Text>
         <Accordion title="上下文预算与最近图像"><JsonView data={{context:runtime.context,perception:runtime.perception}} /></Accordion>
-      </Stack></Card>
-      <Card title="Minecraft 账户与皮肤"><Stack gap={10}>
+      </Stack></Accordion>
+      <Accordion title="账户与皮肤详情"><Stack gap={10}>
         <Text>当前认证：{settings.server?.auth === "microsoft" ? "Microsoft 授权账号" : "离线昵称"}。离线昵称不能登录要求正版验证的服务器。Microsoft 授权后的实际角色名以本机账户页为准。</Text>
         {state.operator?.available ? <FileDownload href={state.operator.url} label="打开本机账户页：授权、状态与取消" openExternal /> : <Alert tone="info" message={state.operator?.guidance || "账户接口暂不可用。启用本机账户端口并显式启动匹配的执行器；Java 客户端请使用自身登录入口。"} />}
         <Text>入口属于运行机器的 127.0.0.1，只能在该机器浏览器打开。执行器更换后请刷新入口。开启页面不自动连接；授权码、实际账号与过期状态仅在独立的本机页面显示，不进入观战流。</Text>
         <Text>Web 默认外观：{settings.viewer?.default_appearance === "server" ? "跟随服务器" : settings.viewer?.default_appearance === "bundled:yui-ysm" ? "随包原始 YUI YSM" : settings.viewer?.default_appearance === "bundled:yui-slim" ? "随包 YUI slim" : "已配置的其他 Web 模型"}。画面中已保存的明确选择优先；未安装匹配资源时不可用。</Text>
         <Text>外观选择按服务器和账号隔离，同一账号重连、重生与刷新后保留。旧观战页记录没有服务器来源，升级后请在「人物模型」重新选择一次（也可选跟随服务器）；旧条目保留，不跨服猜测迁移。</Text>
         <Text>这些选择只影响网页显示，不会修改服务器角色皮肤、Microsoft 全局皮肤或其他玩家看到的外观。服务器皮肤取决于服务器与已授权账号；本插件没有通用的服务器皮肤修改接口。</Text>
-      </Stack></Card>
-      <Card title="安装元数据（只读）"><Stack gap={8}>
+      </Stack></Accordion>
+      <Accordion title="安装与资源详情"><Stack gap={8}>
         <Text>{installation.preparedRuntime}</Text>
         <Text>后端目录：{state.installation?.backend_directory || "暂不可用"}</Text>
         <Text>要求核心：{state.installation?.required_core_version || "暂不可用"}；本地后端：{installation.backend}</Text>
         <Text>本地渲染资源：{installation.localResources}</Text>
         <Text>{installation.externalView}</Text>
         <Text>仅检查配置目录中的有限元数据；版本匹配不等于后端完整性校验、游戏连接或真实画面验证。实际启动仍执行完整后端校验。</Text>
-      </Stack></Card>
-      <Card title="插件设置"><Stack gap={12}>
+      </Stack></Accordion>
+      <Accordion title="高级设置"><Stack gap={12}>
         <Text>保存不会启动或重启游戏。嵌入式运行参数须先显式停止再修改，观战地址可在上方单独保存。外部模式下，这些设置只改变 Neko 观察入口；独立运行的模型与策略请同步到 standalone 配置。</Text>
         {!editing && <Button onClick={() => { setDraft(JSON.parse(JSON.stringify(settings))); setParametersText(JSON.stringify(settings.planner?.parameters || {},null,2)); setRoutineParameters(JSON.stringify(settings.decision_policy?.routine_parameters || {},null,2));setComplexParameters(JSON.stringify(settings.decision_policy?.complex_parameters || {},null,2));setEditing(true) }}>编辑设置</Button>}
         {editing && draft && <Stack gap={12}>
@@ -293,14 +343,14 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <Inline><Button disabled={busy} tone="primary" onClick={saveDraft}>保存设置</Button>
             <Button onClick={()=>{setEditing(false)}}>取消编辑</Button></Inline>
         </Stack>}
-      </Stack></Card>
-      <Card title="当前事实"><DataTable data={runtime.facts || []} columns={[{key:"key",label:"类型"},{key:"text",label:"最近观测（限长）"}]} emptyText="等待框架观测" /></Card>
-      <Card title="决策与中间结果"><Stack gap={10}>
+      </Stack></Accordion>
+      <Accordion title="当前事实"><DataTable data={runtime.facts || []} columns={[{key:"key",label:"类型"},{key:"text",label:"最近观测（限长）"}]} emptyText="等待框架观测" /></Accordion>
+      <Accordion title="决策与中间结果"><Stack gap={10}>
         <Text>每类最多读取文件末尾 128 KiB 中的最近 20 条完整记录；统计仅覆盖此样本。展示实际模型回复与工具回执，不生成额外分析。</Text>
         <DataTable data={audit.decisions || []} columns={[{key:"route",label:"模型路由"},{key:"status",label:"结果"},{key:"tools",label:"选用工具"},{key:"latency_ms",label:"耗时 ms"},{key:"reply",label:"回复摘要"}]} emptyText="尚无决策记录" />
         <DataTable data={audit.receipts || []} columns={[{key:"tool",label:"工具"},{key:"failed",label:"失败"},{key:"text",label:"原生回执摘要"}]} emptyText="尚无工具回执" />
         <Accordion title="原生执行标识与审计样本"><JsonView data={audit} /></Accordion>
-      </Stack></Card>
+      </Stack></Accordion>
     </Stack>
   </Page>
 }

@@ -41,6 +41,9 @@ console_port = 0
 mode = "embedded" # external: N.E.K.O only observes/submits; shutdown leaves standalone running.
 data_directory = "" # external mode: same absolute data root used by standalone.py.
 
+[extension_pack]
+mode = "auto" # Byte-checked optional pack; ordinary servers do not register its channels. none disables it.
+
 [perception]
 enabled = true # Only actual core PNG artifacts. Bind optional vision slot in Neko.
 

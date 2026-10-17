@@ -99,10 +99,12 @@ def test_public_output_order_receipts_and_no_replay(plugin_instance, run_async, 
         assert body["line"] == "先搭个小屋吧。"
         assert body["lanlan_name"] == "TestRole"
         assert body["session_id"].startswith("minecraft-")
-        assert not body["interrupt_audio"] and not body["emit_turn_end"] and not body["wait_for_audio_completion"]
+        assert not body["interrupt_audio"] and not body["emit_turn_end"] and body["wait_for_audio_completion"]
+        assert "audio_completion_timeout" not in body  # The public host owns its completion bound.
         if outcome == "unknown":
             raise httpx.ReadTimeout("synthetic unknown")
-        return httpx.Response(200, json={"ok": outcome == "accepted", "reason": "route_owned_by_other_game" if outcome == "foreign" else "busy"})
+        return httpx.Response(200, json={"ok": outcome == "accepted", "audio_completed": outcome == "accepted",
+            "reason": "route_owned_by_other_game" if outcome == "foreign" else "busy"})
     monkeypatch.setattr(mod.httpx, "AsyncClient", lambda **kw: client_class(transport=httpx.MockTransport(handler), **kw))
 
     async def scenario():
@@ -118,6 +120,10 @@ def test_public_output_order_receipts_and_no_replay(plugin_instance, run_async, 
     stored = json.loads((port.directory / "speech-output.json").read_text(encoding="utf-8"))["records"][review["id"]]
     assert stored["status"] == {"accepted": "accepted", "busy": "rejected", "foreign": "rejected", "unknown": "unknown", "unsupported": "unsupported"}[outcome]
     assert stored["transport_accepted"] == (outcome == "accepted") and not stored["playback_verified"]
+    if outcome in {"accepted", "busy", "foreign"}:
+        assert stored["audio_completed"] == (outcome == "accepted")
+    else:
+        assert "audio_completed" not in stored
     assert len(calls) == (1 if outcome == "unsupported" else 2)
     assert all(request.url.path in {"/openapi.json", "/api/game/minecraft_autonomous/speak"} for request in calls)
 
