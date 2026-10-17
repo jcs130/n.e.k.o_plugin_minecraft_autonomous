@@ -107,9 +107,10 @@ def heartbeat_text(review, commentary=None):
     next_step = ("已有inspect证据与completion_contract，请直接提交continue/insert/revise + reason；"
                  "若接口提示状态已变再inspect。" if inspected else
                  "调用minecraft_autonomy_review inspect，收到证据后在同一轮提交continue/insert/revise + reason。")
-    return ("Minecraft " + review["id"] + "（" + stage + "）；" + cue + intent + "；" + readings
+    return ("你正亲自在玩Minecraft，按自己的性格边玩边聊，开口谈眼前的感受或打算。工具调用无需口头预告。" + cue + intent + "；" + readings
             + f"；连续查询{reads}次。" + (f"未行动回复{evidence['unactioned_replies']}次。" if evidence.get("unactioned_replies") else "")
-            + next_step + speech + "spoken_text可选；开口谈所见、感受或打算，不复述检查流程。")
+            + "策略请求" + review["id"] + "（" + stage + "）：" + next_step + speech
+            + "spoken_text可选；检查流程和控制指令留在工具里。")
 
 
 class NekoHeartbeat:

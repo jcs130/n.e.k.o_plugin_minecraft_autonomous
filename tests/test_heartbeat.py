@@ -55,6 +55,18 @@ def test_retry_resumes_the_inspected_review_instead_of_restarting_inspection(plu
     assert final["acknowledged"]
 
 
+def test_notification_leads_with_playing_and_conversation_before_private_review_steps(plugin_instance, run_async, monkeypatch):
+    port, snapshot, push = setup(plugin_instance, monkeypatch)
+    port.observe(snapshot)
+    result = run_async(plugin_instance.game_decision_heartbeat()).value
+    text = push.call_args.kwargs["parts"][0]["text"]
+    assert text.startswith("你正亲自在玩Minecraft")
+    assert text.index("感受或打算") < text.index("待检查并作出判断")
+    assert text.index("生命20/20") < text.index("调用minecraft_autonomy_review")
+    assert result["heartbeat_id"] in text
+    assert not port.state()["review"].get("result")
+
+
 @pytest.mark.parametrize("phase", ["blocked", "inhibited"])
 def test_delivered_pending_review_refreshes_commentary_for_new_material_episode(plugin_instance, run_async, monkeypatch, phase):
     port, snapshot, push = setup(plugin_instance, monkeypatch)
@@ -191,7 +203,7 @@ def test_frontend_only_transports_framework_reviews(plugin_instance, run_async, 
     assert event["target_lanlan"] == "TestRole" and event["ai_behavior"] == "respond"
     text = event["parts"][0]["text"]
     assert "minecraft_autonomy_review" in text and "口粮0个" in text and len(text.encode()) < 650
-    assert "inspect" in text[:130] and "spoken_text" in text and "调用工具前不说话" not in text
+    assert text.index("口粮0个") < text.index("inspect") and "spoken_text" in text and "调用工具前不说话" not in text
     review_id = result["heartbeat_id"]
     run_async(plugin_instance.minecraft_autonomy_review(review_id, "inspect"))
     acknowledged = run_async(plugin_instance.minecraft_autonomy_review(review_id, "continue", "继续当前工作"))

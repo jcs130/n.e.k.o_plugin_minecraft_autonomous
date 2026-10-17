@@ -116,7 +116,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <Field label="扩展资料"><Select value={extensionDraft??settings.extension_pack?.mode??"auto"} options={[{value:"auto",label:"自动识别已安装扩展"},{value:"none",label:"仅使用标准 Minecraft"},{value:"custom",label:"保留自定义扩展配置"}]} onChange={setExtensionDraft} /></Field>
           <Field label="参与游戏的 Neko 角色"><Input value={characterDraft??settings.heartbeat?.target??""} placeholder="留空跟随当前 Neko 角色" onChange={setCharacterDraft} /></Field>
         </Grid>
-        <Switch label="规划使用 Neko 中绑定的 decision 模型" checked={usingHostModel} onChange={setHostModel} />
+        <Switch label="下次启动使用 Neko 绑定的决策模型" checked={usingHostModel} onChange={setHostModel} />
         {!usingHostModel&&<Text>保留已配置的独立规划模型；可在高级设置中修改。</Text>}
         <Inline>
           <Button tone="primary" disabled={busy||runtime.game_connected||!connection.host||!connection.username} onClick={async()=>{
@@ -152,7 +152,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         }}>仅保存观战地址</Button>
         <Text>使用与当前角色配套的 HTTP(S) 页面。游戏连接成功后默认自动打开一次；重连不重复弹窗，可在设置中关闭。</Text>
         {!state.viewer_url && <Alert tone="info" message="尚未取得可用的观战地址；可配置同角色渲染器与版本资源目录，运行数据仍可查看。" />}
-        {runtime.viewer && <Accordion title="资源版本与画面接入状态"><JsonView data={{pack:runtime.viewer.pack,version:runtime.viewer.minecraftVersion,reason:runtime.viewer.reason,window:runtime.viewer_window,content:runtime.viewer.content}} /></Accordion>}
+        {runtime.viewer && <Accordion open={false} title="资源版本与画面接入状态"><JsonView data={{pack:runtime.viewer.pack,version:runtime.viewer.minecraftVersion,reason:runtime.viewer.reason,window:runtime.viewer_window,content:runtime.viewer.content}} /></Accordion>}
         {state.viewer_url && !state.viewer_body_binding_verified && <Alert tone="warning" message="已保存页面地址；画面与当前 1.21.1 角色的绑定尚未核验。" />}
       </Stack></Card>
       <Card title="当前工作与用户反馈"><Stack gap={12}>
@@ -174,7 +174,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         {requestId && <Text>请求 ID：{requestId}。确认不明时保持相同内容重试。</Text>}
         <Text>受理、原生动作完成、规划器报告和实际目标达成是不同状态。主脑决定阶段目标，独立框架继续规划和执行；正常工作无需重新派发。</Text>
       </Stack></Card>
-      <Accordion title="解说与主脑状态"><Stack gap={10}>
+      <Accordion open={false} title="解说与主脑状态"><Stack gap={10}>
         <StatusBadge label={state.heartbeat?.explicit_stop ? "已停止" : state.heartbeat?.enabled ? "已启用" : "未启用"} tone={state.heartbeat?.enabled && !state.heartbeat?.explicit_stop ? "success" : "default"} />
         {external && state.heartbeat?.explicit_stop && <Stack gap={8}>
           <Text>独立框架重新启动后，需要显式恢复 Neko 反馈。下次正常心跳按原配置继续；此操作不启动游戏、不追加任务。</Text>
@@ -187,7 +187,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>同一个主脑的人格、当前关注和相关记忆可共享给身体规划器；以下仅显示投影元数据，不展示私人正文。</Text>
         <JsonView data={runtime.host_context || {available:false}} />
       </Stack></Accordion>
-      <Accordion title="模型与感知详情"><Stack gap={10}>
+      <Accordion open={false} title="模型与感知详情"><Stack gap={10}>
         <Text>{external ? "当前由独立运行配置决定模型；本插件设置不覆盖外部进程。" : settings.planner?.route === "direct" ? "动作规划使用下方配置的模型服务。Neko 继续负责目标、人格和解说。" : "在 Neko 的模型 API 页面配置模型，并在本插件模型绑定中选择用途。凭据由宿主保管。"}</Text>
         <DataTable data={[
           {slot:"decision",purpose:"动作规划",fallback:"未配置时保留原生队列与规则反射，自然语言规划暂停"},
@@ -205,9 +205,9 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         </Inline>}
         {modelCheck && <JsonView data={modelCheck} />}
         <Text>此 headless 后端可读取背包地图图像；现代 3D 画面还需匹配的观战适配。没有真实图像时按文字运行。</Text>
-        <Accordion title="上下文预算与最近图像"><JsonView data={{context:runtime.context,perception:runtime.perception}} /></Accordion>
+        <Accordion open={false} title="上下文预算与最近图像"><JsonView data={{context:runtime.context,perception:runtime.perception}} /></Accordion>
       </Stack></Accordion>
-      <Accordion title="账户与皮肤详情"><Stack gap={10}>
+      <Accordion open={false} title="账户与皮肤详情"><Stack gap={10}>
         <Text>当前认证：{settings.server?.auth === "microsoft" ? "Microsoft 授权账号" : "离线昵称"}。离线昵称不能登录要求正版验证的服务器。Microsoft 授权后的实际角色名以本机账户页为准。</Text>
         {state.operator?.available ? <FileDownload href={state.operator.url} label="打开本机账户页：授权、状态与取消" openExternal /> : <Alert tone="info" message={state.operator?.guidance || "账户接口暂不可用。启用本机账户端口并显式启动匹配的执行器；Java 客户端请使用自身登录入口。"} />}
         <Text>入口属于运行机器的 127.0.0.1，只能在该机器浏览器打开。执行器更换后请刷新入口。开启页面不自动连接；授权码、实际账号与过期状态仅在独立的本机页面显示，不进入观战流。</Text>
@@ -215,7 +215,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>外观选择按服务器和账号隔离，同一账号重连、重生与刷新后保留。旧观战页记录没有服务器来源，升级后请在「人物模型」重新选择一次（也可选跟随服务器）；旧条目保留，不跨服猜测迁移。</Text>
         <Text>这些选择只影响网页显示，不会修改服务器角色皮肤、Microsoft 全局皮肤或其他玩家看到的外观。服务器皮肤取决于服务器与已授权账号；本插件没有通用的服务器皮肤修改接口。</Text>
       </Stack></Accordion>
-      <Accordion title="安装与资源详情"><Stack gap={8}>
+      <Accordion open={false} title="安装与资源详情"><Stack gap={8}>
         <Text>{installation.preparedRuntime}</Text>
         <Text>后端目录：{state.installation?.backend_directory || "暂不可用"}</Text>
         <Text>要求核心：{state.installation?.required_core_version || "暂不可用"}；本地后端：{installation.backend}</Text>
@@ -223,7 +223,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>{installation.externalView}</Text>
         <Text>仅检查配置目录中的有限元数据；版本匹配不等于后端完整性校验、游戏连接或真实画面验证。实际启动仍执行完整后端校验。</Text>
       </Stack></Accordion>
-      <Accordion title="高级设置"><Stack gap={12}>
+      <Accordion open={false} title="高级设置"><Stack gap={12}>
         <Text>保存不会启动或重启游戏。嵌入式运行参数须先显式停止再修改，观战地址可在上方单独保存。外部模式下，这些设置只改变 Neko 观察入口；独立运行的模型与策略请同步到 standalone 配置。</Text>
         {!editing && <Button onClick={() => { setDraft(JSON.parse(JSON.stringify(settings))); setParametersText(JSON.stringify(settings.planner?.parameters || {},null,2)); setRoutineParameters(JSON.stringify(settings.decision_policy?.routine_parameters || {},null,2));setComplexParameters(JSON.stringify(settings.decision_policy?.complex_parameters || {},null,2));setEditing(true) }}>编辑设置</Button>}
         {editing && draft && <Stack gap={12}>
@@ -257,7 +257,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           {field("presentation","target","解说角色（留空跟随 Neko 当前角色）")}
           {field("presentation","min_interval_seconds","普通解说最小间隔（秒，含决策心跳）","number")}
           <Switch checked={draft.perception.enabled} label="接收核心真实图像（无图像或模型时文字回退）" onChange={v=>change("perception","enabled",v)} />
-          <Accordion title="模型 API 接入"><Stack gap={10}>
+          <Accordion open={false} title="模型 API 接入"><Stack gap={10}>
             <Field label="动作规划使用的模型"><Select value={draft.planner?.route || "host"} options={[{value:"host",label:"使用 Neko 模型绑定（默认）"},{value:"direct",label:"单独配置模型服务"}]} onChange={v=>change("planner","route",v)} /></Field>
             {draft.planner?.route === "direct" && <Stack gap={10}>
               <Field label="模型厂商"><Select value={draft.planner.provider} options={[
@@ -301,7 +301,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             {field("fast","api_key_env","API Key 所在环境变量名（不填密钥）")}
             {field("fast","min_confidence","最低置信度 0–1","number")}
           </Grid>}
-          <Accordion title="游戏记忆"><Stack gap={10}>
+          <Accordion open={false} title="游戏记忆"><Stack gap={10}>
             <Text>记录游戏中的地点、方法与经验，按服务器和角色隔离。默认本地保存，不需要模型；开启外部检索后会发送游戏笔记和查询，服务不可用时回退本地搜索。</Text>
             <Field label="检索方式"><Select value={draft.memory?.mode || "local"} options={[{value:"local",label:"本地关键词（默认）"},{value:"vector",label:"本地记忆 + 向量模型"},{value:"remote",label:"外挂记忆服务"}]} onChange={v=>change("memory","mode",v)} /></Field>
             {(draft.memory?.mode || "local") !== "local" && <Grid cols={2}>
@@ -324,7 +324,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             </Stack>}
             <Text>基础检索只增强本机游戏笔记；经验整理可召回专用范围内的历史经验。换电脑时要迁移本地笔记与提交回执；历史库存和地点仍须现场复核。</Text>
           </Stack></Accordion>
-          <Accordion title="自适应规划深度（可选）"><Stack gap={10}>
+          <Accordion open={false} title="自适应规划深度（可选）"><Stack gap={10}>
             <Switch label="按新任务、失败和死亡证据选择规划预算" checked={draft.decision_policy?.enabled === true} onChange={v=>change("decision_policy","enabled",v)} />
             <Text>默认关闭并保持原模型配置。原生反射与队列持续执行动作；需要规划时才调用现有模型。常规回合用较短预算，新意图、风险、失败恢复和新死亡复盘用复杂预算，均不得超过总输出预算。</Text>
             {draft.decision_policy?.enabled && <Stack gap={10}>
@@ -335,7 +335,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             </Stack>}
             {runtime.model_status?.decision_profile && <JsonView data={runtime.model_status.decision_profile} />}
           </Stack></Accordion>
-          <Accordion title="调用预算"><Stack gap={10}><Text>上下文默认 65536（64K）；服务实际支持时可设为 131072（128K）。保留已设置的其他有效值；32K 服务应使用 32768，此设置不会扩大模型服务容量。</Text><Grid cols={2}>
+          <Accordion open={false} title="调用预算"><Stack gap={10}><Text>上下文默认 65536（64K）；服务实际支持时可设为 131072（128K）。保留已设置的其他有效值；32K 服务应使用 32768，此设置不会扩大模型服务容量。</Text><Grid cols={2}>
             {field("autonomy","context_tokens","上下文窗口","number")}{field("autonomy","max_output_tokens","输出预算","number")}
             {field("autonomy","min_decision_seconds","最小决策间隔（秒）","number")}{field("autonomy","max_decisions","最大轮次，0 为持续运行","number")}
             {field("autonomy","model_timeout_seconds","单次模型总超时（秒）","number")}{field("autonomy","max_tool_rounds","每轮最多连续工具回合","number")}
@@ -344,12 +344,12 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             <Button onClick={()=>{setEditing(false)}}>取消编辑</Button></Inline>
         </Stack>}
       </Stack></Accordion>
-      <Accordion title="当前事实"><DataTable data={runtime.facts || []} columns={[{key:"key",label:"类型"},{key:"text",label:"最近观测（限长）"}]} emptyText="等待框架观测" /></Accordion>
-      <Accordion title="决策与中间结果"><Stack gap={10}>
+      <Accordion open={false} title="当前事实"><DataTable data={runtime.facts || []} columns={[{key:"key",label:"类型"},{key:"text",label:"最近观测（限长）"}]} emptyText="等待框架观测" /></Accordion>
+      <Accordion open={false} title="决策与中间结果"><Stack gap={10}>
         <Text>每类最多读取文件末尾 128 KiB 中的最近 20 条完整记录；统计仅覆盖此样本。展示实际模型回复与工具回执，不生成额外分析。</Text>
         <DataTable data={audit.decisions || []} columns={[{key:"route",label:"模型路由"},{key:"status",label:"结果"},{key:"tools",label:"选用工具"},{key:"latency_ms",label:"耗时 ms"},{key:"reply",label:"回复摘要"}]} emptyText="尚无决策记录" />
         <DataTable data={audit.receipts || []} columns={[{key:"tool",label:"工具"},{key:"failed",label:"失败"},{key:"text",label:"原生回执摘要"}]} emptyText="尚无工具回执" />
-        <Accordion title="原生执行标识与审计样本"><JsonView data={audit} /></Accordion>
+        <Accordion open={false} title="原生执行标识与审计样本"><JsonView data={audit} /></Accordion>
       </Stack></Accordion>
     </Stack>
   </Page>
