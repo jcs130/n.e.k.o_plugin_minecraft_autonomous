@@ -2,6 +2,9 @@
 
 ## 0.6.7 — Development candidate
 
+- Prevent late server status replies from doubling the refresh interval and
+  expiring health/mana. Bundle the original backpack profile texture and render
+  its exact 1.21.1 head/hat model rather than a generic item label.
 - Pin the shared core repair that applies explicit server action denials to the
   exact native block and preserves the original error for replanning.
 - Consume the shared SNBT text fix and original untrimmed armor icons, plus an

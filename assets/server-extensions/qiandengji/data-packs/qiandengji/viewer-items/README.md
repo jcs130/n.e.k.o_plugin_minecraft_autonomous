@@ -15,3 +15,5 @@ Its passive default performs no queries; the exported presentationOptions is an
 explicit host opt-in to a bounded /mycli status read when fresh state is missing.
 Death clears the current body reading and preserves the same connection guide;
 disconnect clears both. This never creates a second game connection or model.
+
+大背包使用服务器实际 Profile textures 哈希匹配；随包携带上述 Mojang 原 PNG（64×64），由原版 1.21.1 PlayerHeadModel/SkullBlockRenderer 几何与 GUI 变换渲染。UUID、名称不会用来猜测纹理；未匹配的头颅不借用此图。

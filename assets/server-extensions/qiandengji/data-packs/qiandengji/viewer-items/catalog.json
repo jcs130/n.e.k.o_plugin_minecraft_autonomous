@@ -54,6 +54,13 @@
       "icon": "icons/abyss_verdict.png",
       "model": "models/abyss_verdict.json",
       "texture": "textures/abyss_verdict.png"
+    },
+    {
+      "id": "backpack_shortcut",
+      "name": "大背包",
+      "baseId": "minecraft:player_head",
+      "profileTextureHash": "8dcc6eb40f3bada41e4339888d6d207437598bdbd175c2e731191d5a9a42d3c8",
+      "icon": "textures/backpack-profile.png"
     }
   ],
   "assets": {
@@ -116,6 +123,12 @@
     "icons/abyss_verdict.png": {
       "sha256": "07876ee027415735dcee903cd99701e95685bdf8e1e8cec97c96b8ae3d4eed9e",
       "bytes": 1124
+    },
+    "textures/backpack-profile.png": {
+      "sha256": "8dcc6eb40f3bada41e4339888d6d207437598bdbd175c2e731191d5a9a42d3c8",
+      "bytes": 697,
+      "sourceUrl": "https://textures.minecraft.net/texture/8dcc6eb40f3bada41e4339888d6d207437598bdbd175c2e731191d5a9a42d3c8",
+      "sourceEvidence": "BackpackShortcutMigration.java TEXTURE, minecraft-ai-friend 22e0eb1f4657e1d24fe606dedfb49a9c91434412; actual profile hash selector required"
     }
   }
 }

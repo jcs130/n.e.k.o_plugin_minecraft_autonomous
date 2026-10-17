@@ -10,7 +10,7 @@ const record=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const text=(v,n)=>typeof v==='string'&&v.length>0&&v.length<=n?v:null;
 const channels=['mcviewer:state','mcagent:state'];
 export const itemAppearanceCatalog={fileUrl:new URL('./data-packs/qiandengji/viewer-items/catalog.json',import.meta.url).href,
-  sha256:'5bb616356aae2799181067c72ddfc1a864c0b2541887f4d5c462160af181ec73'};
+  sha256:'bc79c58108deb78accf2f281de59e149ab4116ecb1131485ae4c9ee51c4012c8'};
 export const presentationOptions=Object.freeze({stateRefreshMs:30_000});
 function skills(raw, observedAt, channel) {
   if(!record(raw)||raw.schemaVersion!==1||!Array.isArray(raw.skills??[])||!Array.isArray(raw.abilities??[])
@@ -99,7 +99,10 @@ export function createPresentationObserver(bot,{now=Date.now,staleMs=12_000,auto
     lastRefresh=at;
     try{bot.chat('/mycli status');refreshError=null;return true;}catch{refreshError='QIANDENGJI_STATUS_REFRESH_FAILED';return false;}
   }
-  const refreshTimer=stateRefreshMs?setInterval(refresh,stateRefreshMs):null;refreshTimer?.unref?.();
+  // Check deadlines cheaply; querying on a coarse interval can miss a reply's
+  // exact 30s deadline by another whole interval and let the 45s state expire.
+  // refresh() still enforces the read-only query rate, including retries.
+  const refreshTimer=stateRefreshMs?setInterval(refresh,1_000):null;refreshTimer?.unref?.();
   const end=()=>{ended=true;clear();clearInterval(refreshTimer);};
   // Death invalidates body readings, not the identity-attested connection guide.
   bot._client.on('custom_payload',payload);bot.on('message',message);bot.on('end',end);bot.on('death',clearBody);

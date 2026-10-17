@@ -1,11 +1,11 @@
 {
   "schema": "agent-mc-server-presentation/v1",
   "repository": "https://github.com/jcs130/cortico-world-qiandengji",
-  "source_revision": "f3ad9e016475e4e7483ad648daadae7a7d808c56",
+  "source_revision": "554c0c7bfc58a3b39853261395f22983897e3ad0",
   "source_path": "integrations/qiandengji/presentation.mjs",
-  "version": "0.5.0-dev.20261017.5",
+  "version": "0.5.0-dev.20261017.6",
   "minecraft_version": "1.21.1",
-  "module_sha256": "cc752a37b3ca3945fea91a62f54f9596cd83932e409dc967e388181f14f41b8a",
+  "module_sha256": "330bcb0c5db8e6824eaa975467a47024ade0c05701d18f3563a8d08aac57eb14",
   "license": "MIT",
   "license_sha256": "f070c28670ca12855a68aff1fa8ca87b5d772489ba0edba1362c42e5ec878c4a",
   "activation": "validated_same_player_server_guidance",
@@ -14,12 +14,12 @@
   "models_called": false,
   "resources": {
     "data-packs/qiandengji/viewer-items/README.md": {
-      "sha256": "3eb728dcf78bceaf332553014f552002ed13d9d1b192cf5dc8dd1dff7e9e7e59",
-      "bytes": 1127
+      "sha256": "8eaadd6849313a61f21d5f5cb152aa6608e6b231236bfa47fa86fed32b98e08a",
+      "bytes": 1397
     },
     "data-packs/qiandengji/viewer-items/catalog.json": {
-      "sha256": "5bb616356aae2799181067c72ddfc1a864c0b2541887f4d5c462160af181ec73",
-      "bytes": 4218
+      "sha256": "bc79c58108deb78accf2f281de59e149ab4116ecb1131485ae4c9ee51c4012c8",
+      "bytes": 4916
     },
     "data-packs/qiandengji/viewer-items/icons/abyss_verdict.png": {
       "sha256": "07876ee027415735dcee903cd99701e95685bdf8e1e8cec97c96b8ae3d4eed9e",
@@ -64,6 +64,10 @@
     "data-packs/qiandengji/viewer-items/textures/abyss_verdict.png": {
       "sha256": "c5188155097155c94083226507480c537568cdcdbcae98aba948876a1eb1a2a5",
       "bytes": 169
+    },
+    "data-packs/qiandengji/viewer-items/textures/backpack-profile.png": {
+      "sha256": "8dcc6eb40f3bada41e4339888d6d207437598bdbd175c2e731191d5a9a42d3c8",
+      "bytes": 697
     },
     "data-packs/qiandengji/viewer-items/textures/blink_dagger.png": {
       "sha256": "41c18f86ba4c04c6483c8051078269e54c5a43e1acc329633f5107c5494ff4f7",
