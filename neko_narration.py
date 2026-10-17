@@ -1,5 +1,6 @@
 """Thin public host voice transport for the framework's optional speech outbox."""
 
+import asyncio
 import sqlite3
 
 from agent_mc_autonomy.configuration import Settings, _boolean, _integer
@@ -16,10 +17,19 @@ from .neko_speech import enqueue_speech, output_settings
 
 class NekoNarration:
     @timer_interval(id="native_planner_voice", seconds=2, name="转发自主游玩台词",
-                    description="读取同次规划的有界台词，不调用模型，不等待合成，不调度游戏。")
+                    description="独立语音线程转发同次规划台词并等待有界回执，不调用模型，不阻塞或调度游戏。")
     async def native_planner_voice(self, **_):
         try:
-            return Ok(await self._native_planner_voice())
+            result = await self._native_planner_voice()
+            if result.get("submitted"):
+                # Official timer handlers run in their own asyncio.run loop.
+                # Keep THIS timer's delivery alive until its bounded completion;
+                # the independent body and other SDK threads keep advancing.
+                loop = asyncio.get_running_loop()
+                owned = [task for task in tuple(getattr(self, "_speech_output_tasks", ())) if task.get_loop() is loop]
+                if owned:
+                    await asyncio.gather(*owned)
+            return Ok(result)
         except (OSError, sqlite3.Error, ValueError, TypeError, KeyError, TransportError):
             # No provider error body, key, profile or spoken line enters logs.
             return Ok({"submitted": False, "reason": "voice_context_unavailable"})

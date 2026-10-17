@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.2 — Release preparation
+
+### Fixed
+- Keep a planning-voice timer's own bounded HTTP/audio task alive until completion. The official host creates a separate event loop per timer callback, so returning immediately previously cancelled an enqueued line before submission. Waiting happens in that voice timer, independently of the MC controller and main brain; stop/expiry/unknown-output protections remain intact.
+- Add a regression reproducing return-before-delivery, retaining the tool-only narration support and the existing official TTS/persona/model-slot boundaries.
+
 ## 0.6.1 — Release preparation
 
 ### Fixed

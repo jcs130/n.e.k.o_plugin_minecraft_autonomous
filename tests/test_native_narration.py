@@ -51,7 +51,7 @@ def test_same_planning_line_uses_current_cat_voice_without_review_or_model(plugi
         binding = module.owned_runtime(plugin_instance, settings, "TestRole", review, 0)
         port = NarrationPort(review.directory, now=review.now)
         assert port.offer('{"spoken_text":"这山景真漂亮，去找块石头搭个小窝。"}', binding)["offered"]
-        result = (await plugin_instance.native_planner_voice()).value
+        result = await plugin_instance._native_planner_voice()
         assert result["submitted"] and result["extra_model_calls"] == 0
         assert not requests  # HTTP/TTS runs independently after enqueue.
         await asyncio.gather(*plugin_instance._speech_output_tasks)
@@ -95,3 +95,31 @@ def test_blank_target_resolves_public_current_cat_and_filters_private_fields(plu
         module.HostContextSettings(True, "http://127.0.0.1:32123/api/characters"), "", allow_current=True))
     assert profile["agent_name"] == "UserCat" and "活泼" in profile["persona"]
     assert "private" not in json.dumps(profile)
+
+
+def test_timer_finishes_owned_speech_before_sdk_closes_callback_loop(plugin_instance, monkeypatch, run_async):
+    module, review, _, settings, _, _ = configured(plugin_instance, monkeypatch)
+    speech = adapter(plugin_instance, "neko_speech")
+    requests = []
+    real_client = httpx.AsyncClient
+
+    def handler(request):
+        requests.append(request)
+        if request.method == "GET":
+            return httpx.Response(200, json={"paths": {"/api/game/{game_type}/speak": {"post": {}}}})
+        return httpx.Response(200, json={"ok": True, "audio_completed": True})
+
+    monkeypatch.setattr(speech.httpx, "AsyncClient", lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw))
+
+    async def scenario():
+        await plugin_instance.native_planner_voice()
+        binding = module.owned_runtime(plugin_instance, settings, "TestRole", review, 0)
+        assert NarrationPort(review.directory, now=review.now).offer('{"spoken_text":"这山风真舒服。"}', binding)["offered"]
+        result = (await plugin_instance.native_planner_voice()).value
+        # The real SDK wraps EACH timer callback in asyncio.run(...). Returning
+        # with a pending child task would cancel it before the next timer tick.
+        assert result["submitted"] and len(requests) == 2
+        assert all(task.done() for task in plugin_instance._speech_output_tasks)
+
+    with session_lease(review.directory):
+        run_async(scenario())
