@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.65 — Internal candidate
+
+- Pin autonomy 0.1.89: a review proven never offered or inspected receives fresh evidence and a new ID after expiration. Offline time no longer creates a false host-acknowledgement failure and five-minute silence. Actual, rejected and unknown deliveries retain their existing bounds; no action or old acknowledgement is replayed.
+- Retain 0.5.64's original YSM UV, terrain preparation, optional-context-read and native reconnect continuity repairs. Source checks, actual playback/action receipts and long-term survival remain separate.
+
 ## 0.5.64 — Internal candidate
 
 ### Fixed
