@@ -2,6 +2,8 @@
 
 ## 0.6.7 — Development candidate
 
+- Use original compass frames from observed own-player state and original inactive crossbow GUI textures.
+
 - Prevent late server status replies from doubling the refresh interval and
   expiring health/mana. Bundle the original backpack profile texture and render
   its exact 1.21.1 head/hat model rather than a generic item label.
