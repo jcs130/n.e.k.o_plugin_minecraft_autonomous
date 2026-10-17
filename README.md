@@ -6,7 +6,7 @@
 
 ## 完整离线包安装
 
-普通用户下载 [Releases](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases) 中的 **Minecraft-Autonomous-0.6.3-Windows-x64-offline.zip**。它已包含 Node、固定后端及依赖、3D 观战、1.21.1 贴图、音效/音乐、浏览器运行时和 YUI 普通皮肤/YSM 模型，无需安装 Git、Python builder、npm 或手工拼 vendor。
+普通用户下载 [0.6.6 发布页](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.6) 中的 **Minecraft-Autonomous-0.6.6-Windows-x64-offline.zip**。它已包含 Node、固定后端及依赖、3D 观战、1.21.1 贴图、音效/音乐、浏览器运行时和 YUI 普通皮肤/YSM 模型，无需安装 Git、Python builder、npm 或手工拼 vendor。当前为公开测试版，已验证范围和限制见 [版本说明](docs/release-0.6.6.md)。
 
 1. **完整解压 → 双击「一键安装.cmd」**。校验并准备资源后，自动打开中文入门页；不会启动或修改 Neko、模型和游戏服务器。
 2. **Neko 插件中心 → 导入**，选择同目录的 `.neko-plugin`。首次使用，在官方「插件 API」保存一个支持文字和工具调用的模型，并在本插件「配置」页绑定 `decision`。已有槽直接复用；支持图像时可同时绑定 `vision`。面板提供这两个页面的直接入口。
@@ -32,11 +32,11 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 插件 | `minecraft_autonomous` **0.6.3**；Windows x64 / Neko CPython 3.11 |
-| 自主框架 | `agent-mc-autonomy@0.2.1`，提交 `8b2d48e536bea73a94535911d8eb0a41e10eb82d` |
-| 游戏核心 | `agent-mc-world@0.5.7-rc.5`，提交 `78b67164f6fe64bb1e271e43901fc45ed7a760c8` |
-| 核心归档 SHA256 | `f5653b38a0d86314a22eaceaa5445acfa5b441ae2c206a76ce742d04e4920745` |
-| 共享观战 | `mc-visual-console@3553c60d49ff4874f663129a749d937632c6c759` |
+| 插件 | `minecraft_autonomous` **0.6.6**；Windows x64 / Neko CPython 3.11 |
+| 自主框架 | `agent-mc-autonomy@0.2.4`，提交 `1fb12b8136155d2fefdb6ae4b4882ee09ba57359` |
+| 游戏核心 | `agent-mc-world@0.5.7-rc.7`，提交 `20d731efe8e165887f8af97ff1ed13c7241c75df` |
+| 核心归档 SHA256 | `aca644510c07634869ee08ffba621a3be1d52b365df376f914ca2d78f196e76a` |
+| 共享观战 | `mc-visual-console@b5a41c37d8f503df5344762bd5df5e61c1734f4b` |
 | 宿主公共接口核对 | Neko main `ec09fca56ad146a55855d59f12969a3bac12c9f8`；主程序/SDK 未修改 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT；随包保留素材和第三方许可 |
 
@@ -275,7 +275,7 @@ NeoForge 原生注册表/握手、Numen 远程身体、原生服控制租约和�
 
 见 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [架构说明](docs/design.md)。
 单元测试使用真实公共 SDK和替身模型/执行器；独立 stdio 检查拒绝网络和 Cortico 导入。
-官方 Verify/Release/Ruff 模板保持原样。推送只触发源码验证，未创建 release tag、未发布 Market。
+官方 Verify/Release/Ruff 模板保持原样。普通源码推送只触发验证；正式版本经官方 Release 工作流构建，Windows 完整离线包另附逐文件校验和安装验证。GitHub 下载可用与 Market 审核通过是不同状态，Market 以官方页面实际结果为准。
 包结构检查通过不能替代真实游戏验收。
 
 解耦审计、旧约定清理和可转发给源码维护者的提示词见
