@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.10 — Development candidate
+
+- Preserve localized private-message identity in the independent Minecraft core.
+- Prioritize important native events and acknowledge only those actually shown
+  to the planner; retain omitted events and native original-query handles.
+- Repair real engine-child decision attribution and cadence-aware player
+  interpolation, including original YSM display heading.
+- Pin checked core/viewer/autonomy inputs. Neko main and SDK are unchanged;
+  live private reception and sustained survival require separate evidence.
+
 ## 0.6.9 — Development candidate
 
 - Keep asynchronously mounted terrain maps above the decision panel without
