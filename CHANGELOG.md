@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.9 — Development candidate
+
+- Keep asynchronously mounted terrain maps above the decision panel without
+  moving stable canvases every frame.
+- Carry actual planner/operator attribution through the independent runtime,
+  MCP and core into viewer events; anonymous decisions remain unknown.
+- Pin the matching core and viewer source builds. Neko main/SDK are unchanged.
+  Gameplay acceptance remains separate from source and package checks.
+
 ## 0.6.8 — Development candidate
 
 - Consume native observed-effect evidence in the independent autonomy framework.
