@@ -7,7 +7,7 @@ Neko 提供高层目标、策略、角色演出与语音；独立框架细化规
 可配置其他人的兼容服务器，不要求在本机开服。
 Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minecraft-ai-friend` 项目。
 
-0.5.54 候选固定规范框架 0.1.78（`fd03891f`）、精确 Git 核心 `41bed34a` / `0.5.7-dev.20261017.3` 与共享观战 `f0f2227e`。完整离线包包含运行依赖、原版 1.21.1 贴图/实体/图标、声音/音乐、原始 YUI 与固定 Chromium 引擎。保留既有公开会话、人格投影、异步语音和原生队列边界。恢复协议的历史说明见 [0.5.53 集成说明](docs/integration-0.5.53-20261017.md)。
+当前 main 为 0.5.55 开发版，固定框架 0.1.79（`b4e7dff3`）、精确 Git 核心 `bfa3882f` / `0.5.7-rc.3` 与共享观战 `f0f2227e`。核心修复水中碰撞晃动被误算成推进、定时重下同一目标导致脱困无限续期的问题；正常路线保留，受阻路线有界撤销并排除后换路。完整游戏逻辑仍只在独立核心，薄适配器仅更新依赖。已发布的 0.5.54 离线包固定旧框架 0.1.78，尚不包含本次修复；新包另行发布，不能混用不同版的插件和运行包。恢复协议的历史说明见 [0.5.53 集成说明](docs/integration-0.5.53-20261017.md)。
 
 inspect 含待复盘死亡事件时，同次最终判断可引用检查返回的短 evidence_ref，必须提供有依据及适用条件的教训，或明确暂缓原因；遗漏时不确认、不投递、不口播，可在同一心跳补交。旧 episode-only 教训还须提供 evidence，短引用路径保留。独立 body 也须正常收尾后升至匹配的 0.1.71；仅重载适配器不更新旧 producer。教训仍是假设，改善与现场播放另行验证。
 
@@ -27,8 +27,8 @@ YUI 普通 slim 皮肤和原始 YSM 模型随插件附带。Neko 内嵌运行的
 | SDK 入口 | `plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin` |
 | 环境 | Python 3.11+；Node 22+；N.E.K.O 为可选前端 |
 | 游戏协议 | **Java 1.21.1（767）**，拒绝 `auto` 和其他版本 |
-| 自主框架 | `agent-mc-autonomy@0.1.78`，固定来源 `minecraft-ai-friend@fd03891f2f21ac5e503951c2b21ee3910639bc57` |
-| 执行核心 | `agent-mc-world@0.5.7-dev.20261017.3`，来源提交 `41bed34ac5a3c1a73bb0be2f2457b260d7f2c47e`；精确归档 SHA256 `dad654b22683f7a0ffa265948ac7ca8bfbd62d8f071827196abf8f368c59fce4` |
+| 自主框架 | `agent-mc-autonomy@0.1.79`，固定来源 `minecraft-ai-friend@b4e7dff3d61197dbb0d4f6d2adbf3f54fe1d81e5` |
+| 执行核心 | `agent-mc-world@0.5.7-rc.3`，来源提交 `bfa3882fc8f6e93d7bedd453127c91488852fd9b`；精确归档 SHA256 `1a91d462a5b88c91d43c09a14c3b87370a2c9f56d099184948f4ff977705a3f4` |
 | 共享观战输入 | `mc-visual-console@f0f2227e65ea05ea89dcd4954790ec787a3a2e7a`；完整离线包已包含固定源码与原始资源 |
 | 构建 | 固定源码，直接运行核心官方 `build:engine`；无插件专用补丁或第二份编译实现 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT，归档保留其许可证和来源 |
