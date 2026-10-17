@@ -163,9 +163,10 @@ def test_actual_blocked_outcome_has_bounded_preview_and_unverified_reaction(plug
     assert "mc_do/blocked" in cue and "path_stalled" in cue and "run-1:8" in cue
     assert cue.index("四周一片漆黑") < cue.index("path_stalled")
     assert cue.index("path_stalled") < cue.index("调用minecraft_autonomy_review")
-    assert cue.index("path_stalled") < cue.index("长期目标") and len(cue.encode()) < 750
+    assert "长期目标" not in cue and len(cue.encode()) < 750  # Full intent is returned by inspect, not duplicated in every cue.
     assert "未行动回复3次" in cue
     detail = run_async(plugin_instance.minecraft_autonomy_review(result["heartbeat_id"], "inspect"))
+    assert detail["standing_goal"] == snapshot["standing_goal"]
     assert not detail["native_outcomes"][0]["goal_verified"]
     note = run_async(plugin_instance.minecraft_autonomy_review(result["heartbeat_id"], "continue", "Change strategy using actual receipt"))["commentary"]
     assert note["allowed"] and not result["playback_verified"]

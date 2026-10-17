@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.63 — Internal candidate
+
+### Fixed
+- Keep the review ID and required death reflection visible in short host notification previews; avoid repeating the full standing goal there.
+- Pin framework 0.1.86: preserve individually bounded live facts and put short recovery completion requirements first. Missing reflections return the same bound contract without acknowledging or dispatching anything.
+- Retain viewer 43e23250, including the original YSM crown/chin UV conversion fix and bounded terrain caches. Source validation is separate from actual deployment and gameplay acceptance.
+
 ## 0.5.62 — Internal candidate
 
 ### Fixed

@@ -63,9 +63,6 @@ def heartbeat_text(review, commentary=None):
 
     evidence = review["evidence"]
     facts = evidence["facts"]
-    user = evidence.get("current_user_goal") or {}
-    intent = ("当前用户目标:" + brief(user["goal"], 50) if user.get("goal") else
-              "长期目标:" + brief(evidence.get("standing_goal", ""), 50))
     readings = "；".join(brief(facts.get(key, ""), size) for key, size in (
         ("queue", 55), ("body", 50), ("foodReserve", 40)))
     reads = sum(evidence.get("read_activity", {}).values())
@@ -93,25 +90,22 @@ def heartbeat_text(review, commentary=None):
         origin, phase, problem, reference = selected
         ref = (str(reference.get("run", "")) + ":" + str(reference["cursor"]) if "cursor" in reference else
                reference.get("request_id") or reference.get("archive") or "status")
-        cue = "实际反馈:" + brief(origin, 25) + "/" + brief(phase, 25) + " " + brief(problem, 75) + " 引用:" + brief(ref, 40) + "；"
+        cue = "实际反馈:" + brief(origin, 20) + "/" + brief(phase, 20) + " " + brief(problem, 55) + " 引用:" + brief(ref, 30) + "；"
         readings = ""  # Keep the causal cue within the host preview budget.
-    speech = "说一个自然的小打算或感想。"
-    if review.get("trigger") == "idle_presence":
-        speech = "轻松聊一句自己的好奇、心情或小打算；有兴致也可轻哼原创小调。"
-    if review.get("attempts", 0) > 1:
-        speech = "延续刚才的话题，补齐策略判断。"
-    elif commentary is not None and not commentary["allowed"]:
-        speech = "延续当前交流，不强行另起口播。"
     inspected = bool(review.get("inspected_at"))
     stage = "已检查，待最终判断" if inspected else "待检查并作出判断"
-    next_step = ("已有inspect证据与completion_contract，请直接提交continue/insert/revise + reason；"
-                 "若接口提示状态已变再inspect。" if inspected else
+    next_step = ("请直接提交continue/insert/revise + reason，短句完成completion_contract；状态改变才inspect。" if inspected else
                  "调用minecraft_autonomy_review inspect，收到证据后在同一轮提交continue/insert/revise + reason。")
-    scene = "眼前：" + brief(facts["clock"], 70) + "；" if facts.get("clock") else ""
-    return ("你正亲自在玩Minecraft，按自己的性格边玩边聊，开口谈眼前的感受或打算。工具调用无需口头预告。" + scene + cue + intent + "；" + readings
+    scene = "眼前：" + brief(facts["clock"], 30) + "；" if facts.get("clock") else ""
+    recovery = "短句先提交最终判断，含death_reflection。" if evidence.get("death_episode") else ""
+    conversation = ("延续刚才的话题。" if review.get("attempts", 0) > 1 else
+                    "平静时也聊聊好奇的事。" if review.get("trigger") == "idle_presence" else "")
+    # The identifier and pending recovery requirement must survive the host's
+    # preview. The full goal/persona already lives in inspect, not every cue.
+    return ("你正亲自在玩Minecraft，按自己的性格聊眼前的感受或打算。"
+            + "策略请求" + review["id"] + "（" + stage + "）；" + recovery + scene + cue + readings
             + f"；连续查询{reads}次。" + (f"未行动回复{evidence['unactioned_replies']}次。" if evidence.get("unactioned_replies") else "")
-            + "策略请求" + review["id"] + "（" + stage + "）：" + next_step + speech
-            + "spoken_text可选；检查流程和控制指令留在工具里。")
+            + next_step + conversation + "spoken_text可选；过程留在工具里。")
 
 
 class NekoHeartbeat:

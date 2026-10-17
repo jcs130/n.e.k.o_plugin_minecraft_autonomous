@@ -13,4 +13,4 @@ def test_backend_compatibility_wrapper_uses_canonical_installer(plugin_module):
 def test_canonical_distribution_version():
     from importlib.metadata import version
 
-    assert version("agent-mc-autonomy") == "0.1.85"
+    assert version("agent-mc-autonomy") == "0.1.86"
