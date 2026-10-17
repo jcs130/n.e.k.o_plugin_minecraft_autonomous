@@ -1,11 +1,12 @@
 import {
   Page, Card, Stack, Grid, Inline, Text, StatCard, StatusBadge, DataTable,
   Field, Input, Select, Switch, Textarea, Button, ActionButton, RefreshButton,
-  Alert, Accordion, JsonView, FileDownload, useState,
+  Alert, Accordion, JsonView, FileDownload, useState, useEffect,
 } from "@neko/plugin-ui"
 import type { PluginSurfaceProps } from "@neko/plugin-ui"
 import { installationGuidance } from "./installation-guidance.js"
 import { applyConnectionPreset } from "./connection-presets.js"
+import { startPanelRefresh } from "./panel-refresh.js"
 
 export default function Panel(props: PluginSurfaceProps<any>) {
   const { state, actions } = props
@@ -28,6 +29,10 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const [appearanceDraft, setAppearanceDraft] = useState<string | null>(null)
   const [extensionDraft, setExtensionDraft] = useState<string | null>(null)
   const [characterDraft, setCharacterDraft] = useState<string | null>(null)
+  useEffect(() => {
+    if (editing || busy) return
+    return startPanelRefresh({refresh:props.api.refresh,document})
+  }, [props.api.refresh,editing,busy])
   const settings = state.settings || {}
   const runtime = state.runtime || {}
   const audit = state.audit || {}
@@ -90,7 +95,8 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <Text>{external ? "独立运行 · Neko 观察与投递" : "Neko 嵌入式运行"}</Text></Inline>
         <RefreshButton label="刷新观测" />
       </Inline>
-      <Text>观测时间：{runtime.updated_at || "尚无样本"}。保存的快照不等于当前进程存活；刷新只读取状态，不触发模型或游戏动作。</Text>
+      <Text>观测时间：{runtime.updated_at || "尚无样本"}。面板可见时每 3 秒读取状态，编辑时暂停；不会触发模型或游戏动作。保存的快照不等于当前进程存活。</Text>
+      {runtime.planner_diagnostic?.category&&<Alert tone="warning" message={`规划请求被服务端拒绝（HTTP ${runtime.planner_diagnostic.status}，${runtime.planner_diagnostic.category}）。请核对模型和工具兼容性；原生队列继续独立运行。`} />}
       <Grid cols={4} gap={12}>
         <StatCard label="本次运行决策轮次" value={runtime.decisions ?? "—"} />
         <StatCard label="待结算原生动作" value={(runtime.pending || []).length} />

@@ -31,5 +31,9 @@ def test_panel_dependency_graph_is_supported_by_host(monkeypatch):
         {
             "path": "ui/connection-presets.js",
             "source": (root / "ui/connection-presets.js").read_text(encoding="utf-8"),
-        }
+        },
+        {
+            "path": "ui/panel-refresh.js",
+            "source": (root / "ui/panel-refresh.js").read_text(encoding="utf-8"),
+        },
     ]

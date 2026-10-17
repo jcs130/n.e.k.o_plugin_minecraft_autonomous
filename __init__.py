@@ -123,7 +123,7 @@ class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoHeartbeat, Nek
                 selected.validate_budget(settings.max_output_tokens)
 
             async def play(goal, publish, stopped):
-                await run_session(settings, entry, data_root, create_planner(planner_raw, self.ctx.models, settings),
+                await run_session(settings, entry, data_root, create_planner(planner_raw, getattr(self.ctx, "models", None), settings),
                                   goal, publish, stopped)
 
             with self._control_lock:

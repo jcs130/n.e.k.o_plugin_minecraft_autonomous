@@ -88,6 +88,14 @@ def test_missing_decision_is_visible_without_dispatch_or_leaking(plugin_module, 
     assert run_async(planner.NekoPlanner(None, 1024).decide([], []))["model_status"]["route"] == "unavailable"
 
 
+def test_legacy_sdk_model_check_reports_missing_gateway(plugin_instance, run_async, monkeypatch):
+    monkeypatch.delattr(type(plugin_instance.ctx), "models")
+    result = run_async(plugin_instance.check_model(mode="text"))
+    assert isinstance(result, Ok)
+    assert result.value["structured_probe_passed"] is False
+    assert result.value["model_status"]["reason"] == "model_gateway_unavailable"
+
+
 def test_incomplete_neko_output_uses_same_bounded_retry_contract(plugin_module, run_async):
     planner = module(plugin_module, "neko_planner")
     brain = planner.NekoPlanner(gateway(AsyncMock(return_value=model_response(finish="length"))), 512)

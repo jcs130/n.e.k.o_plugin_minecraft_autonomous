@@ -154,7 +154,7 @@ class Dashboard:
     async def check_model(self, mode: str, **_):
         if mode not in {"text", "vision"}:
             return Err({"code": "invalid_model_check"})
-        return Ok(await check_model(self.ctx.models, mode))
+        return Ok(await check_model(getattr(self.ctx, "models", None), mode))
 
     @ui.context(id="dashboard")
     async def dashboard(self):
@@ -169,7 +169,7 @@ class Dashboard:
             directory = settings.data_root(self.data_path()) / "sessions" / settings.identity / "host"
             state = {key: snapshot.get(key) for key in (
                 "phase", "game_connected", "autonomy_running", "updated_at", "decisions", "source", "live_verified",
-                "standing_goal", "current_goal", "context", "host_context", "model_status", "fast_focus", "perception", "planner_error", "viewer", "viewer_window")}
+                "standing_goal", "current_goal", "context", "host_context", "model_status", "fast_focus", "perception", "planner_error", "planner_diagnostic", "viewer", "viewer_window")}
             state["facts"] = [{"key": str(p.get("key", ""))[:80], "text": str(p.get("text", ""))[:900],
                                "has_more": len(str(p.get("text", ""))) > 900} for p in snapshot.get("facts", {}).get("parts", [])[:24]]
             state["pending"] = [{k: p.get(k) for k in ("kind", "id", "phase", "terminal")} for p in snapshot.get("pending", [])[:16]]

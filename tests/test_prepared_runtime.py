@@ -74,9 +74,15 @@ def test_unprepared_draft_stays_editable_and_default_eligible(plugin_instance, p
     assert plugin_instance._worker is None
 
 
-def test_dashboard_roundtrip_and_start_share_exact_runtime(prepared, plugin_instance, plugin_module, monkeypatch, run_async):
+@pytest.mark.parametrize("legacy_sdk", [False, True])
+def test_dashboard_roundtrip_and_start_share_exact_runtime(prepared, plugin_instance, plugin_module, monkeypatch, run_async, legacy_sdk):
+    if legacy_sdk:
+        monkeypatch.delattr(type(plugin_instance.ctx), "models")
     host, bundle, calls = prepared
     raw = {"autonomy": {"enabled": True}, "server": {"host": "localhost", "username": "Fixture"}}
+    if legacy_sdk:
+        raw["planner"] = {"route": "direct", "provider": "openai-compatible", "base_url": "http://fixture.invalid/v1",
+                          "model": "fixture", "auth": {"mode": "none"}}
     monkeypatch.setattr(plugin_instance.config, "dump", AsyncMock(side_effect=lambda: copy.deepcopy(raw)))
     monkeypatch.setattr(plugin_instance.config, "update", AsyncMock(side_effect=lambda settings: raw.update(copy.deepcopy(settings))))
     monkeypatch.setattr(plugin_module, "verify_runtime", lambda _: pytest.fail("status must not hash runtime"))
@@ -98,10 +104,14 @@ def test_dashboard_roundtrip_and_start_share_exact_runtime(prepared, plugin_inst
             return {"worker_alive": True}
     monkeypatch.setattr(plugin_module, "Worker", Worker)
     captured = []
-    async def session(settings, *_):
+    async def session(settings, entry, data_root, planner, *_):
         captured.append(settings)
+        if legacy_sdk:
+            assert planner.config.model == "fixture"
+            await planner.aclose()
     monkeypatch.setattr(plugin_module, "run_session", session)
-    monkeypatch.setattr(plugin_module, "create_planner", lambda *_: None)
+    if not legacy_sdk:
+        monkeypatch.setattr(plugin_module, "create_planner", lambda *_: None)
     assert isinstance(run_async(plugin_instance.start()), Ok)
     run_async(plugin_instance._worker.play("survive", None, None))
     assert checked == [bundle.backend]

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.62 — Internal candidate
+
+### Fixed
+- A missing public SDK model gateway no longer crashes explicit direct planning or the model-check entry; unavailable host planning stays explicit.
+- Pin framework 0.1.85: unique tool names, provider-compatible tuple projection with original native validation, bounded safe HTTP rejection diagnostics and queue-preserving backoff.
+- Pin viewer 43e23250: bounded received/decoded terrain caches recover normally beyond 512 columns and preserve updates, block entities and unload semantics.
+- Refresh visible control panels periodically without polling hidden panels or overwriting an advanced edit. Exclude author backup files from packages.
+- Clarify exact offline pairing, Windows TOML paths, inherited API-key environments and official metadata rebuild/import. Keep source validation distinct from recipient and gameplay acceptance.
+
 ## 0.5.53 — Internal candidate
 
 - Pin reviewed canonical autonomy 0.1.77 at `ed94de1277ff0bf61182733374ec8ac8db7e8413` (final recovery fix2), retaining exact checked core .39 / `3ee62ca2` and packaged viewer c799.
