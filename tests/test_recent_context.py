@@ -370,3 +370,23 @@ def test_ordinary_inspect_detail_and_final_do_not_query_public_bus(plugin_instan
         run_async(plugin_instance.minecraft_autonomy_review(review, 'inspect', lineage_offset=0))
         run_async(plugin_instance.minecraft_autonomy_review(review, 'continue', 'Keep working'))
         assert query.await_count == 1
+
+
+def test_review_history_keeps_substantive_tail_instead_of_repeated_process_prelude(plugin_instance, monkeypatch, run_async):
+    port, snapshot, _, settings, _, _, host, _ = prepare(plugin_instance, monkeypatch)
+    text = '本喵先查一下现场再判断。本喵查完了，直接提交判断。' * 8 + '洞口有一朵小蘑菇，我想给它留盏灯。'
+    query = attach_bus(plugin_instance, [record(text)])
+    port.observe(snapshot)
+    with session_lease(port.directory):
+        review = run_async(plugin_instance.game_decision_heartbeat()).value['heartbeat_id']
+        detail = run_async(plugin_instance.minecraft_autonomy_review(review, 'inspect'))
+        hint = detail['recent_language_hint']
+        assert '小蘑菇' in hint['utterances'][-1]['text']
+        assert '先查一下现场' not in hint['utterances'][-1]['text']
+        assert hint['purpose'] == 'avoid_repetition'
+        assert hint['utterances'][-1]['excerpt'] == 'tail'
+        assert hint['historical_only'] and not hint['audio_verified']
+        assert host_recent.size(hint) <= 600 and query.await_count == 1
+        original = json.loads(host.recent_path.read_text(encoding='utf-8'))['recent_messages'][-1]
+        assert original['text'] == text and original['text_sha256'] == hint['utterances'][-1]['sha256']
+        assert not port.state()['review'].get('result')

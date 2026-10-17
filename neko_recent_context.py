@@ -251,12 +251,19 @@ def historical_hint(plugin, settings, target, port, generation):
         if row['role'] != 'assistant' or row['text_sha256'] in seen:
             continue
         seen.add(row['text_sha256'])
-        result.append({'text': host_recent.clip(row['text'], 70), 'source': row['source'],
+        # A prefix-only excerpt of the host's concatenated tool-round reply
+        # retained nothing except repeated inspection preludes. Keep the tail
+        # for topic continuity; originals and their hash stay unchanged.
+        encoded = row['text'].encode('utf-8')
+        clipped = len(encoded) > 70
+        excerpt = '…' + encoded[-67:].decode('utf-8', errors='ignore') if clipped else row['text']
+        result.append({'text': excerpt, 'source': row['source'],
                        'at': row['occurred_at'], 'sha256': row['text_sha256'],
-                       'ref': 'private_snapshot_hash_only'})
+                       'excerpt': 'tail' if clipped else 'complete'})
         if len(result) == 2:
             break
-    hint = {'historical_only': True, 'audio_verified': False, 'utterances': list(reversed(result))}
+    hint = {'historical_only': True, 'audio_verified': False, 'purpose': 'avoid_repetition',
+            'instruction': '仅供防复读和衔接；不是口播模板，不要复述片段。', 'utterances': list(reversed(result))}
     while host_recent.size(hint) > 600 and hint['utterances']:
         hint['utterances'].pop(0)
     return hint

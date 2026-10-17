@@ -150,6 +150,7 @@ def test_preview_error_phase_and_reference_share_one_source(plugin_module, runti
 
 def test_actual_blocked_outcome_has_bounded_preview_and_unverified_reaction(plugin_instance, run_async, monkeypatch):
     port, snapshot, push = setup(plugin_instance, monkeypatch)
+    snapshot["facts"]["parts"].append({"key": "clock", "text": "四周一片漆黑。"})
     snapshot["native_outcomes"] = [{"tool": "mc_do", "execution_id": "task-7", "phase": "blocked",
         "receipt": "path_stalled: no route " * 200, "observation_only": False, "goal_verified": False,
         "original_event": {"run": "run-1", "cursor": 8}}]
@@ -160,6 +161,7 @@ def test_actual_blocked_outcome_has_bounded_preview_and_unverified_reaction(plug
     cue = push.call_args.kwargs["parts"][0]["text"]
     assert push.call_args.kwargs["ai_behavior"] == "respond"
     assert "mc_do/blocked" in cue and "path_stalled" in cue and "run-1:8" in cue
+    assert cue.index("四周一片漆黑") < cue.index("path_stalled")
     assert cue.index("path_stalled") < cue.index("调用minecraft_autonomy_review")
     assert cue.index("path_stalled") < cue.index("长期目标") and len(cue.encode()) < 750
     assert "未行动回复3次" in cue
