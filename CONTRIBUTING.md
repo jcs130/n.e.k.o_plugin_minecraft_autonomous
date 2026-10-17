@@ -19,7 +19,7 @@ GitHub 仓库名包含点号；直接把该名字作为 Python 包目录运行�
 ```powershell
 $env:NEKO_ROOT = '/path/to/N.E.K.O'
 uv run --project "$env:NEKO_ROOT" python -m pytest tests -q
-node --test tests/observer-data.test.mjs
+node --test tests/observer-data.test.mjs tests/installation-guidance.test.mjs tests/connection-presets.test.mjs tests/panel-refresh.test.mjs
 uvx ruff==0.12.4 check --ignore-noqa --config ruff.toml --exclude assets/appearances/sources .
 uv run --project "$env:NEKO_ROOT" neko-plugin check --release --market-release .
 ```
