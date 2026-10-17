@@ -17,13 +17,14 @@ from .bundled_appearance import default_bundled_appearance_settings as default_b
 from .dashboard import Dashboard
 from .direct_planner import create_planner
 from .neko_heartbeat import NekoHeartbeat
+from .neko_narration import NekoNarration
 from .neko_presentation import NekoPresentation
 from .neko_tools import NekoAutonomyTools
 from .prepared_runtime import require_prepared_runtime, resolve_host_runtime
 
 
 @neko_plugin
-class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoHeartbeat, NekoPresentation, NekoPluginBase):
+class MinecraftAutonomousPlugin(Dashboard, NekoAutonomyTools, NekoHeartbeat, NekoPresentation, NekoNarration, NekoPluginBase):
     def __init__(self, ctx):
         super().__init__(ctx)
         self._control_lock = threading.RLock()

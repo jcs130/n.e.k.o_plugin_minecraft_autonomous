@@ -201,6 +201,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           {slot:"fast",purpose:"可选聊天模型快速选择",fallback:"未配置或无效时使用规则；在设置中选择 Neko 模型槽后启用"},
         ]} columns={[{key:"slot",label:"用途槽"},{key:"purpose",label:"用途"},{key:"fallback",label:"回退"}]} />
         <Text>System One 模式可接官方 Jev 或兼容的本地 Decider，使用专用 /v1/systemone 接口。默认规则模式不调用快模型。快速选择只提供规划关注点，原生反射与任务队列继续掌管动作。</Text>
+        <Text>主 API 用于猫娘对话；辅助 API 用于宿主的记忆、视觉和 Agent 等职责。插件不会自动继承辅助密钥：请在管理器的「插件 API」（/model-api）创建模型，再在本插件详情绑定 decision / vision / fast。多个用途可共用一个兼容模型，密钥始终由宿主管理。</Text>
         <Grid cols={2}><JsonView data={runtime.model_status || {route:"尚无模型调用记录"}} /><JsonView data={runtime.fast_focus || {configured_mode:settings.fast?.mode || "rules"}} /></Grid>
         <Text>下面的手动检查会调用 Neko 已绑定模型；图像检查使用合成色块，不代表真实游戏画面验收。外部运行的模型不受此检查影响。</Text>
         <Inline><Button disabled={busy} onClick={async()=>{await call("check_model",{mode:"text"})}}>检查文字与工具调用</Button>
@@ -258,7 +259,12 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           {field("heartbeat","review_interval_seconds","无新变化时复核间隔（秒）","number")}
           <Switch checked={draft.host_context?.enabled !== false} label="共享主脑人格、当前关注和相关记忆" onChange={v=>change("host_context","enabled",v)} />
           {field("host_context","character_api_url","角色档案接口（可选，仅显式本机 /api/characters 地址）")}
-          <Text>启用决策心跳后，自动解说合并到主脑决策中。此设置不启动游戏；关闭只停止主脑自动复盘，独立框架继续运行。</Text>
+          <Text>主脑心跳负责目标、用户反馈与重要复盘。下方规划台词复用同一次动作规划，不依赖主脑复盘先完成，不增加解说模型调用。两者均不会自动启动游戏。</Text>
+          <Switch checked={draft.speech_output?.enabled === true} label="通过当前猫娘的现有声音播报游戏台词" onChange={v=>change("speech_output","enabled",v)} />
+          {field("speech_output","base_url","Neko 本机地址（例如 http://127.0.0.1:48911，不含路径或密钥）")}
+          <Switch checked={draft.speech_output?.planner_narration !== false} label="转发同一次 MC 规划中的自然台词" onChange={v=>change("speech_output","planner_narration",v)} />
+          {field("speech_output","min_interval_seconds","规划台词最小间隔（秒，10—900）","number")}
+          <Text>角色留空时跟随上述 Neko 地址的当前猫娘；人设只取公开字段，声音沿用她的现有配置。台词独立排队，语音繁忙时保留有效新句、过期丢弃；发送受理与播放完成分别记录。</Text>
           <Switch checked={draft.presentation?.enabled === true} label="让 Neko 解说重要游戏变化" onChange={v=>change("presentation","enabled",v)} />
           {field("presentation","target","解说角色（留空跟随 Neko 当前角色）")}
           {field("presentation","min_interval_seconds","普通解说最小间隔（秒，含决策心跳）","number")}

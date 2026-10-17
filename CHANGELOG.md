@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0 — Release preparation
+
+### Added
+- Forward optional natural commentary from the existing MC planning response through Neko's public character and game-speech APIs. Ordinary speech no longer requires a completed main-brain review or an extra narration model call; voice synthesis runs independently of body work.
+- Follow the selected user's current cat when the role is blank. Share only public persona fields; retain the cat's existing TTS configuration without reading voice IDs or supplier credentials.
+- Add panel controls for same-decision speech, explicit local host address and pacing, plus installation guidance distinguishing Core, Assist and the official Plugin API model bindings.
+
+### Safety and verification
+- Pin the host-neutral framework's bounded, once-claimed speech outbox. Stop, actor/world/runtime changes, new intent, death and expiry invalidate old lines; unknown delivery is never replayed.
+- This is a release candidate preparation. Public Release publication, Market approval, clean-machine installation and long-term gameplay remain separate acceptance steps.
+
 ## 0.5.65 — Internal candidate
 
 - Pin autonomy 0.1.89: a review proven never offered or inspected receives fresh evidence and a new ID after expiration. Offline time no longer creates a false host-acknowledgement failure and five-minute silence. Actual, rejected and unknown deliveries retain their existing bounds; no action or old acknowledgement is replayed.

@@ -65,7 +65,9 @@ idle_presence_seconds = 45 # Bounded optional character chat in the existing rev
 
 [speech_output]
 enabled = false # Explicit optional public Neko REST output-only integration; no additional model.
-base_url = "" # Exact local Neko origin, with no path/credentials. Requires heartbeat.target.
+base_url = "" # Exact local Neko origin, with no path/credentials; empty target follows its current cat.
+planner_narration = true # Forward explicit spoken_text from the existing planning call; no extra inference.
+min_interval_seconds = 30 # Pace ordinary planning commentary independently of strategic reviews.
 # Capability checked through /openapi.json; only /api/game/minecraft_autonomous/speak is used.
 # Enqueue is not playback; ordinary final host replies cannot be filtered by this plugin.
 

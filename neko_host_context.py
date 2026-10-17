@@ -28,19 +28,19 @@ class HostContextSettings:
         return cls(_boolean(section, "enabled", True), url)
 
 
-async def character_profile(plugin, config, target, *, fresh=False, timeout=3):
-    if not config.character_api_url or not target:
+async def character_profile(plugin, config, target, *, fresh=False, timeout=3, allow_current=False):
+    if not config.character_api_url or not target and not allow_current:
         return {}
     key = (config.character_api_url, target)
     cache = getattr(plugin, "_host_profile_cache", None)
-    if not fresh and target and cache and cache[0] == key and time.monotonic() - cache[1] < 60:
+    if not fresh and cache and cache[0] == key and time.monotonic() - cache[1] < (60 if target else 2):
         return cache[2]
     try:
         async with httpx.AsyncClient(timeout=timeout, trust_env=False, follow_redirects=False) as client:
             response = await client.get(config.character_api_url, params={"language": "zh-CN"})
             response.raise_for_status()
             raw = response.json()
-        actor = target
+        actor = target or raw.get("当前猫娘")
         profile = raw.get("猫娘", {}).get(actor, {})
         persona = profile.get("system_prompt", "")
         if not isinstance(actor, str) or not actor or len(actor.encode("utf-8")) > 160 or not isinstance(persona, str):
