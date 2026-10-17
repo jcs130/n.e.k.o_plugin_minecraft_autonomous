@@ -20,7 +20,7 @@
 
 插件模型调用使用公开 `await ctx.models.get_client()` 和清单用途别名 `decision` / `vision` / `fast`。官方网关不自动注入主脑人设或历史，适配层需显式传入受限上下文。独立模式可自行配置模型，其进程不会继承 Neko 模型密钥或临时网关令牌。
 
-核心 `agent-mc-autonomy` 的 `NarrationPort` 与任何宿主 SDK 无关。宿主在拥有的新鲜身体快照下订阅，规划器在原响应的 assistant content 中可提供严格 JSON `{"spoken_text":"一句台词"}`，并保留正常动作工具调用；其它分析文本不会自动变成语音。端口仅负责台词有效期、限频和一次领取，不调度原生身体队列。
+核心 `agent-mc-autonomy` 的 `NarrationPort` 与任何宿主 SDK 无关。宿主在拥有的新鲜身体快照下订阅，规划器可在同一次 `mc_do` 调用的可选 `_spoken_text` 中给出台词，控制器会在原生参数校验和派发前移除该宿主字段。也可在原响应 assistant content 提供严格 JSON `{"spoken_text":"一句台词"}` 并保留正常动作调用。其它分析文本不会自动变成语音。端口仅负责台词有效期、限频和一次领取，不调度原生身体队列。
 
 已对照 Neko 官方主干 `ec09fca56ad146a55855d59f12969a3bac12c9f8`：
 

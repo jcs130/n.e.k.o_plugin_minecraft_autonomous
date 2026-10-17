@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 — Release preparation
+
+### Fixed
+- Pin framework 0.2.1: models that return only tool calls can include the same-decision line in an optional host-only `mc_do._spoken_text` field. It is removed before the original native argument validation and dispatch; assistant-content narration remains supported. No extra generation or Minecraft chat message is introduced.
+- Retain 0.6.0's public model-slot, character-persona and existing-voice integration. Candidate artifacts remain separate from public Release and Market approval.
+
 ## 0.6.0 — Release preparation
 
 ### Added
