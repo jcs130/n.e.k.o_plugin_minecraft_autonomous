@@ -20,3 +20,11 @@
 现场部署：自有执行器正常排空，无未知派发后切换依赖；配置只更新 `viewer.renderer_directory`，引擎包、账号、模型、人设及其它配置保留。实际 `/3dview/build.json` 返回新来源摘要，两份服务脚本逐一匹配按实际运行目录预构建的哈希，原资源与外观摘要不变，真实连接和已收到区块的观战状态通过。重新连接千灯纪后生命 20/20、饥饿 20/20，Neko 主程序/桌面及模型保持原进程；这不是新的长期生存验收。
 
 已知限制：长期无人干预生存和规划效率仍在优化；Microsoft 正版账号完整流程、千灯纪全部特色资源与完整场景表现尚未全部验收。兼容观战的手持地图更新不代表当前原生界面新增同名面板。网页声音需浏览器允许播放；本完整包面向 Windows x64 / Neko CPython 3.11，其他宿主组合需另行验证。GitHub 发布不等于 Market 审核已通过。
+
+## 0.6.6 发布交付记录
+
+- GitHub 正式发布：[v0.6.6](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.6)，tag 固定到 `e50920d110a88f318525c1fa486e2c6d07df145a`；官方 Release/Verify 工作流通过，Release run `39026540814`。
+- Windows 完整离线包 `Minecraft-Autonomous-0.6.6-Windows-x64-offline.zip`：1109903221 字节，SHA256 `3c5dfde239fc108354d5643e91898a89f4d28ae90e2ec379abfdab1add76fbc7`。全部 73088 个运行文件逐一校验，独立中文/空格目录中一键安装和资源识别通过；测试 PATH 没有 Python、Node、Git 或 npm，原有运行注册保持不变。
+- 完整 ZIP 和 Windows 专用插件均经无登录公开下载回读，字节数与 SHA256 一致；校验和、Windows 构建说明、固定核心和观战源码归档同时附于 Release。
+- Market 投稿 #147 第 2 稿已受理并通过自动检查，仓库仍待平台人工审核；GitHub 下载发布不代表 Market 已上架。
+- 本次发布没有改动或重启 Neko 主程序/SDK，没有替换正在运行的身体、模型或私有配置，也不把发布校验记作完整健康巡检或长期生存验收。
