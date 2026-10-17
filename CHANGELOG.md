@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.64 — Internal candidate
+
+### Fixed
+- Pin autonomy 0.1.88 / shared viewer 3553c60d: yield terrain preparation through browser tasks so throttled painting does not hold up a complete terrain commit. Keep the prior recovery-budget, exact YSM UV and bounded column-cache fixes.
+- An intermittent denied optional status read no longer aborts the strategic review timer; unavailable recent conversation material stays unavailable, without altering ownership or replaying work.
+
+- Keep the owned runtime alive through native connecting/retrying phases, suspend model/action work on unavailable facts and require fresh queue/body state after recovery. Explicit stop and stopped/unknown states retain their fences.
+
 ## 0.5.63 — Internal candidate
 
 ### Fixed

@@ -72,7 +72,7 @@ def current_request(plugin, settings, target, port, generation):
         if not base or base['stable']['agent_name'] != target:
             return None
         return request
-    except (ValueError, TypeError, KeyError):
+    except (OSError, ValueError, TypeError, KeyError):
         return None
 
 
