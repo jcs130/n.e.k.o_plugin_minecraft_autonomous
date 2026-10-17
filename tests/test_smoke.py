@@ -11,10 +11,10 @@ def test_plugin_manifest_exists() -> None:
     assert metadata["id"] == root.name == project["name"] == "minecraft_autonomous"
     assert metadata["entry"] == "plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin"
     assert metadata["version"] == project["version"]
-    assert project["version"] == "0.6.4"
+    assert project["version"] == "0.6.5"
     assert project["dependencies"][0] == (
         "agent-mc-autonomy @ git+https://github.com/jcs130/minecraft-ai-friend.git@"
-        "733e659977a6d062129e4e273d2101d44effe529#subdirectory=packages/agent-mc-autonomy"
+        "ed44c19759e82f4301ae11c8a6db429446308bf4#subdirectory=packages/agent-mc-autonomy"
     )
 
 
