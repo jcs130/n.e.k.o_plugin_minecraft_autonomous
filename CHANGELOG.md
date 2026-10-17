@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.11 — Development candidate
+
+- Recognize actual Java 1.21.1 registered incoming private-chat templates in
+  native events, retained message history and viewer labels. Keep public quotes
+  and conflicting sender identities separate.
+- Retain the native event references actually included in each decision receipt,
+  without copying private message text into diagnostic metadata.
+- Pin the checked independent core/runtime repair; Neko main/SDK are unchanged.
+
 ## 0.6.10 — Development candidate
 
 - Preserve localized private-message identity in the independent Minecraft core.
