@@ -25,3 +25,13 @@
 完整交付附件的 SHA256、资源逐文件检查、清洁目录安装和实际发布状态以同版 Release 附件与维护记录为准；本说明不代替 Market 审核。此前 0.6.2 的真实自然台词与桌面播放结束证据沿用，0.6.3 不修改语音传输或游戏核心。
 
 持续自然食物获取、无人干预长期生存、全部千灯纪特色资源与 Microsoft 真人授权尚未全部验收。它们不因本次界面、安装和离线测试通过而被标为完成。
+
+## 实际发布结果
+
+2026-10-17 已公开 [GitHub v0.6.3](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.3)，标签指向 `0ce48c25a33ca55c8defffdf912265e86ecaedc1`。[官方工作流 39015616820](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/actions/runs/39015616820) 通过，宿主源码核对仍为 ec09fca。没有修改官方工作流、重写标签或替换其 Market 校验资产。
+
+Windows x64 / CPython 3.11 用户使用同版完整离线包，其 SHA256 为 `c6b29ec614cd0146cbdd47ca7f46e60bd3b4f9679b5c1a6c9acb6e9ac408f557`，大小 1,109,851,271 字节；单独 Windows 插件 SHA256 为 `b3798222a1a43513125e3a623d61e59d65ec70d9e58a25e0b66383993b2e07df`。Windows 构建来自标签对应的干净源码目录，含匹配的 pyd 与真实 dist-info。官方默认 Linux CI 包及其 evidence 保留原样，不能代替 Windows 完整包；发布页明确区分。
+
+最终完整 ZIP 内 73,062 个运行文件逐个核对 SHA256/CRC，Windows 插件元数据源指纹通过官方校验。相同运行资源与一键安装脚本在新的中文/空格目录、独立 LOCALAPPDATA 中完成准备，退出 0，现有用户注册文件原字节不变，默认自主游玩仍关闭；这不是另一台电脑上的冻结 Neko 安装证明。随后 Windows 插件从公开 Release 下载回读哈希一致，完整包公开下载返回 206 和正确 ZIP 头，服务端完整包摘要与本地一致。
+
+官方 publish 已完成 GitHub 阶段，随后 Market 返回 HTTP 400 / `release_repo_mismatch: GitHub release 未绑定到唯一的已通过插件`。浏览器旧登录会话已失效，需要本人完成账号登录后核对原申请及仓库绑定；未重复创建审核申请，没有把 GitHub 已发布说成 Market 已上架。完整包可从 GitHub 正常取得。
