@@ -103,7 +103,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       <Card title="连接与启动"><Stack gap={12}>
         <Text>选好服务器，点击开始即可。默认自带 YUI 模型、3D 观战、贴图和声音，跟随当前猫娘解说；无需填写 Node、资源路径或音色密钥。</Text>
         <Text>{installation.preparedRuntime}</Text>
-        <Inline><Text>动作规划复用本插件已绑定的 Neko 模型。首次使用只需在官方页面绑定 decision，以后直接开始。</Text>
+        <Inline><Text>{runtime.model_status?.model ? `当前实际动作规划模型：${runtime.model_status.model}。` : settings.planner?.route === "direct" ? `动作规划使用已配置的独立模型：${settings.planner.model || "待填写"}。` : "动作规划复用本插件已绑定的 Neko 模型。首次使用只需在官方页面绑定 decision，以后直接开始。"}</Text>
           <FileDownload href={`${props.host?.origin || ""}/model-api`} label="Neko 模型 API" openExternal />
           <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=config`} label="本插件模型绑定" openExternal /></Inline>
         <Inline>
