@@ -8,16 +8,16 @@ auto_start = false
 enabled = false
 min_decision_seconds = 10
 idle_decision_seconds = 60
-max_decisions = 100
+max_decisions = 0 # Continuous after explicit start; stop from the panel whenever desired.
 max_tool_rounds = 6
 context_tokens = 65536 # 默认64K；服务实际支持时可选131072（128K），保留显式配置的其他有效值。
 max_output_tokens = 1024
 model_timeout_seconds = 180
 
 [server]
-host = ""
+host = "127.0.0.1" # Existing local Java server; remote servers can be selected in the panel.
 port = 25565
-username = ""
+username = "" # Quick start creates and saves a private offline nickname when left empty.
 auth = "offline" # Use microsoft for authenticated public servers.
 version = "1.21.1"
 login_config_file = "" # Optional private login configuration; never commit it.

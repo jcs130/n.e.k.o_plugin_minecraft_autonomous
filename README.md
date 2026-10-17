@@ -1,53 +1,44 @@
-# Minecraft Autonomous · 我的世界自主生存
+# Minecraft Autonomous · 我的世界自主游玩
 
-Minecraft 自主框架的薄适配插件，面向 [N.E.K.O](https://github.com/Project-N-E-K-O/N.E.K.O) 的接入插件。
-模型用途绑定、当前猫娘人设及现有声音的配置见 [模型、人设与角色声音](docs/model-and-voice.md)。日常台词复用同一次 MC 规划，独立于主脑策略复盘及身体动作执行。
-Neko 提供高层目标、策略、角色演出与语音；独立框架细化规划并驱动原生执行队列。
-没有用户新消息时继续推进目标；新反馈可以在检查点插入，或明确替换当前行为。
-完整框架已归入 [minecraft-ai-friend/packages/agent-mc-autonomy](https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-autonomy)，不安装、不启动 Neko 也能运行。本插件按固定提交依赖它；不再保存控制器、调度器或上下文策略的副本。
-可配置其他人的兼容服务器，不要求在本机开服。
-Minecraft 执行插件由 **jcs130** 编写与维护，源码来自你的 `minecraft-ai-friend` 项目。
+让 Neko 带着自己的性格进入 Minecraft：自主选择目标、持续行动，用户反馈随时改变计划，当前猫娘用已有声音解说。支持 Java **1.21.1**，可以连接本机或他人的兼容服务器。
 
-当前 main 为 0.6.2 发布准备版，固定框架 0.2.1（`8b2d48e5`）、精确 Git 核心 `78b67164` / `0.5.7-rc.5` 与共享观战 `3553c60d`。在保留 0.5.65 的 YSM、地形准备、重连及复盘修复基础上，新增同次规划台词的独立输出端口与当前猫娘语音适配，不增加解说模型调用。配置和兼容边界见 [模型、人设与角色声音](docs/model-and-voice.md)；源码、实际部署、完整安装包、长期生存与 Market 审核分别验收。
-
-保留既有水下脱困、重复查询恢复、人格与近期消息、原版物品图标和自带 YUI 外观。千灯纪技能、魔力等仍由可选扩展资料按实际数据启用。已发布的 0.5.54 离线包使用旧框架 0.1.78；升级须使用匹配版本的完整离线包。附件问题的逐项核实见 [兼容修复记录](docs/recipient-compatibility-20261017.md)，源码验证、安装验收与真实生存分别记录。
-
-插件面板顶部的「连接与启动」集中填写地址、端口、账号、外观、参与角色和扩展模式，点击「保存并一键启动」走正常启动流程。当前执行器须先停止并排空；所有权或回执不明时拒绝接管。默认仍不开自动启动。高级模型、账号授权、资源和诊断保留在折叠项内。`extension_pack.mode` 默认 `auto`，也可设为 `none` 只使用标准 Minecraft；`custom` 保留显式本地端口配置。千灯纪解析源码在独立资料包，随包文件有提交和 SHA256 来源，不加载其他 Agent 宿主。语音继续走 Neko 官方输出接口，异步等待生成完成回执，不阻塞身体队列，也不把受理声称为已播放。
-
-inspect 含待复盘死亡事件时，同次最终判断可引用检查返回的短 evidence_ref，必须提供有依据及适用条件的教训，或明确暂缓原因；遗漏时不确认、不投递、不口播，可在同一心跳补交。旧 episode-only 教训还须提供 evidence，短引用路径保留。独立 body 也须正常收尾后升至匹配的 0.1.71；仅重载适配器不更新旧 producer。教训仍是假设，改善与现场播放另行验证。
-
-
-可显式配置 `[speech_output] enabled=true`、本机 Neko `base_url` 和 `heartbeat.target`，启用已公开的输出接口。接口能力通过 `/openapi.json` 核对，仅发送 `/api/game/minecraft_autonomous/speak`，不建立游戏聊天会话或接管路由。插件清理主脑通过工具参数给出的意图句，在目标投递前持久记录关联并异步排入语音；目标、原生行动与播放独立推进。`speech-output.json` 区分排队、受理、拒绝和未知，未知发送不会重放，受理不代表听到声音。
-
-公共 SDK 不支持拦截主脑普通最终回复，`task_result` 固定使用 `direct_reply=False`。本插件的清理仅覆盖自己提交的 `spoken_text`；不能保证之后的主脑回复不会重复或包含控制文字。最终回复采用自然接话指导，实际声线、音量、重复情况与听感仍须现场验收。`inspect` 只读取事实和刷新检查记录；最终判断同次携带死亡教训（引用 episode_id 或 source_event.run）或明确暂缓原因，通知受理不会自动完成复盘。
-
-**0.5.54 候选版面向 Windows x64 / CPython 3.11 Neko，使用 Mineflayer 连接 Java 1.21.1。完整离线包与真实游戏验收分别记录；自然语音听感、场景渲染和长期自主生存仍须现场验证。**
-默认关闭自主游玩，必须显式执行独立 `run` 或内嵌 `start`。普通源码更新不自动开始游戏；Release/Market 仍需单独发布。
-YUI 普通 slim 皮肤和原始 YSM 模型随插件附带。Neko 内嵌运行的 Web 默认值为 `bundled:yui-ysm`；配置中的明确默认值与观战页已保存的选择都会保留，已保存的「跟随服务器」优先。选择只影响网页，不修改服务器或 Microsoft 皮肤。偏好按服务器/账号隔离；旧清单 URL 记录缺少服务器来源，保留原条目，升级后在「人物模型」重新选择一次。独立运行默认 `server`，可显式配置 `viewer.default_appearance` 与安装目录的 `assets/appearances/catalog.json`。外部运行的实际设置由 standalone 配置管理。
-实际结果及失败记录见 [原版服验收](docs/vanilla-live-acceptance-2026-10-13.md)。本次固定构建、配置页和性能证据见 [0.5.44 记录](docs/performance-release-20261016.md)。
-
-| 项目 | 内容 |
-| --- | --- |
-| Plugin ID | `minecraft_autonomous` |
-| SDK 入口 | `plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin` |
-| 环境 | Python 3.11+；Node 22+；N.E.K.O 为可选前端 |
-| 游戏协议 | **Java 1.21.1（767）**，拒绝 `auto` 和其他版本 |
-| 自主框架 | `agent-mc-autonomy@0.1.84`，固定来源 `minecraft-ai-friend@404f7a24b117b28e6618de9e547c5aa9b6b11abc` |
-| 执行核心 | `agent-mc-world@0.5.7-rc.3`，来源提交 `bfa3882fc8f6e93d7bedd453127c91488852fd9b`；精确归档 SHA256 `1a91d462a5b88c91d43c09a14c3b87370a2c9f56d099184948f4ff977705a3f4` |
-| 共享观战输入 | `mc-visual-console@f0f2227e65ea05ea89dcd4954790ec787a3a2e7a`；完整离线包已包含固定源码与原始资源 |
-| 构建 | 固定源码，直接运行核心官方 `build:engine`；无插件专用补丁或第二份编译实现 |
-| 许可证 | 本插件 Apache-2.0；独立核心 MIT，归档保留其许可证和来源 |
+游戏规划、原生任务队列、记忆和执行器属于独立的 [Minecraft AI Friend](https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-autonomy)。这里是薄适配器；不修改 Neko 主程序或 SDK。没有新聊天时仍会继续游玩。
 
 ## 完整离线包安装
 
-已有 Neko 的普通用户使用完整离线 ZIP，无需安装 Git、Python builder、SDK、npm 或手动准备 vendor。下载以 [仓库 Releases](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases) 实际列出的同版附件或维护者提供的文件为准，请核对版本和校验值。
+普通用户下载 [Releases](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases) 中的 **Minecraft-Autonomous-0.6.3-Windows-x64-offline.zip**。它已包含 Node、固定后端及依赖、3D 观战、1.21.1 贴图、音效/音乐、浏览器运行时和 YUI 普通皮肤/YSM 模型，无需安装 Git、Python builder、npm 或手工拼 vendor。
 
-1. 将完整 ZIP 解压到任意目录，双击最外层 `prepare.cmd`，等待准备成功。它只校验并复制运行资源到当前用户的版本化本地缓存，不启动游戏、模型或 Neko 服务。
-2. 打开 **Neko 插件中心 → 导入**，选择同目录的 `minecraft_autonomous.neko-plugin`，完成安装或升级。
-3. 在插件设置中填写自己的服务器和账号，绑定 Neko 模型，允许显式启动后点击开始。Microsoft 认证由本人完成；离线准备不代登录。
-4. 准备成功并导入插件后，可删除解压目录；运行资源保留在 `%LOCALAPPDATA%/AgentMCWorld/installations`。升级时先显式停止，再对新完整包重复上述步骤。
+1. **完整解压 → 双击「一键安装.cmd」**。校验并准备资源后，自动打开中文入门页；不会启动或修改 Neko、模型和游戏服务器。
+2. **Neko 插件中心 → 导入**，选择同目录的 `.neko-plugin`。首次使用，在官方「插件 API」保存一个支持文字和工具调用的模型，并在本插件「配置」页绑定 `decision`。已有槽直接复用；支持图像时可同时绑定 `vision`。面板提供这两个页面的直接入口。
+3. **插件「配置与控制」→ 选择服务器 →「开始自主游玩」**。本机默认 `127.0.0.1:25565`；离线昵称留空会自动生成并保存，下一次沿用。也可选择千灯纪公网预设或填写自己的服务器。默认跟随当前猫娘解说、使用随包 YUI YSM、进入游戏后自动打开观战，持续运行直到停止。
 
-明确填写自定义 Node、后端或观战路径时不会自动混入离线包路径；外部观察模式继续使用独立执行器配置。插件中心只导入较小的 `.neko-plugin`，完整资源与运行时位于相邻目录，不改变 Neko 包限制。源码开发者使用 [源码安装指南](docs/install-source.md) 的真实 SDK 构建流程。
+首次仍需本人已有的 **Neko、可用规划模型、可进入的服务器**。完整包不包含 Minecraft 服务端或模型权重，也不共享作者的 API 密钥、密码和私有世界。「本机原版」表示连接已经开好的本机服务器；Microsoft 正版账号需本人通过官方页面授权。Neko 的主/辅助 API 密钥不会自动变成插件模型绑定。
+
+后续使用直接打开插件点击开始；不用重新填写资源路径、音色 ID 或 TTS 密钥。Neko 使用自定义端口时，在高级设置修改本机语音地址。网页音效和音乐需要浏览器允许播放。想安静观战，可关闭首页的猫娘解说开关。导入、保存或重开 Neko 都不会自动进服。
+
+资源保存在 `%LOCALAPPDATA%/AgentMCWorld/installations`，准备成功后可删除解压目录。升级先停止旧版游玩，再运行新版安装入口并正常导入。`prepare.cmd` 兼容旧安装方式。明确自定义的运行路径不会混入离线包默认值，外部观察模式不接管已有执行器。
+
+## 默认体验与可选功能
+
+- **持续自主游玩**：首次配置默认不限决策轮数；可随时停止、插入目标或改变计划。生存指南是可检索参考，不限制角色自己的兴趣。
+- **同一个猫娘**：公开人格、主脑选出的相关记忆/近期消息与意图投影给身体规划器；同一次规划可给出自然台词，独立语音队列沿用当前角色声音，不增加解说模型调用。
+- **3D 观战**：自带 YUI YSM 和普通皮肤，仅替换 Web 外观；浏览器中明确保存的选择优先，不更改服务器皮肤。
+- **通用 Minecraft 优先**：默认 Mineflayer 标准数据。千灯纪玩法通道和技能/魔力等只由可选扩展在匹配实际数据后启用；可关闭扩展。
+- **可选快决策和记忆服务**：未配置 fast/Jev 时使用规则反射；默认本地记忆检索。高级模型、账号、外观及诊断设置均在折叠项。
+
+动作受理、目标达成、音频生成和桌面播放分别记录，不能互相替代。长期无人干预生存、Microsoft 真账号全流程以及千灯纪全部特色模型/资源仍在持续打磨，详见版本说明。源码开发安装见 [源码指南](docs/install-source.md)，模型与声音见 [接入说明](docs/model-and-voice.md)。
+
+## 当前固定组合
+
+| 项目 | 内容 |
+| --- | --- |
+| 插件 | `minecraft_autonomous` **0.6.3**；Windows x64 / Neko CPython 3.11 |
+| 自主框架 | `agent-mc-autonomy@0.2.1`，提交 `8b2d48e536bea73a94535911d8eb0a41e10eb82d` |
+| 游戏核心 | `agent-mc-world@0.5.7-rc.5`，提交 `78b67164f6fe64bb1e271e43901fc45ed7a760c8` |
+| 核心归档 SHA256 | `f5653b38a0d86314a22eaceaa5445acfa5b441ae2c206a76ce742d04e4920745` |
+| 共享观战 | `mc-visual-console@3553c60d49ff4874f663129a749d937632c6c759` |
+| 宿主公共接口核对 | Neko main `ec09fca56ad146a55855d59f12969a3bac12c9f8`；主程序/SDK 未修改 |
+| 许可证 | 本插件 Apache-2.0；独立核心 MIT；随包保留素材和第三方许可 |
 
 ## 架构与版本选择
 

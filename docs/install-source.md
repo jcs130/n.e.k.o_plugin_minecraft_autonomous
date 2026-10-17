@@ -51,7 +51,7 @@ Get-FileHash $package -Algorithm SHA256
 
 构建输出是 ZIP 格式的 `.neko-plugin`；交付前用归档工具确认其中存在：
 
-- `payload/plugins/minecraft_autonomous/plugin.meta.json`：真实 SDK 从入口导出的静态元数据及源码指纹；本版应含 17 个入口。SDK 可能在元数据探测失败时警告后继续打包，单看 CLI 退出成功不够，缺失时应停止交付并排查导入错误。
+- `payload/plugins/minecraft_autonomous/plugin.meta.json`：真实 SDK 从入口导出的静态元数据及源码指纹；本版应含 18 个公开入口及规划语音定时处理器。SDK 可能在元数据探测失败时警告后继续打包，单看 CLI 退出成功不够，缺失时应停止交付并排查导入错误。
 - `payload/plugins/minecraft_autonomous/vendor/`：含声明依赖及其 `dist-info`。
 - `payload/dependencies.toml`、`manifest.toml` 和 `metadata.toml`。
 - 插件静态界面、YUI slim 皮肤和原始 YSM 外观资源。

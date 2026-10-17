@@ -285,18 +285,29 @@ class Dashboard:
                   input_schema={"type": "object", "properties": {"connection": {"type": "object"},
                       "goal": {"type": "string", "maxLength": 4000}, "use_neko_model": {"type": "boolean"},
                       "appearance": {"type": "string"}, "extension_mode": {"enum": ["auto", "none", "custom"]},
-                      "character": {"type": "string", "maxLength": 80}}, "required": ["connection"]})
+                      "character": {"type": "string", "maxLength": 80}, "narration": {"type": "boolean"},
+                      "neko_url": {"type": "string", "maxLength": 200}}, "required": ["connection"]})
     async def quick_start(self, connection: dict, goal: str = "", use_neko_model: bool = True,
-                          appearance: str | None = None, extension_mode: str | None = None, character: str | None = None, **_):
+                          appearance: str | None = None, extension_mode: str | None = None, character: str | None = None,
+                          narration: bool = True, neko_url: str | None = None, **_):
         from agent_mc_autonomy.mailbox import Mailbox
         from agent_mc_autonomy.ownership import session_is_owned
         from agent_mc_autonomy.recovery import require_no_pending_acknowledgement
 
         if (not isinstance(connection, dict) or not connection or set(connection) - EDITABLE["server"]
-                or not isinstance(goal, str) or len(goal) > 4000 or type(use_neko_model) is not bool):
+                or not isinstance(goal, str) or len(goal) > 4000 or type(use_neko_model) is not bool or type(narration) is not bool):
             return Err({"code": "invalid_quick_start", "message": "请填写有效连接；不要在连接字段中传入密码或其它控制参数。"})
         try:
             raw = await self.config.dump()
+            connection = dict(connection)
+            # Defaults are applied only on this explicit play action. Importing
+            # the plugin never creates an account or joins a server.
+            if not connection.get("host"):
+                connection["host"] = "127.0.0.1"
+            if not connection.get("username"):
+                if connection.get("auth", raw.get("server", {}).get("auth", "offline")) == "microsoft":
+                    return Err({"code": "account_required", "message": "正版登录请先填写自己的 Microsoft 账户标识，再通过官方页面授权。"})
+                connection["username"] = raw.get("server", {}).get("username") or "Neko_" + uuid.uuid4().hex[:8]
             current = Settings.parse(raw)
             directory = current.data_root(self.data_path()) / "sessions" / current.identity / "host"
             if session_is_owned(directory) or self._worker and self._worker.snapshot().get("worker_alive"):
@@ -314,6 +325,15 @@ class Dashboard:
                     require_no_pending_acknowledgement(target)
             patch = {"server": connection, "runtime": {"mode": "embedded"}, "autonomy": {"enabled": True},
                      "heartbeat": {"enabled": True}, "host_context": {"enabled": True}, "presentation": {"enabled": True}}
+            if "max_decisions" not in raw.get("autonomy", {}):
+                patch["autonomy"]["max_decisions"] = 0
+            patch["speech_output"] = {"enabled": narration}
+            if narration:
+                origin = neko_url if neko_url is not None else raw.get("speech_output", {}).get("base_url") or "http://127.0.0.1:48911"
+                output_settings({"speech_output": {"enabled": True, "base_url": origin}}, "current_character")
+                patch["speech_output"].update(base_url=origin, planner_narration=True)
+                if neko_url is not None or not raw.get("host_context", {}).get("character_api_url"):
+                    patch["host_context"]["character_api_url"] = origin.rstrip("/") + "/api/characters"
             if use_neko_model:
                 patch["planner"] = {"route": "host"}
             if appearance is not None:
@@ -325,8 +345,6 @@ class Dashboard:
                     raise ValueError("invalid_character")
                 patch["heartbeat"]["target"] = character
                 patch["presentation"]["target"] = character
-                if not character:
-                    patch["speech_output"] = {"enabled": False}
             result = await self.save_settings(patch)
             if isinstance(result, Err):
                 return result

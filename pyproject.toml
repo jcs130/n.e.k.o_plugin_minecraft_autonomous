@@ -1,6 +1,6 @@
 [project]
 name = "minecraft_autonomous"
-version = "0.6.2"
+version = "0.6.3"
 description = "Thin N.E.K.O adapter for the host-neutral Minecraft autonomy framework"
 requires-python = ">=3.11"
 readme = "README.md"
@@ -15,7 +15,7 @@ Repository = "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous"
 Issues = "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/issues"
 
 [tool.neko.build]
-exclude_dirs = ["tests", "test", "_tests", "docs", "tasks", "local", "runtime", "logs", ".superpowers", "vendor/*/benchmarks", "vendor/*/samples", "vendor/*/[dD]emos"]
+exclude_dirs = ["tests", "test", "_tests", "docs", "tasks", "release_tools", "local", "runtime", "logs", ".superpowers", "vendor/*/benchmarks", "vendor/*/samples", "vendor/*/[dD]emos"]
 exclude_files = ["AGENTS.md", "CONTRIBUTING.md", "ruff.toml", ".gitignore", ".gitattributes", ".editorconfig"]
 exclude = [".env", ".env.*", "*.key", "*.log", "*.local.toml", "*.bak", "*.orig", "*.rej", "vendor/annotated_types/test_cases.py", "vendor/win32com/servers/test_pycomtest.py", "vendor/win32/scripts/pywin32_testall.py"]
 
