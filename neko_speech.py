@@ -20,6 +20,12 @@ from .neko_commentary import load_commentary, save_commentary
 def sanitize_speech(value):
     if not isinstance(value, str) or len(value) > 600:
         return ""
+    # Marked reasoning is internal even when a model puts it in spoken_text.
+    # Ordinary English/game names remain speech; never guess from language.
+    value = re.sub(r"<think(?:ing)?\s*>.*?</think(?:ing)?\s*>", "", value, flags=re.I | re.S)
+    if re.search(r"</think(?:ing)?\s*>", value, flags=re.I):
+        value = re.sub(r"^.*?</think(?:ing)?\s*>", "", value, count=1, flags=re.I | re.S)
+    value = re.split(r"<think(?:ing)?\s*>", value, maxsplit=1, flags=re.I)[0]
     # Reserved metadata accepts whitespace/chunk splits, nested brackets and
     # future suffixes. Ordinary bracketed game names remain ordinary speech.
     prefix = r"(?:neko\s*_\s*\w+|tts\s*[_:-]\s*\w+|voice\s*[_:-]\s*\w+|speech\s*[_:-]\s*\w+|emotion|prosody|control)"

@@ -43,7 +43,7 @@ EDITABLE = {
     "viewer": {"url", "auto_open", "renderer_directory", "catalog_file", "bundled_appearance_catalog_file", "default_appearance", "listen_port"},
     "perception": {"enabled"},
     "presentation": {"enabled", "target", "min_interval_seconds"},
-    "heartbeat": {"enabled", "target", "min_interval_seconds", "review_interval_seconds", "idle_presence_seconds"},
+    "heartbeat": {"enabled", "target", "min_interval_seconds", "review_interval_seconds", "idle_presence_seconds", "structured_reviews"},
     "speech_output": {"enabled", "base_url", "planner_narration", "min_interval_seconds"},
     "extension_pack": {"mode"},
     "server_extension": {"presentation_module", "presentation_sha256"},
@@ -183,6 +183,10 @@ class Dashboard:
                                "review": {key: review.get(key) for key in ("id", "trigger", "attempts", "result", "opportunity", "notification_status", "inspected_at", "reflection", "inspected_evidence_ref")}}
             heartbeat_state["inspection"] = {"default": "compact", "original_query": "minecraft_autonomy_review: evidence_ref/detail_path/detail_offset"}
             heartbeat_state["delivery_failure"] = (review.get("result") or {}).get("error")
+            heartbeat_state["transport"] = "neko_public_model_gateway" if heartbeat.structured_reviews else "host_notification"
+            if heartbeat.structured_reviews:
+                from .neko_commentary import load_commentary
+                heartbeat_state["structured_delivery"] = load_commentary(port.directory / "structured-review.json")
             heartbeat_state["delivery_state"] = ("final_decision" if (review.get("result") or {}).get("acknowledged") else "inspected_awaiting_final" if review.get("inspected_at") else "notification_" + str(review.get("notification_status", "not_delivered")))
             heartbeat_state["next"] = "主脑尚未完成最终判断；重新检查当前心跳后提交简短判断。" if heartbeat_state["delivery_failure"] else None
             return {"settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),

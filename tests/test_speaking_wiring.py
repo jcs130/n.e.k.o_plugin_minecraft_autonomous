@@ -127,6 +127,7 @@ def test_registered_idle_unchanged_retry_and_optional_context(plugin_instance, m
 
 def test_registered_death_keeps_evidence_and_requires_honest_completion(plugin_instance, monkeypatch, run_async):
     _, port, review, episode = setup_death(plugin_instance, monkeypatch)
+    plugin_instance.config.dump.return_value['heartbeat']['structured_reviews'] = False
     entry = registered_review(plugin_instance)
     port.now = lambda: 10090
     snapshot = json.loads((port.directory / "status.json").read_text(encoding="utf-8"))

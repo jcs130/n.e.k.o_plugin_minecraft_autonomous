@@ -15,7 +15,8 @@ from plugin.sdk.plugin import Err
 def setup(plugin, monkeypatch):
     mod = importlib.import_module(plugin.__class__.__module__ + ".neko_heartbeat")
     raw = {"autonomy": {"enabled": True}, "server": {"host": "example.invalid", "username": "TestBot"},
-           "heartbeat": {"enabled": True, "target": "TestRole", "idle_presence_seconds": 900}}
+           "heartbeat": {"enabled": True, "target": "TestRole", "idle_presence_seconds": 900,
+                         "structured_reviews": False}}
     monkeypatch.setattr(plugin.config, "dump", AsyncMock(return_value=raw))
     directory = mod.review_port(plugin, mod.Settings.parse(raw)).directory
     port = ReviewPort(directory, now=lambda: 10000)

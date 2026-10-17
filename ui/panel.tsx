@@ -265,6 +265,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <Switch checked={draft.autonomy.enabled} label="允许显式启动自主游玩" onChange={v=>change("autonomy","enabled",v)} />
           <Switch checked={draft.viewer.auto_open !== false} label="进入游戏后自动打开观战界面" onChange={v=>change("viewer","auto_open",v)} />
           <Switch checked={draft.heartbeat?.enabled === true} label="让 Neko 主脑持续参与自主生存决策" onChange={v=>change("heartbeat","enabled",v)} />
+          <Switch checked={draft.heartbeat?.structured_reviews !== false} label="结构化复盘与单独口播（避免内部过程被念出）" onChange={v=>change("heartbeat","structured_reviews",v)} />
           {field("heartbeat","target","主脑角色（留空跟随当前角色）")}
           {field("heartbeat","min_interval_seconds","变化唤醒最小间隔（秒）","number")}
           {field("heartbeat","review_interval_seconds","无新变化时复核间隔（秒）","number")}

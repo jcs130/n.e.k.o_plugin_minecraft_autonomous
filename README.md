@@ -32,7 +32,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 插件 | `minecraft_autonomous` **0.6.13 开发候选**；Windows x64 / Neko CPython 3.11 |
+| 插件 | `minecraft_autonomous` **0.6.14 开发候选**；Windows x64 / Neko CPython 3.11 |
 | 自主框架 | `agent-mc-autonomy@0.2.11`，提交 `722e52c1110468c38ea87dac5e45a15c75e5f687` |
 | 游戏核心 | `agent-mc-world@0.5.7-rc.14`，提交 `768d8906a9a09b8c21f5c1c4f37818147bf9ca93` |
 | 核心归档 SHA256 | `3c390af436ba0ced69319a24b0d67441afdf21a64f7f7fe814df0b68b36686e1` |
@@ -43,6 +43,8 @@
 ## 架构与版本选择
 
 动作规划默认使用 Neko 的模型绑定；也可在「模型 API 接入」中单独选择通义千问、DeepSeek、Kimi、智谱、豆包、硅基流动、OpenAI、Claude、Gemini 或兼容服务。厂商预设不代选模型。原生协议、思考内容回传、流式接收和参数校验均在共享 `agent-mc-autonomy`，插件只提供配置与模型入口。模型访问不进入 Minecraft 身体执行核心。
+
+自动高层复盘默认通过官方模型 SDK 的 `decision` 绑定接收结构化判断，沿用当前角色的公开人格、已选记忆、近期消息和真实现场。只有明确的 `spoken_text` 会进入原有角色语音出口；模型自由文本和思考字段不会变成普通聊天或语音。此通路替代旧的通知触发回复，不增加一套解说模型循环。角色普通聊天仅接收只读现场，用户直接交流和插入目标保持原入口。未绑定模型时面板如实显示复盘不可用，独立身体继续按原配置运行，不回退到无过滤的自动回复。高级设置保留旧通知模式供兼容诊断。
 
 支持 API Key、外部管理的 Bearer 令牌、OpenAI / Google 官方 OAuth 及 Google ADC。OAuth 可选依赖需单独安装，在运行机器执行 `auth-login`，使用系统凭据库保存授权。Claude 支持 API Key 或外部有效 Bearer，不冒称通用 Claude 订阅账号登录。配置、参数、授权命令和厂商限制见 [共享模型接入文档](https://github.com/jcs130/minecraft-ai-friend/blob/main/packages/agent-mc-autonomy/docs/model-providers.md)。读取模型列表不会推理；显式测试模型会消耗一次调用额度。
 

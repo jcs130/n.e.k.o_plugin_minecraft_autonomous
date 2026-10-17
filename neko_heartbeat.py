@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass
 
 from agent_mc_autonomy.commentary import commentary_observation
-from agent_mc_autonomy.configuration import Settings, _text
+from agent_mc_autonomy.configuration import Settings, _boolean, _text
 from agent_mc_autonomy.host_context import HostContextPort
 from agent_mc_autonomy.mailbox import observation
 from agent_mc_autonomy.ownership import session_is_owned
@@ -25,6 +25,7 @@ class HeartbeatSettings:
     min_interval_seconds: int = 60
     review_interval_seconds: int = 180
     idle_presence_seconds: int = 45
+    structured_reviews: bool = True
 
     @classmethod
     def parse(cls, raw):
@@ -35,7 +36,8 @@ class HeartbeatSettings:
         policy = ReviewPolicy.parse(section)
         if len(target) > 80:
             raise ValueError("heartbeat.target is too long")
-        return cls(policy.enabled, target, policy.min_interval_seconds, policy.review_interval_seconds, policy.idle_presence_seconds)
+        return cls(policy.enabled, target, policy.min_interval_seconds, policy.review_interval_seconds,
+                   policy.idle_presence_seconds, _boolean(section, "structured_reviews", True))
 
     def policy(self):
         return ReviewPolicy(self.enabled, self.min_interval_seconds, self.review_interval_seconds, self.idle_presence_seconds)
@@ -188,6 +190,23 @@ class NekoHeartbeat:
                 PresentationSettings.parse(raw).min_interval_seconds, review_id=review["id"])
             record_origin(self, settings, config.target, port, generation, review, origin, note)
         passive = not note["allowed"] and review["trigger"] == "periodic_review"
+        if config.structured_reviews and not passive:
+            from .neko_structured_review import deliver_review, record_delivery
+            # Keep the current character aware of its body for ordinary user
+            # conversation, without starting a second free-form model/TTS turn.
+            self.push_message(visibility=[], ai_behavior="read",
+                parts=[{"type": "text", "text": "Minecraft当前现场（只读观测）："
+                        + str(review["evidence"]["facts"].get("body", ""))[:100]
+                        + "；" + str(review["evidence"]["facts"].get("queue", ""))[:100]}],
+                source="minecraft_autonomous", target_lanlan=config.target or None,
+                coalesce_key="minecraft_review_" + settings.identity,
+                metadata={"heartbeat_id": review["id"], "sampled_at": review["evidence"]["sampled_at"], "expires_in_s": 90})
+            result = await deliver_review(self, raw, settings, config, port, review, generation)
+            record_delivery(port, result)
+            if result.get("submitted"):
+                with self._control_lock:
+                    save_commentary(path, {**state, "submitted_at": port.now(), "playback_verified": False})
+            return Ok(result)
         text = ("游戏仍在自主运行。以下内部观测静默留给下次交流，无需回复或口播："
                 + str(review["evidence"]["facts"].get("body", ""))[:100]
                 + "；" + str(review["evidence"]["facts"].get("queue", ""))[:100] if passive else heartbeat_text(review, note))
