@@ -1,5 +1,6 @@
 /** Passive, host-neutral Qiandengji presentation for the caller's own bot.
- * No planner, task queue, chat commands, login or second Minecraft connection.
+ * No planner, task queue, login or second Minecraft connection. Hosts can
+ * explicitly enable bounded read-only status refresh after attested detection.
  * Ordinary servers stay inactive. State expires and is cleared on disconnect.
  */
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
@@ -8,6 +9,9 @@ const finite=(v,lo,hi)=>typeof v==='number'&&Number.isFinite(v)&&v>=lo&&v<=hi;
 const record=v=>v!==null&&typeof v==='object'&&!Array.isArray(v);
 const text=(v,n)=>typeof v==='string'&&v.length>0&&v.length<=n?v:null;
 const channels=['mcviewer:state','mcagent:state'];
+export const itemAppearanceCatalog={fileUrl:new URL('./data-packs/qiandengji/viewer-items/catalog.json',import.meta.url).href,
+  sha256:'5bb616356aae2799181067c72ddfc1a864c0b2541887f4d5c462160af181ec73'};
+export const presentationOptions=Object.freeze({stateRefreshMs:30_000});
 function skills(raw, observedAt, channel) {
   if(!record(raw)||raw.schemaVersion!==1||!Array.isArray(raw.skills??[])||!Array.isArray(raw.abilities??[])
     ||(raw.skills?.length??0)>64||(raw.abilities?.length??0)>64)return null;
@@ -36,9 +40,12 @@ function vitals(raw, playerUuid) {
   if(typeof raw.inWater==='boolean')result.inWater=raw.inWater;
   return result;
 }
-export function createPresentationObserver(bot,{now=Date.now,staleMs=12_000,autoDetect=true}={}) {
+export function createPresentationObserver(bot,{now=Date.now,staleMs=12_000,autoDetect=true,stateRefreshMs=0}={}) {
   if(bot.version!=='1.21.1')throw Error('QIANDENGJI_PRESENTATION_VERSION_MISMATCH');
   let current=null,closed=false,ended=false,serverSession=null,lastSequence=0,detected=!autoDetect;
+  if(!Number.isInteger(stateRefreshMs)||stateRefreshMs<0||stateRefreshMs>300_000||stateRefreshMs>0&&stateRefreshMs<30_000)throw Error('QIANDENGJI_REFRESH_INTERVAL_INVALID');
+  const freshness=Math.max(staleMs,stateRefreshMs*1.5);
+  let lastRefresh=-Infinity,refreshError=null;
   const registered=[];
   const own=()=>{const value=bot._client?.uuid;return UUID.test(value??'')?value.toLowerCase():null;};
   const bind=(value,source,at)=>{current={...value,profile:'qiandengji_1.21.1',source,receivedAt:at,entityId:bot.entity?.id};};
@@ -83,21 +90,31 @@ export function createPresentationObserver(bot,{now=Date.now,staleMs=12_000,auto
       abilities:prepared.map(id=>({id,name:id,level:null,cooldownMs:null,manaCost:null})),source:'plugin',observedAt:raw.observedAt}},
       'qiandengji_bound_system_status',at);
   };
-  function clear(){current=null;serverSession=null;lastSequence=0;}
-  const end=()=>{ended=true;clear();};
-  bot._client.on('custom_payload',payload);bot.on('message',message);bot.on('end',end);bot.on('death',clear);
+  function clearBody(){current=null;}
+  function clear(){clearBody();serverSession=null;lastSequence=0;}
+  function refresh(){
+    const at=now();
+    if(!stateRefreshMs||closed||ended||!detected||!serverSession||!own()||bot._client.state!=='play'||!bot.entity||bot.health===0
+      ||at-lastRefresh<stateRefreshMs||current&&at-current.receivedAt<stateRefreshMs)return false;
+    lastRefresh=at;
+    try{bot.chat('/mycli status');refreshError=null;return true;}catch{refreshError='QIANDENGJI_STATUS_REFRESH_FAILED';return false;}
+  }
+  const refreshTimer=stateRefreshMs?setInterval(refresh,stateRefreshMs):null;refreshTimer?.unref?.();
+  const end=()=>{ended=true;clear();clearInterval(refreshTimer);};
+  // Death invalidates body readings, not the identity-attested connection guide.
+  bot._client.on('custom_payload',payload);bot.on('message',message);bot.on('end',end);bot.on('death',clearBody);
   // Register an existing server protocol only. This sends channel metadata,
   // never a gameplay command. Paper then sends fresh own-player state itself.
   const register=()=>{if(closed||!detected||registered.length||typeof bot._client.registerChannel!=='function')return;
     for(const channel of channels){bot._client.registerChannel(channel,['restBuffer'],true);registered.push(channel);}};
   if(bot._client.state==='play')register();else bot.once('login',register);
   const snapshot=()=>{
-    if(closed||ended||!current||current.playerUuid!==own()||current.entityId!==bot.entity?.id||now()-current.receivedAt<0||now()-current.receivedAt>staleMs)return null;
-    return structuredClone(current);
+    if(closed||ended||!current||current.playerUuid!==own()||current.entityId!==bot.entity?.id||now()-current.receivedAt<0||now()-current.receivedAt>freshness)return null;
+    return {...structuredClone(current),serverItemPackId:'qiandengji-items-1.21.1'};
   };
   return {snapshot,capabilities:()=>{const value=snapshot();return {active:!!value,id:'qiandengji',minecraftVersion:bot.version,
-    source:value?.source??null,observedAt:value?.skills.observedAt??null,skills:!!value?.skills,mana:!!value?.skills.mana};},
-    close(){if(closed)return;closed=true;clear();bot._client.off('custom_payload',payload);bot.off('message',message);bot.off('end',end);bot.off('death',clear);bot.off('login',register);
+    source:value?.source??null,observedAt:value?.skills.observedAt??null,skills:!!value?.skills,mana:!!value?.skills.mana,refreshError};},refresh,
+    close(){if(closed)return;closed=true;clear();clearInterval(refreshTimer);bot._client.off('custom_payload',payload);bot.off('message',message);bot.off('end',end);bot.off('death',clearBody);bot.off('login',register);
       // Do not unregister a protocol that another explicit extension may share.
       // The connection owns registration; this observer owns only its listeners.
     }};

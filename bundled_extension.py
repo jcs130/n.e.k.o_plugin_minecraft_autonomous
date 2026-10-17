@@ -25,6 +25,18 @@ def bundled_extension_status(raw):
         if (metadata.get("schema") != "agent-mc-server-presentation/v1" or metadata.get("minecraft_version") != "1.21.1"
                 or module.stat().st_size > 262144 or hashlib.sha256(module.read_bytes()).hexdigest() != metadata.get("module_sha256")):
             raise ValueError("pack_integrity_mismatch")
+        resources = metadata.get("resources", {})
+        if not isinstance(resources, dict) or len(resources) > 64:
+            raise ValueError("pack_resource_manifest_invalid")
+        for relative, expected in resources.items():
+            if (not isinstance(relative, str) or "\\" in relative or Path(relative).is_absolute()
+                    or any(part in {"", ".", ".."} for part in relative.split("/")) or not isinstance(expected, dict)):
+                raise ValueError("pack_resource_path_invalid")
+            resource = (PACK / relative).resolve()
+            if (not resource.is_relative_to(PACK.resolve()) or not resource.is_file()
+                    or resource.stat().st_size > 1048576 or resource.stat().st_size != expected.get("bytes")
+                    or hashlib.sha256(resource.read_bytes()).hexdigest() != expected.get("sha256")):
+                raise ValueError("pack_resource_integrity_mismatch")
         return {"mode": mode, "available": True, "id": "qiandengji", "version": metadata.get("version"),
                 "module": str(module), "sha256": metadata["module_sha256"], "activation": "validated_same_player_server_data"}
     except (OSError, ValueError, TypeError):

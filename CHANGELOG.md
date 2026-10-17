@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.7 — Development candidate
+
+- Pin the shared core repair that applies explicit server action denials to the
+  exact native block and preserves the original error for replanning.
+- Consume the shared SNBT text fix and original untrimmed armor icons, plus an
+  independently checked optional server item catalog.
+- Bundle Qiandengji's original custom item icons/models/textures. Keep its own
+  connection attestation through death and opt into bounded read-only status
+  refresh. Ordinary servers gain no custom protocol, queries or resource rules.
+- Validate every bundled extension resource before selecting the pack. Neko
+  main/SDK and model processes remain outside the plugin's lifecycle.
+
 ## 0.6.2 — Release preparation
 
 ### Fixed
