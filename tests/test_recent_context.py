@@ -1,5 +1,6 @@
 import asyncio
 import copy
+import dataclasses
 import importlib
 import json
 import threading
@@ -61,6 +62,23 @@ def attach_bus(plugin, rows):
     query = AsyncMock(return_value=[ConversationRecord.from_raw(r) for r in rows])
     plugin._test_bus = SdkBusContext(SimpleNamespace(conversations=SimpleNamespace(get=query)), host_ctx=plugin.ctx)
     return query
+
+
+def test_full_context_publication_keeps_available_recent_language(plugin_instance, monkeypatch, run_async):
+    port, snapshot, raw, settings, clock, save, host, _ = prepare(plugin_instance, monkeypatch)
+    settings = dataclasses.replace(settings, context_mode='full', context_tokens=1048576)
+    raw = copy.deepcopy(raw)
+    raw.setdefault('autonomy', {})['context_mode'] = 'full'
+    snapshot['host_recent_request']['context_mode'] = 'full'
+    save()
+    rows = [record(text=f'{i}: ' + 'Original recent language. ' * 160, at=9990 + i / 10) for i in range(12)]
+    attach_bus(plugin_instance, rows)
+    with session_lease(port.directory):
+        result = run_async(mod(plugin_instance).refresh_recent(plugin_instance, raw, settings, 'TestRole', port, plugin_instance._generation))
+        value = host.read_recent(snapshot['host_recent_request'])
+    assert result['messages'] == 12 and len(value['recent_messages']) == 12
+    assert not any(row['truncated'] for row in value['recent_messages'])
+    assert {row['text'] for row in value['recent_messages']} == {row['content'] for row in rows}
 
 
 @pytest.mark.parametrize('shape', ['mapping', 'sdk', 'ok', 'iterable'])

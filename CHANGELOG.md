@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.12 — Development candidate
+
+- 固定独立框架 0.2.10，配置面板增加完整上下文模式：关闭额外的消息/历史/工具结果裁剪，保留实际窗口预算与省略诊断。
+- 模型窗口可显式填写服务支持的容量；独立规划器的模型切换不改变 Neko 主程序、SDK 或角色语音。
+- 保持核心 rc.14 与观战 8e72a554 固定版本；源码与离线验证通过不等于长期生存验收或公开发布。
+
 ## 0.6.11 — Development candidate
 
 - Recognize actual Java 1.21.1 registered incoming private-chat templates in

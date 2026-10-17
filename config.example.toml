@@ -11,6 +11,7 @@ idle_decision_seconds = 60
 max_decisions = 0 # Continuous after explicit start; stop from the panel whenever desired.
 max_tool_rounds = 6
 context_tokens = 65536 # 默认64K；服务实际支持时可选131072（128K），保留显式配置的其他有效值。
+context_mode = "compact" # full 保留已提供的原文、完整工具结果与历史，仅按实际模型窗口预算省略。
 max_output_tokens = 1024
 model_timeout_seconds = 180
 

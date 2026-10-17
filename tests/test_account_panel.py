@@ -6,7 +6,7 @@ import pytest
 from plugin.sdk.plugin import Err, Ok
 
 
-@pytest.mark.parametrize("limit", [32768, 65536, 98304, 131072])
+@pytest.mark.parametrize("limit", [32768, 65536, 98304, 131072, 1048576])
 def test_context_limit_save_and_public_roundtrip_preserves_explicit_value(plugin_instance, plugin_module, run_async, monkeypatch, limit):
     dashboard = importlib.import_module(plugin_module.__name__ + ".dashboard")
     patch = {"autonomy": {"context_tokens": limit}}
@@ -16,6 +16,17 @@ def test_context_limit_save_and_public_roundtrip_preserves_explicit_value(plugin
     update.assert_awaited_once_with(patch)
     assert dashboard.public_config(plugin_module.Settings.parse(patch))["autonomy"]["context_tokens"] == limit
     assert dashboard.public_config(plugin_module.Settings.parse({}))["autonomy"]["context_tokens"] == 65536
+
+
+def test_full_context_setting_roundtrip(plugin_instance, plugin_module, run_async, monkeypatch):
+    dashboard = importlib.import_module(plugin_module.__name__ + ".dashboard")
+    update = AsyncMock(return_value={})
+    monkeypatch.setattr(plugin_instance.config, "update", update)
+    patch = {"autonomy": {"context_mode": "full", "context_tokens": 1048576}}
+    assert isinstance(run_async(plugin_instance.save_settings(patch)), Ok)
+    update.assert_awaited_once_with(patch)
+    assert dashboard.public_config(plugin_module.Settings.parse(patch))["autonomy"]["context_mode"] == "full"
+    assert isinstance(run_async(plugin_instance.save_settings({"autonomy": {"context_mode": "unlimited"}})), Err)
 
 
 def test_account_settings_save_only_and_native_link_contains_no_account_payload(plugin_instance, plugin_module, run_async, monkeypatch, tmp_path):

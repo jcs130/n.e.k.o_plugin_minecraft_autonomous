@@ -56,6 +56,8 @@ def owned_runtime(plugin, settings, target, port, generation):
                  'session': snapshot.get('runtime_session'), 'run': snapshot.get('native_run'),
                  'scope': snapshot.get('game_identity'), 'intent_revision': port.mailbox.intent_revision(),
                  'death_episode_id': snapshot.get('body_death_episode_id')}
+        if settings.context_mode == 'full':
+            value['context_mode'] = 'full'
         host_recent.binding(value)
         return value
     except (OSError, ValueError, TypeError, KeyError, OverflowError):
@@ -102,7 +104,7 @@ async def refresh_profile(plugin, raw, settings, target, port, generation):
             HostContextPort(port.directory, now=port.now).publish_static(fresh, scope=scope_key(owned['scope']))
 
 
-def normalize_record(value, actor, cutoff, sampled):
+def normalize_record(value, actor, cutoff, sampled, *, full=False):
     # SDK's public dump preserves normalized fields. Mapping records are kept
     # intact: from_raw would confuse delivery id with metadata.conversation_id.
     if not isinstance(value, Mapping):
@@ -145,7 +147,7 @@ def normalize_record(value, actor, cutoff, sampled):
         conversation = field('conversation_id')
         if conversation is not None:
             host_recent.text(conversation)
-        clipped = host_recent.clip(content, 1600)
+        clipped = host_recent.clip(content, host_recent.FULL_STORAGE_BYTES if full else 1600)
         return {'id': identity, 'derived_id': True, 'conversation_id': conversation,
                 'actor': actor, 'role': normalized_role, 'source': source, 'turn_type': turn,
                 'observed_at': observed, 'occurred_at': occurred,
@@ -187,7 +189,7 @@ def speech_records(port, binding):
                      'decision_id': receipt['decision_id'], 'speech_id': receipt.get('speech_id'),
                      'offered_at': offered, 'receipt_state': 'accepted' if state in {'accepted', 'queued'} else 'rejected' if state == 'rejected' else 'unknown',
                      'text_sha256': receipt['text_sha256'], 'text_available': False, 'playback_verified': False})
-    return sorted(rows, key=lambda r: r['offered_at'])[-3:]
+    return sorted(rows, key=lambda r: r['offered_at'])[-(60 if binding.get('context_mode') == 'full' else 3):]
 
 
 async def refresh_recent(plugin, raw, settings, target, port, generation):
@@ -208,7 +210,7 @@ async def refresh_recent(plugin, raw, settings, target, port, generation):
     if floor is None or floor[0] != floor_key:
         floor = (floor_key, host_recent.timestamp(port.now()))
         plugin._recent_session_floor = floor
-    cutoff = max(floor[1], port.now() - 600)
+    cutoff = port.now() - 600 if binding.get('context_mode') == 'full' else max(floor[1], port.now() - 600)
     async def query():
         result = plugin.bus.conversations.get(max_count=60, since_ts=cutoff, timeout=0.35)
         return await result if inspect.isawaitable(result) else result
@@ -227,7 +229,7 @@ async def refresh_recent(plugin, raw, settings, target, port, generation):
         sampled = port.now()
         candidates = {}
         for raw_row in rows:
-            row = normalize_record(raw_row, target, max(cutoff, sampled - 600), sampled)
+            row = normalize_record(raw_row, target, max(cutoff, sampled - 600), sampled, full=binding.get('context_mode') == 'full')
             if row:
                 candidates[(row['source'], row['id'])] = row
         selected = host_recent.select_recent_messages(list(candidates.values()), binding=binding, sampled_at=sampled, source='neko_public_conversations')
@@ -236,9 +238,9 @@ async def refresh_recent(plugin, raw, settings, target, port, generation):
         projection = {'schema': host_recent.SCHEMA, 'binding': binding, 'source': 'neko_public_conversations',
                       'sampled_at': sampled, 'expires_at': sampled + 30,
                       'coverage': {'state': 'partial' if count else 'unavailable', 'received_count': received,
-                                   'limit': 63, 'saturated': len(rows) == 60, 'selected_count': count,
+                                   'limit': max(63, received), 'saturated': len(rows) == 60, 'selected_count': count,
                                    'omitted_count': received - count, 'arrival_cursor': cutoff,
-                                   'reasons': ['session_observed_from', 'best_effort_publication'] if rows else ['session_observed_from', 'empty_snapshot', 'coverage_unknown']},
+                                   'reasons': [('public_recent_window' if binding.get('context_mode') == 'full' else 'session_observed_from'), 'best_effort_publication'] if rows else ['empty_snapshot', 'coverage_unknown']},
                       'recent_messages': selected, 'recent_speech': speech}
         return HostContextPort(port.directory, now=port.now).publish_recent(projection, binding=current)
 
