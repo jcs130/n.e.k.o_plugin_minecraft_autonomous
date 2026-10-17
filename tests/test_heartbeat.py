@@ -36,6 +36,25 @@ def test_disabled_never_reads_game(plugin_instance, run_async, monkeypatch):
     assert run_async(plugin_instance.game_decision_heartbeat()).value["reason"] == "disabled"
 
 
+def test_retry_resumes_the_inspected_review_instead_of_restarting_inspection(plugin_instance, run_async, monkeypatch):
+    port, snapshot, push = setup(plugin_instance, monkeypatch)
+    port.observe(snapshot)
+    first = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
+    run_async(plugin_instance.minecraft_autonomy_review(first, "inspect"))
+    port.now = lambda: 10090
+    snapshot["updated_at"] = datetime.fromtimestamp(10090, timezone.utc).isoformat()
+    (port.directory / "status.json").write_text(json.dumps(snapshot), encoding="utf-8")
+    port.observe(snapshot)
+    retry = run_async(plugin_instance.game_decision_heartbeat()).value
+    text = push.call_args.kwargs["parts"][0]["text"]
+    assert retry["heartbeat_id"] == first and "已检查，待最终判断" in text
+    assert "请直接提交continue/insert/revise" in text
+    assert "调用minecraft_autonomy_review inspect，收到证据后" not in text
+    assert not port.state()["review"].get("result")  # Notification never invents the brain's decision.
+    final = run_async(plugin_instance.minecraft_autonomy_review(first, "continue", "Keep the current work"))
+    assert final["acknowledged"]
+
+
 @pytest.mark.parametrize("phase", ["blocked", "inhibited"])
 def test_delivered_pending_review_refreshes_commentary_for_new_material_episode(plugin_instance, run_async, monkeypatch, phase):
     port, snapshot, push = setup(plugin_instance, monkeypatch)
@@ -129,6 +148,7 @@ def test_actual_blocked_outcome_has_bounded_preview_and_unverified_reaction(plug
     cue = push.call_args.kwargs["parts"][0]["text"]
     assert push.call_args.kwargs["ai_behavior"] == "respond"
     assert "mc_do/blocked" in cue and "path_stalled" in cue and "run-1:8" in cue
+    assert cue.index("path_stalled") < cue.index("调用minecraft_autonomy_review")
     assert cue.index("path_stalled") < cue.index("长期目标") and len(cue.encode()) < 750
     assert "未行动回复3次" in cue
     detail = run_async(plugin_instance.minecraft_autonomy_review(result["heartbeat_id"], "inspect"))
@@ -202,7 +222,7 @@ def test_long_review_uses_small_inspection_cue_without_losing_framework_evidence
     review_id = run_async(plugin_instance.game_decision_heartbeat()).value["heartbeat_id"]
     cue = push.call_args.kwargs["parts"][0]["text"]
     assert len(cue.encode("utf-8")) <= 600
-    assert "先" in cue and cue.index("inspect") < cue.index("continue")
+    assert cue.index("inspect") < cue.index("continue")
     assert "空闲" in cue and "26" in cue and "口粮0个" in cue
     detail = run_async(plugin_instance.minecraft_autonomy_review(review_id, "inspect"))
     assert "工作台1个" in detail["facts"]["gear"]

@@ -55,7 +55,8 @@ def is_stopped(plugin):
 def heartbeat_text(review, commentary=None):
     # The host's general notification preview is 200 tokens. A full objective
     # before the facts hid inventory, the idle queue and repeated-read evidence.
-    # Transport a small cue; the existing inspection tool reads framework facts.
+    # Put the causal game evidence before process instructions. On a retry,
+    # preserve the inspection phase already reached instead of starting over.
     def brief(text, size):
         raw = str(text).encode("utf-8")
         return raw.decode() if len(raw) <= size else raw[:size - 3].decode("utf-8", errors="ignore") + "…"
@@ -101,11 +102,14 @@ def heartbeat_text(review, commentary=None):
         speech = "延续刚才的话题，补齐策略判断。"
     elif commentary is not None and not commentary["allowed"]:
         speech = "延续当前交流，不强行另起口播。"
-    return ("Minecraft " + review["id"] + "。先minecraft_autonomy_review inspect，再continue/insert/revise完成判断。"
-            + "按completion_contract先提交最短判断；表达沿用工具内边玩边聊技能。" + speech
-            + "spoken_text可选，按语音回执接话；控制指令不口播。"
-            + cue + intent + "；" + readings
-            + f"；连续查询{reads}次。" + (f"未行动回复{evidence['unactioned_replies']}次。" if evidence.get("unactioned_replies") else ""))
+    inspected = bool(review.get("inspected_at"))
+    stage = "已检查，待最终判断" if inspected else "待检查并作出判断"
+    next_step = ("已有inspect证据与completion_contract，请直接提交continue/insert/revise + reason；"
+                 "若接口提示状态已变再inspect。" if inspected else
+                 "调用minecraft_autonomy_review inspect，收到证据后在同一轮提交continue/insert/revise + reason。")
+    return ("Minecraft " + review["id"] + "（" + stage + "）；" + cue + intent + "；" + readings
+            + f"；连续查询{reads}次。" + (f"未行动回复{evidence['unactioned_replies']}次。" if evidence.get("unactioned_replies") else "")
+            + next_step + speech + "spoken_text可选；开口谈所见、感受或打算，不复述检查流程。")
 
 
 class NekoHeartbeat:
