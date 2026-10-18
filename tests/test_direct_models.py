@@ -22,6 +22,21 @@ def test_direct_settings_save_and_dashboard_do_not_call_models(plugin_instance, 
     assert shown["protocol"] == "gemini" and shown["api_key_env"] == "GEMINI_API_KEY"
 
 
+def test_explicit_reasoning_history_round_trips_without_a_model_or_worker(plugin_instance, plugin_module, monkeypatch, run_async):
+    monkeypatch.setattr(plugin_instance.config, "dump", AsyncMock(return_value={}))
+    update = AsyncMock()
+    monkeypatch.setattr(plugin_instance.config, "update", update)
+    patch = {"planner": {"route": "direct", "provider": "openai-compatible", "model": "fixture",
+                         "base_url": "http://localhost:1/v1", "auth": {"mode": "none"},
+                         "reasoning_history": "current_turn"}}
+    assert isinstance(run_async(plugin_instance.save_settings(patch)), Ok)
+    assert update.call_args.args[0] == patch
+    module = importlib.import_module(plugin_module.__name__+".direct_planner")
+    assert module.public_planner(patch["planner"])["reasoning_history"] == "current_turn"
+    assert isinstance(run_async(plugin_instance.save_settings({"planner": {**patch["planner"], "protocol": "responses"}})), Err)
+    assert update.await_count == 1 and plugin_instance._worker is None
+
+
 def test_direct_route_uses_shared_provider_and_host_stays_default(plugin_module):
     module = importlib.import_module(plugin_module.__name__+".direct_planner")
     settings = plugin_module.Settings()
