@@ -26,6 +26,11 @@ REVIEW_TOOL = {"type": "function", "function": {
         "death_reflection": {"type": "object"}},
         "required": ["decision", "reason"], "additionalProperties": False}}}
 
+# These canonical refusals occur before speech, mailbox or choice commitment.
+# Unknown transport results and successful/accepted work must never be retried.
+CORRECTABLE = frozenset({'no_active_review_stage', 'previous_intent_pending',
+                         'goal_already_active', 'reason_and_stage_goal_required'})
+
 
 async def deliver_review(plugin, raw, settings, config, port, review, generation):
     common = {"heartbeat_id": review["id"], "trigger": review["trigger"], "offered": True,
@@ -69,32 +74,45 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
             + SPEAK)}, {"role": "user", "content": json.dumps(packet, ensure_ascii=False)}]
         client = await gateway.get_client()
         client_opened = True
-        response = await asyncio.wait_for(client.chat.completions.create(
-            model="decision", messages=messages, tools=[REVIEW_TOOL], stream=False,
-            tool_choice={"type": "function", "function": {"name": "submit_game_review"}},
-            parallel_tool_calls=False, max_completion_tokens=2048), timeout=25)
-        if owned_runtime(plugin, settings, target, port, generation) != bound:
-            return refused("structured_review_superseded")
-        choice = response.choices[0]
-        calls = choice.message.tool_calls or []
-        if choice.finish_reason != "tool_calls" or len(calls) != 1 or calls[0].function.name != "submit_game_review":
-            return refused("structured_review_invalid_response")
-        arguments = json.loads(calls[0].function.arguments)
-        allowed = set(REVIEW_TOOL["function"]["parameters"]["properties"])
-        if (not isinstance(arguments, dict) or set(arguments) - allowed
-                or arguments.get("decision") not in {"continue", "insert", "revise"}
-                or not isinstance(arguments.get("reason"), str) or not arguments["reason"].strip()):
-            return refused("structured_review_invalid_response")
-        # No model content/reasoning is forwarded, logged, or offered to speech.
-        # The canonical handler rechecks the evidence/intent/stop before dispatch.
-        port.delivered(review["id"], True)
-        result = await plugin.minecraft_autonomy_review(review["id"], **arguments)
+        for attempt in range(2):
+            if owned_runtime(plugin, settings, target, port, generation) != bound:
+                return refused("structured_review_superseded")
+            response = await asyncio.wait_for(client.chat.completions.create(
+                model="decision", messages=messages, tools=[REVIEW_TOOL], stream=False,
+                tool_choice={"type": "function", "function": {"name": "submit_game_review"}},
+                parallel_tool_calls=False, max_completion_tokens=2048), timeout=25)
+            if owned_runtime(plugin, settings, target, port, generation) != bound:
+                return refused("structured_review_superseded")
+            choice = response.choices[0]
+            calls = choice.message.tool_calls or []
+            if choice.finish_reason != "tool_calls" or len(calls) != 1 or calls[0].function.name != "submit_game_review":
+                return refused("structured_review_invalid_response")
+            call = calls[0]
+            arguments = json.loads(call.function.arguments)
+            allowed = set(REVIEW_TOOL["function"]["parameters"]["properties"])
+            if (not isinstance(arguments, dict) or set(arguments) - allowed
+                    or arguments.get("decision") not in {"continue", "insert", "revise"}
+                    or not isinstance(arguments.get("reason"), str) or not arguments["reason"].strip()):
+                return refused("structured_review_invalid_response")
+            # Forward only the tool transaction, never free text or reasoning.
+            # The canonical handler rechecks evidence/intent/stop before effects.
+            port.delivered(review["id"], True)
+            result = await plugin.minecraft_autonomy_review(review["id"], **arguments)
+            if (attempt or result.get('is_error') is not True or result.get('error') not in CORRECTABLE
+                    or not isinstance(getattr(call, 'id', None), str) or not call.id):
+                break
+            messages = [*messages, {"role": "assistant", "tool_calls": [{"id": call.id, "type": "function",
+                "function": {"name": "submit_game_review", "arguments": call.function.arguments}}]},
+                {"role": "tool", "tool_call_id": call.id, "content": json.dumps(result, ensure_ascii=False)}]
         tasks = [t for t in tuple(getattr(plugin, "_speech_output_tasks", ()))
                  if t.get_loop() is asyncio.get_running_loop()]
         if tasks:
             await asyncio.gather(*tasks)
         return {**common, "submitted": True, "main_brain_acknowledged": result.get("acknowledged") is True,
                 "transport_status": "accepted", "decision": arguments["decision"],
+                "correction_attempts": attempt,
+                "decision_error": result.get('error') if result.get('error') in CORRECTABLE else
+                                  "review_rejected" if result.get('is_error') else None,
                 "reason": "structured_review_acknowledged" if result.get("acknowledged") else "structured_review_not_acknowledged"}
     except (APIConnectionError, APIStatusError, TransportError,
             TimeoutError, OSError, ValueError, TypeError, KeyError, IndexError, AttributeError):

@@ -9,7 +9,7 @@ from test_recent_context import prepare
 
 
 def response(arguments, content='I need to inspect first.</think>'):
-    call = SimpleNamespace(function=SimpleNamespace(name='submit_game_review', arguments=json.dumps(arguments)))
+    call = SimpleNamespace(id='review-call', function=SimpleNamespace(name='submit_game_review', arguments=json.dumps(arguments)))
     return SimpleNamespace(choices=[SimpleNamespace(finish_reason='tool_calls', message=SimpleNamespace(
         content=content, tool_calls=[call]))])
 
@@ -100,3 +100,68 @@ def test_missing_gateway_does_not_fall_back_to_an_unfiltered_reply(plugin_instan
 def test_control_text_in_explicit_voice_is_not_speakable(plugin_module):
     speech = importlib.import_module(plugin_module.__name__ + '.neko_speech')
     assert speech.sanitize_speech('<think>I need to inspect first.</think>我们去找棵树吧。') == '我们去找棵树吧。'
+
+
+def test_rejected_stage_choice_returns_actual_error_once(plugin_instance, monkeypatch, run_async):
+    port, _, _, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
+    create.side_effect = [response({'decision': 'revise', 'reason': 'Change the stage', 'goal': 'New stage'}),
+                          response({'decision': 'continue', 'reason': 'No stage exists to revise'})]
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged'] is True
+    assert result['correction_attempts'] == 1
+    assert create.await_count == 2
+    correction = create.await_args.kwargs['messages'][-2:]
+    assert correction[0]['role'] == 'assistant' and 'I need' not in json.dumps(correction)
+    assert correction[1]['role'] == 'tool' and correction[1]['tool_call_id'] == 'review-call'
+    assert json.loads(correction[1]['content'])['error'] == 'no_active_review_stage'
+    assert port.state()['last_decision']['decision'] == 'continue'
+    assert port.mailbox.intent_revision() == 0
+
+
+def test_rejected_review_correction_is_bounded(plugin_instance, monkeypatch, run_async):
+    port, _, _, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
+    create.return_value = response({'decision': 'revise', 'reason': 'Change the stage', 'goal': 'New stage'})
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged'] is False
+    assert result['decision_error'] == 'no_active_review_stage'
+    assert result['correction_attempts'] == 1
+    assert create.await_count == 2
+    assert not port.state()['review'].get('choice')
+
+
+def test_transport_timeout_does_not_retry_an_unknown_review(plugin_instance, monkeypatch, run_async):
+    port, _, _, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
+    create.side_effect = TimeoutError()
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['reason'] == 'structured_review_unavailable'
+    assert create.await_count == 1
+    assert not port.state()['review'].get('choice')
+
+
+@pytest.mark.parametrize('change', ['stop', 'generation', 'run', 'intent'])
+def test_corrected_review_rechecks_ownership(plugin_instance, monkeypatch, run_async, change):
+    port, snapshot, _, _, _, save, _, _, create = configured(plugin_instance, monkeypatch)
+    async def answer(**kwargs):
+        if create.await_count == 1:
+            return response({'decision': 'revise', 'reason': 'No stage', 'goal': 'New stage'})
+        if change == 'stop':
+            plugin_instance._operator_state(True)
+        elif change == 'generation':
+            plugin_instance._generation += 1
+        elif change == 'run':
+            snapshot['native_run'] = 'other-run'
+            save()
+        else:
+            port.mailbox.submit_user_intent('feedback', {'goal': 'New operator goal', 'mode': 'insert'},
+                                           '11111111-1111-4111-8111-111111111111')
+        return response({'decision': 'continue', 'reason': 'Stale correction'})
+    create.side_effect = answer
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged'] is False
+    assert result['reason'] == 'structured_review_superseded'
+    assert create.await_count == 2
+    assert not port.state()['review'].get('choice')
