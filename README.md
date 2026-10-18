@@ -32,8 +32,8 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 插件 | `minecraft_autonomous` **0.6.37 开发候选**；Windows x64 / Neko CPython 3.11 |
-| 自主框架 | `agent-mc-autonomy@0.2.32`，提交 `cb7c146b74948c2a4173b15c6f200acc79ca8063` |
+| 插件 | `minecraft_autonomous` **0.6.38 开发候选**；Windows x64 / Neko CPython 3.11 |
+| 自主框架 | `agent-mc-autonomy@0.2.33`，提交 `8ddb46ac549b2585ec8761cd8843ee88df83f76e` |
 | 游戏核心 | `agent-mc-world@0.5.7-rc.36`，提交 `e439a172623f8d1b08eee63b9324d2e7a5a659ef` |
 | 核心归档 SHA256 | `09de969063f44ff356d4ba966b2d73961a29e90a03d6c41981ebec90b2731496` |
 | 共享观战 | `mc-visual-console@1cbd5574660c99a6c72a55224e84f4460778fd6a` |
