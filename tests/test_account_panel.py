@@ -29,6 +29,21 @@ def test_full_context_setting_roundtrip(plugin_instance, plugin_module, run_asyn
     assert isinstance(run_async(plugin_instance.save_settings({"autonomy": {"context_mode": "unlimited"}})), Err)
 
 
+@pytest.mark.parametrize("headroom", [0, 8192])
+def test_full_history_headroom_roundtrip_preserves_capacity(plugin_instance, plugin_module, run_async, monkeypatch, headroom):
+    dashboard = importlib.import_module(plugin_module.__name__ + ".dashboard")
+    update = AsyncMock(return_value={})
+    monkeypatch.setattr(plugin_instance.config, "update", update)
+    patch = {"autonomy": {"context_mode": "full", "context_tokens": 131072,
+                          "context_history_headroom_tokens": headroom}}
+    assert isinstance(run_async(plugin_instance.save_settings(patch)), Ok)
+    update.assert_awaited_once_with(patch)
+    public = dashboard.public_config(plugin_module.Settings.parse(patch))["autonomy"]
+    assert public["context_history_headroom_tokens"] == headroom
+    assert public["context_tokens"] == 131072
+    assert isinstance(run_async(plugin_instance.save_settings({"autonomy": {"context_history_headroom_tokens": -1}})), Err)
+
+
 def test_account_settings_save_only_and_native_link_contains_no_account_payload(plugin_instance, plugin_module, run_async, monkeypatch, tmp_path):
     patch = {"server": {"host": "micro.kangqiang.site", "port": 25702, "username": "ag_NEKO", "auth": "offline", "connection_type": "custom", "version": "1.21.1"},
              "operator": {"port": 28986}, "runtime": {"mode": "external", "data_directory": str(tmp_path)}}
