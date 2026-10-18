@@ -7,6 +7,7 @@ commentary model. Only the existing explicit spoken_text transport can speak.
 
 import asyncio
 import json
+import math
 
 from agent_mc_autonomy.host_context import HostContextPort
 from openai import APIConnectionError, APIStatusError
@@ -45,6 +46,7 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
         plugin._structured_review_busy = True
     gateway = None
     client_opened = False
+    wait_budget = None
     try:
         gateway = plugin.ctx.models
         if gateway is None:
@@ -77,10 +79,15 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
         for attempt in range(2):
             if owned_runtime(plugin, settings, target, port, generation) != bound:
                 return refused("structured_review_superseded")
+            expires = review.get('opportunity', {}).get('expires_at')
+            wait_budget = (min(180, expires - port.now() - 2)
+                           if type(expires) in (int, float) and math.isfinite(expires) else 25)
+            if wait_budget <= 0:
+                return refused('structured_review_expired')
             response = await asyncio.wait_for(client.chat.completions.create(
                 model="decision", messages=messages, tools=[REVIEW_TOOL], stream=False,
                 tool_choice={"type": "function", "function": {"name": "submit_game_review"}},
-                parallel_tool_calls=False, max_completion_tokens=2048), timeout=25)
+                parallel_tool_calls=False, max_completion_tokens=2048), timeout=wait_budget)
             if owned_runtime(plugin, settings, target, port, generation) != bound:
                 return refused("structured_review_superseded")
             choice = response.choices[0]
@@ -111,12 +118,18 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
         return {**common, "submitted": True, "main_brain_acknowledged": result.get("acknowledged") is True,
                 "transport_status": "accepted", "decision": arguments["decision"],
                 "correction_attempts": attempt,
+                "model_wait_budget_seconds": round(wait_budget, 3),
                 "decision_error": result.get('error') if result.get('error') in CORRECTABLE else
                                   "review_rejected" if result.get('is_error') else None,
                 "reason": "structured_review_acknowledged" if result.get("acknowledged") else "structured_review_not_acknowledged"}
     except (APIConnectionError, APIStatusError, TransportError,
-            TimeoutError, OSError, ValueError, TypeError, KeyError, IndexError, AttributeError):
-        return refused("structured_review_unavailable")
+            TimeoutError, OSError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        category = ('deadline_exceeded' if isinstance(error, TimeoutError) else
+                    'provider_http_error' if isinstance(error, APIStatusError) else
+                    'provider_connection_error' if isinstance(error, APIConnectionError) else
+                    'gateway_transport_error' if isinstance(error, TransportError) else 'invalid_or_unavailable_response')
+        return {**refused("structured_review_unavailable"), "failure_category": category,
+                "model_wait_budget_seconds": round(wait_budget, 3) if wait_budget is not None else None}
     finally:
         try:
             if client_opened and callable(getattr(gateway, "aclose", None)):

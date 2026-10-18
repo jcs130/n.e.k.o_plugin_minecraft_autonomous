@@ -138,7 +138,50 @@ def test_transport_timeout_does_not_retry_an_unknown_review(plugin_instance, mon
         result = run_async(plugin_instance.game_decision_heartbeat()).value
     assert result['reason'] == 'structured_review_unavailable'
     assert create.await_count == 1
+    assert result['failure_category'] == 'deadline_exceeded'
     assert not port.state()['review'].get('choice')
+
+
+def test_review_wait_uses_remaining_native_lease(plugin_instance, monkeypatch, run_async):
+    port, _, _, _, clock, _, _, _, create = configured(plugin_instance, monkeypatch)
+    transport = importlib.import_module(plugin_instance.__class__.__module__ + '.neko_structured_review')
+    actual_wait = transport.asyncio.wait_for
+    waits = []
+    async def wait_for(coro, timeout):
+        waits.append(timeout)
+        return await actual_wait(coro, timeout)
+    monkeypatch.setattr(transport.asyncio, 'wait_for', wait_for)
+    async def answer(**kwargs):
+        clock[0] += 30  # A valid, slow inference must fit the offered lease.
+        return response({'decision': 'continue', 'reason': 'Continue after the queued inference'})
+    create.side_effect = answer
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged'] is True
+    assert 25 < waits[-1] <= 180
+    assert create.await_count == 1
+
+
+def test_correction_shares_original_review_deadline(plugin_instance, monkeypatch, run_async):
+    port, _, _, _, clock, _, _, _, create = configured(plugin_instance, monkeypatch)
+    transport = importlib.import_module(plugin_instance.__class__.__module__ + '.neko_structured_review')
+    actual_wait = transport.asyncio.wait_for
+    waits = []
+    async def wait_for(coro, timeout):
+        waits.append(timeout)
+        return await actual_wait(coro, timeout)
+    monkeypatch.setattr(transport.asyncio, 'wait_for', wait_for)
+    async def answer(**kwargs):
+        clock[0] += 10
+        return response({'decision': 'revise', 'reason': 'Change stage', 'goal': 'New stage'} if create.await_count == 1
+                        else {'decision': 'continue', 'reason': 'Continue original goal'})
+    create.side_effect = answer
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged'] is True
+    assert waits[-1] == waits[-2] - 10
+    assert 25 < waits[-1] <= 170
+    assert create.await_count == 2
 
 
 @pytest.mark.parametrize('change', ['stop', 'generation', 'run', 'intent'])
