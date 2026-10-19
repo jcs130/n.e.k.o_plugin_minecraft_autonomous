@@ -32,13 +32,17 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 插件 | `minecraft_autonomous` **0.6.50 开发候选**；Windows x64 / Neko CPython 3.11 |
-| 自主框架 | `agent-mc-autonomy@0.2.48`，提交 `e9a44307cd6432a8325adb4d9ab8d1b71ede997e` |
-| 游戏核心 | `agent-mc-world@0.5.7-rc.48`，提交 `a61fe9b287749250b918217d89ed6a9c15aa2819` |
-| 核心归档 SHA256 | `366aa9cf4728a05584725358ee72b8d82a61f2bc3467083cc99a28aac381866e` |
+| 插件 | `minecraft_autonomous` **0.6.51 开发候选**；Windows x64 / Neko CPython 3.11 |
+| 自主框架 | `agent-mc-autonomy@0.2.49`，提交 `65a7a3b2c9e0212f558159f43b56b11392e24db2` |
+| 游戏核心 | `agent-mc-world@0.5.7-rc.50`，提交 `b083e33cf05b20eedf76edca4631b8801c31f3a5` |
+| 核心归档 SHA256 | `16a8cc87f620ba7c7c0f09895294e694034451a955ae3ad3730f7bf98b0927b8` |
 | 共享观战 | `mc-visual-console@1cbd5574660c99a6c72a55224e84f4460778fd6a` |
 | 宿主公共接口核对 | Neko main `ec09fca56ad146a55855d59f12969a3bac12c9f8`；主程序/SDK 未修改 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT；随包保留素材和第三方许可 |
+
+0.6.51 固定共享核心的技能字段合并修复：整理背包的 `inventory/open` 枚举不再限制查找木头、攻击或实体交互。
+原生逐技能校验和未知回执保护继续保留。共享框架另记录了本地 vLLM 参数顺序约束的实测兼容问题，
+模型服务设置由部署者独立验收，不随插件安装自动更改。
 
 0.6.50 同步上游上下文辅助 API 并更新固定核心归档。这些 SDK 接口需要宿主显式采用；
 本次不自动启用服务器事件过滤、不改 Python 规划器的上下文策略，也不把依赖更新当作实测提速。
