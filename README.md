@@ -32,13 +32,17 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 插件 | `minecraft_autonomous` **0.6.49 开发候选**；Windows x64 / Neko CPython 3.11 |
-| 自主框架 | `agent-mc-autonomy@0.2.47`，提交 `ec0f8cbdcdce0bebc92185be1058f2567d65d17b` |
-| 游戏核心 | `agent-mc-world@0.5.7-rc.47`，提交 `c484edbd74310198028bf54f20f3b1d177d62da2` |
-| 核心归档 SHA256 | `dd30248c162b3ba600febd824a5d3c74a2acacc28228000511ba746c588915aa` |
+| 插件 | `minecraft_autonomous` **0.6.50 开发候选**；Windows x64 / Neko CPython 3.11 |
+| 自主框架 | `agent-mc-autonomy@0.2.48`，提交 `e9a44307cd6432a8325adb4d9ab8d1b71ede997e` |
+| 游戏核心 | `agent-mc-world@0.5.7-rc.48`，提交 `a61fe9b287749250b918217d89ed6a9c15aa2819` |
+| 核心归档 SHA256 | `366aa9cf4728a05584725358ee72b8d82a61f2bc3467083cc99a28aac381866e` |
 | 共享观战 | `mc-visual-console@1cbd5574660c99a6c72a55224e84f4460778fd6a` |
 | 宿主公共接口核对 | Neko main `ec09fca56ad146a55855d59f12969a3bac12c9f8`；主程序/SDK 未修改 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT；随包保留素材和第三方许可 |
+
+0.6.50 同步上游上下文辅助 API 并更新固定核心归档。这些 SDK 接口需要宿主显式采用；
+本次不自动启用服务器事件过滤、不改 Python 规划器的上下文策略，也不把依赖更新当作实测提速。
+原始聊天、动作回执与队列继续保留，观战渲染资源沿用单独固定的版本。
 
 0.6.49 更新独立框架的状态写盘保护和经过隔离打包验证的核心依赖。框架先完成 flush/fsync，再发布状态替换；
 写盘失败保留旧记录，损坏状态仍阻止启动，不能自动清除未知动作。核心提供可选的观众连接限制、唤醒分类和精简工具目录接口，

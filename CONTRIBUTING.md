@@ -20,7 +20,8 @@ GitHub 仓库名包含点号；直接把该名字作为 Python 包目录运行�
 $env:NEKO_ROOT = '/path/to/N.E.K.O'
 uv run --project "$env:NEKO_ROOT" python -m pytest tests -q
 node --test tests/observer-data.test.mjs tests/installation-guidance.test.mjs tests/connection-presets.test.mjs tests/panel-refresh.test.mjs
-uvx ruff==0.12.4 check --ignore-noqa --config ruff.toml --exclude assets/appearances/sources .
+$pythonFiles = git ls-files -- '*.py' | Where-Object { $_ -notlike 'assets/appearances/sources/*' }
+uvx ruff==0.12.4 check --ignore-noqa --config ruff.toml @pythonFiles
 uv run --project "$env:NEKO_ROOT" neko-plugin check --release --market-release .
 ```
 
@@ -28,6 +29,8 @@ uv run --project "$env:NEKO_ROOT" neko-plugin check --release --market-release .
 先在隔离源码目录使用真实 SDK 的 `neko-plugin sync . --python <匹配宿主的Python路径>` 安装全部声明依赖；冻结版宿主使用独立 builder。同步只准备 `vendor/`，不会生成包的静态入口元数据或完成运行安装。交付需 `build` 并检查 `plugin.meta.json`，普通用户经插件中心导入，详见 [源码安装指南](docs/install-source.md)。游戏逻辑的测试在 MC friend 主仓库运行，本仓库只检验适配层。
 随包外观的 `assets/appearances/sources` 保存未改动的原始素材生成器与许可；不格式化第三方来源文件，Ruff 检查插件自身源码、测试及适配代码。
 本地测试通过 `NEKO_ROOT` 找到真实 SDK；官方 CI 将插件挂载到宿主源码树后验证。
+本机 Ruff 使用 Git 跟踪的自身 Python 文件，避免扫描不进入源码或分发包的私有 `local/` 运行副本；
+不修改官方管理的 Ruff 模板，也不格式化第三方素材生成器。
 测试入口要求先用真实 SDK 同步本插件的 `vendor/`，并在收集用例前加载其中的固定依赖；
 无需设置 `PYTHONPATH`，也不依赖开发环境全局安装的框架版本。
 主仓库 `packages/agent-mc-autonomy/tests/standalone_probe.py` 在隔离 Python 进程中禁止宿主导入、网络和游戏进程，
