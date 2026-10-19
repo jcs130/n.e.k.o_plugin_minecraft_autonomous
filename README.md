@@ -32,13 +32,17 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 插件 | `minecraft_autonomous` **0.6.42 开发候选**；Windows x64 / Neko CPython 3.11 |
-| 自主框架 | `agent-mc-autonomy@0.2.39`，提交 `f7e77c22bfb6efebcce8c886b19fd4855dd19b22` |
+| 插件 | `minecraft_autonomous` **0.6.43 开发候选**；Windows x64 / Neko CPython 3.11 |
+| 自主框架 | `agent-mc-autonomy@0.2.40`，提交 `f124116783fa7d6dac01cff4f7600e568c24231f` |
 | 游戏核心 | `agent-mc-world@0.5.7-rc.42`，提交 `25cf75bac93a8ca8afc20b7f0db2e769869ba364` |
 | 核心归档 SHA256 | `286a3e89fdb626fa6c2373cdd9697023686024fa5fea628638c9a88636580752` |
 | 共享观战 | `mc-visual-console@1cbd5574660c99a6c72a55224e84f4460778fd6a` |
 | 宿主公共接口核对 | Neko main `ec09fca56ad146a55855d59f12969a3bac12c9f8`；主程序/SDK 未修改 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT；随包保留素材和第三方许可 |
+
+0.6.43 固定共享框架的上下文修复：显式本地 NInfer 配置可使用 CPU tokenizer/template
+计数，避免把 128K token 窗口当成字节预算；同一事件内的重复回执改为精确引用。
+默认模型绑定、思考预算和原始记录不变。缓存命中与现场延迟另行实测。
 
 ## 架构与版本选择
 
