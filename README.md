@@ -32,13 +32,17 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 插件 | `minecraft_autonomous` **0.6.48 开发候选**；Windows x64 / Neko CPython 3.11 |
-| 自主框架 | `agent-mc-autonomy@0.2.46`，提交 `e5cf569cb2599dee718333d65005fdf69a66872c` |
-| 游戏核心 | `agent-mc-world@0.5.7-rc.42`，提交 `25cf75bac93a8ca8afc20b7f0db2e769869ba364` |
-| 核心归档 SHA256 | `286a3e89fdb626fa6c2373cdd9697023686024fa5fea628638c9a88636580752` |
+| 插件 | `minecraft_autonomous` **0.6.49 开发候选**；Windows x64 / Neko CPython 3.11 |
+| 自主框架 | `agent-mc-autonomy@0.2.47`，提交 `ec0f8cbdcdce0bebc92185be1058f2567d65d17b` |
+| 游戏核心 | `agent-mc-world@0.5.7-rc.47`，提交 `c484edbd74310198028bf54f20f3b1d177d62da2` |
+| 核心归档 SHA256 | `dd30248c162b3ba600febd824a5d3c74a2acacc28228000511ba746c588915aa` |
 | 共享观战 | `mc-visual-console@1cbd5574660c99a6c72a55224e84f4460778fd6a` |
 | 宿主公共接口核对 | Neko main `ec09fca56ad146a55855d59f12969a3bac12c9f8`；主程序/SDK 未修改 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT；随包保留素材和第三方许可 |
+
+0.6.49 更新独立框架的状态写盘保护和经过隔离打包验证的核心依赖。框架先完成 flush/fsync，再发布状态替换；
+写盘失败保留旧记录，损坏状态仍阻止启动，不能自动清除未知动作。核心提供可选的观众连接限制、唤醒分类和精简工具目录接口，
+后两者需宿主显式采用，不会据此自动删减聊天或历史。共享观战的实际资源固定版本见上表；源码同步不等于安装产物已替换。
 
 0.6.48 兼容新版 vLLM 的私有 `reasoning` 续轮字段及显式 `thinking_token_budget`，思考不进入解说正文；
 默认模型绑定不变。切换模型时须移除或重新核对原部署的精确计数绑定，未提供匹配计数器时使用保守上界。
