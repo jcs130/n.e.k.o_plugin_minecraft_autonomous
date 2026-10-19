@@ -42,12 +42,17 @@
 发布包通过官方 `sync` 准备依赖、`check --release --market-release` 检查，并由 `build` 生成带静态 `plugin.meta.json` 的 `.neko-plugin`。普通用户从插件中心导入，不直接复制 Git 目录。完整离线包的资源和发布状态另见安装指南及 Release 附件；源码提交不等于 Market 审核通过。
 # 本地模型的上下文计数
 
-0.6.47 消费共享框架 0.2.45 的可选 `planner.context_counter`。它属于独立模型适配，
+0.6.48 消费共享框架 0.2.46 的可选 `planner.context_counter`。它属于独立模型适配，
 不是 Neko 主程序补丁。只有明确选择本地 NInfer Chat，并提供与实际模型产物匹配的
 tokenizer、模板、SHA256 和服务默认参数时才启用；计数在 CPU 上执行，不增加模型调用。
 可选依赖、绑定校验和安全回退见共享框架的
-[模型接入说明](https://github.com/jcs130/minecraft-ai-friend/blob/b6b0095cba7f5fb1fb9947e411b1317104333b2a/packages/agent-mc-autonomy/docs/model-providers.md)。
+[模型接入说明](https://github.com/jcs130/minecraft-ai-friend/blob/e5cf569cb2599dee718333d65005fdf69a66872c/packages/agent-mc-autonomy/docs/model-providers.md)。
 普通用户继续沿用 Neko 的模型绑定，不需要下载本地 tokenizer 或填写这些高级参数。
 
 full 模式的完整交换、精确引用及只在真实溢出后退役旧历史的规则，见
-[上下文窗口与复用](https://github.com/jcs130/minecraft-ai-friend/blob/b6b0095cba7f5fb1fb9947e411b1317104333b2a/packages/agent-mc-autonomy/docs/context-window-cache.md)。
+[上下文窗口与复用](https://github.com/jcs130/minecraft-ai-friend/blob/e5cf569cb2599dee718333d65005fdf69a66872c/packages/agent-mc-autonomy/docs/context-window-cache.md)。
+
+新版兼容服务返回的 `reasoning` 与旧版 `reasoning_content` 均由共享框架按提供方作用域保存，
+不进入口播正文。仅在服务明确支持时设置 `planner.parameters.thinking_token_budget`，
+有限思考预算须小于输出预算；这不会提高模型上下文容量。模型或模板改变时，旧 NInfer
+计数绑定不能继续沿用；没有匹配的精确计数器时，保守上界可能提前退役历史。

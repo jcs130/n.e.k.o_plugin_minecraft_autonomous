@@ -32,15 +32,18 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 插件 | `minecraft_autonomous` **0.6.47 开发候选**；Windows x64 / Neko CPython 3.11 |
-| 自主框架 | `agent-mc-autonomy@0.2.45`，提交 `b6b0095cba7f5fb1fb9947e411b1317104333b2a` |
+| 插件 | `minecraft_autonomous` **0.6.48 开发候选**；Windows x64 / Neko CPython 3.11 |
+| 自主框架 | `agent-mc-autonomy@0.2.46`，提交 `e5cf569cb2599dee718333d65005fdf69a66872c` |
 | 游戏核心 | `agent-mc-world@0.5.7-rc.42`，提交 `25cf75bac93a8ca8afc20b7f0db2e769869ba364` |
 | 核心归档 SHA256 | `286a3e89fdb626fa6c2373cdd9697023686024fa5fea628638c9a88636580752` |
 | 共享观战 | `mc-visual-console@1cbd5574660c99a6c72a55224e84f4460778fd6a` |
 | 宿主公共接口核对 | Neko main `ec09fca56ad146a55855d59f12969a3bac12c9f8`；主程序/SDK 未修改 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT；随包保留素材和第三方许可 |
 
-0.6.47 固定共享框架的上下文优化：full 模式保留完整输入、回复和工具回执，对未变化的目标、
+0.6.48 兼容新版 vLLM 的私有 `reasoning` 续轮字段及显式 `thinking_token_budget`，思考不进入解说正文；
+默认模型绑定不变。切换模型时须移除或重新核对原部署的精确计数绑定，未提供匹配计数器时使用保守上界。
+
+共享框架的上下文优化继续保留：full 模式保留完整输入、回复和工具回执，对未变化的目标、
 已选记忆、近期消息和语音回执使用精确引用，历史退窗后重新展开；身份、来源和播放状态变化
 保留新值。同一请求只组装、计数一次，实际裁剪后才重算。显式本地 NInfer 可用 CPU
 tokenizer/template 计数。默认模型绑定、思考预算和原始记录不变，真实推理延迟另行实测。
