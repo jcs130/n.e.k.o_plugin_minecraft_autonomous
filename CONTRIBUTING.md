@@ -75,3 +75,9 @@ python backend/check_disconnected.py --directory ./local/backend
 普通源码推送只触发 Verify。后端未完成现场验收前，不创建发布 tag、不手动触发 Release、
 不调用 `neko-plugin publish`，也不将开发基础作为可玩的插件提交 Market。
 首次 Market 审核及之后的发布遵循官方文档，不能用本地验证冒充审核通过。
+
+Market 的 Release 只保留官方工作流生成、由 `market-evidence.json` 指定的一个直接
+`.neko-plugin` 资产。Windows 等平台的补充插件放入独立 ZIP，完整离线包也使用 ZIP；
+不要改写官方包或发布凭据。0.6.70 实际发布时，两份直接插件资产引起凭据匹配拒绝；
+补充包改为 ZIP、保留内部插件字节后，同一 Release 被 Market 接受。
+发布前同时核对内层插件、ZIP、公开下载和 SHA256SUMS；平台补充构建的证据与官方 CI 分开记录。
