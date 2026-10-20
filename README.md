@@ -6,7 +6,7 @@
 
 ## 完整离线包安装
 
-普通用户下载 [0.6.6 发布页](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.6) 中的 **Minecraft-Autonomous-0.6.6-Windows-x64-offline.zip**。它已包含 Node、固定后端及依赖、3D 观战、1.21.1 贴图、音效/音乐、浏览器运行时和 YUI 普通皮肤/YSM 模型，无需安装 Git、Python builder、npm 或手工拼 vendor。当前为公开测试版，已验证范围和限制见 [版本说明](docs/release-0.6.6.md)。
+普通用户下载 [0.6.70 发布页](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.70) 中的 **Minecraft-Autonomous-0.6.70-Windows-x64-offline.zip**。它已包含 Node、固定后端及依赖、3D 观战、1.21.1 贴图、音效/音乐、浏览器运行时和 YUI 普通皮肤/YSM 模型，无需安装 Git、Python builder、npm 或手工拼 vendor。当前为公开测试版，已验证范围和限制见 [版本说明](docs/release-0.6.70.md)。
 
 1. **完整解压 → 双击「一键安装.cmd」**。校验并准备资源后，自动打开中文入门页；不会启动或修改 Neko、模型和游戏服务器。
 2. **Neko 插件中心 → 导入**，选择同目录的 `.neko-plugin`。首次使用，在官方「插件 API」保存一个支持文字和工具调用的模型，并在本插件「配置」页绑定 `decision`。已有槽直接复用；支持图像时可同时绑定 `vision`。面板提供这两个页面的直接入口。
@@ -32,7 +32,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 插件 | `minecraft_autonomous` **0.6.69 开发候选**；Windows x64 / Neko CPython 3.11 |
+| 插件 | `minecraft_autonomous` **0.6.70 公开测试版**；Windows x64 / Neko CPython 3.11 |
 | 自主框架 | `agent-mc-autonomy@0.2.65`，提交 `c5429b56e7a49eb5be16b513fb24332d0f73b7d4` |
 | 游戏核心 | `agent-mc-world@0.5.7-rc.52`，提交 `bba59bb92a0b83d0321671a19f272eef38400cd1` |
 | 核心归档 SHA256 | `8b5fcc50c80914f6375f3ef7d1c5855e60aeb3598ccba7c7886f831f36b75f1f` |
