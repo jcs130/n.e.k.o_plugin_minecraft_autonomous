@@ -30,12 +30,12 @@
 
 动作受理、目标达成、音频生成和桌面播放分别记录，不能互相替代。长期无人干预生存、Microsoft 真账号全流程以及千灯纪全部特色模型/资源仍在持续打磨，详见版本说明。源码开发安装见 [源码指南](docs/install-source.md)，模型与声音见 [接入说明](docs/model-and-voice.md)。
 
-## 当前源码固定组合（0.6.75 开发候选，尚未发布）
+## 当前源码固定组合（0.6.76 开发候选，尚未发布）
 
 | 项目 | 内容 |
 | --- | --- |
-| 插件 | `minecraft_autonomous` **0.6.75 开发候选**；Windows x64 / Neko CPython 3.11 |
-| 自主框架 | `agent-mc-autonomy@0.2.71`，提交 `467e82efa78660fae88fcc2e38d5c9515fcd814a` |
+| 插件 | `minecraft_autonomous` **0.6.76 开发候选**；Windows x64 / Neko CPython 3.11 |
+| 自主框架 | `agent-mc-autonomy@0.2.72`，提交 `e293807999e1412df4867df1567ac81a342b662b` |
 | 游戏核心 | `agent-mc-world@0.5.7-rc.58`，提交 `04039c3aedcf596d72822e881c5185076d268ae6` |
 | 核心归档 SHA256 | `afd449a7788ae79058361510a4d1732c77e808978b5674240ea2fb4bd305e662` |
 | 共享观战 | `mc-visual-console@dd7c4011abe4e5e7498fe60740b0c23abe7fbb3f` |
