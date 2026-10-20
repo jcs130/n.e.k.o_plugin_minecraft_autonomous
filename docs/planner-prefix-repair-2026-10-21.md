@@ -103,3 +103,24 @@ GPU running/waiting counters being zero did not prove HTTP/pre-admission work
 was fully drained. The trace and failed clean-exit assertion are retained.
 Neko source/SDK, Java, driver, 250W power cap and private game configuration were
 unchanged. Public release remains 0.6.70; no new tag or Market submission.
+
+## Waiting reply after a completed task
+
+The 0.2.75 live trial independently exposed a coordinator race: native task 4
+completed at 22:50:06.720 UTC, during an ahead inference that began at
+22:50:01.526. The reply arrived at 22:50:16.276 saying to wait for that task.
+Because the body was now idle, the no-action branch imposed another 120-second
+pause. Autonomy 0.2.76 exempts this existing, known ahead request from that
+penalty and schedules the next ordinary boundary using the real terminal.
+It does not manufacture actions or bypass failed-anchor cancellation, stops,
+ordinary idle backoff or the native queue. The old behavior was reproduced
+before the change; 1,395 package tests and 190 isolated-wheel cases plus the
+SDK-free probe pass. This thin consumer only pins source `9f199d3d`.
+
+Separately, the 0.2.75 context trial reached 116,507 input tokens, then performed
+one real overflow retirement. The next two replies kept the retained prefix
+without another retirement. Cold rotation still took 133.141 seconds; warm
+responses then took 28.782 and 14.687 seconds. Main-brain reviews have also
+produced real acknowledgements, while expired/corrected review attempts remain
+separate failures. These finite records do not establish permanent timeout
+resolution, complete farm progress or long-term survival acceptance.
