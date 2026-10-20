@@ -8,9 +8,9 @@ from agent_mc_autonomy.ownership import session_lease
 from test_recent_context import prepare
 
 
-def response(arguments, content='I need to inspect first.</think>'):
+def response(arguments, content='I need to inspect first.</think>', *, finish_reason='tool_calls'):
     call = SimpleNamespace(id='review-call', function=SimpleNamespace(name='submit_game_review', arguments=json.dumps(arguments)))
-    return SimpleNamespace(choices=[SimpleNamespace(finish_reason='tool_calls', message=SimpleNamespace(
+    return SimpleNamespace(choices=[SimpleNamespace(finish_reason=finish_reason, message=SimpleNamespace(
         content=content, tool_calls=[call]))])
 
 
@@ -61,6 +61,33 @@ def test_free_text_cannot_replace_a_structured_decision(plugin_instance, monkeyp
     assert result['reason'] == 'structured_review_invalid_response'
     assert not port.state()['review'].get('result')
     assert all(call.kwargs['ai_behavior'] == 'read' for call in push.call_args_list)
+    assert not getattr(plugin_instance, '_speech_output_tasks', None)
+
+
+@pytest.mark.parametrize('finish_reason', ['stop', 'tool_calls'])
+def test_accepts_complete_structured_review_with_provider_stop(plugin_instance, monkeypatch, run_async, finish_reason):
+    port, _, _, _, _, _, _, push, create = configured(plugin_instance, monkeypatch)
+    create.return_value = response({'decision': 'continue', 'reason': 'Keep current work'},
+                                   content=None, finish_reason=finish_reason)
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged'] is True
+    assert create.await_count == 1
+    assert port.state()['review']['result']['acknowledged']
+    assert not getattr(plugin_instance, '_speech_output_tasks', None)
+    assert all(call.kwargs['ai_behavior'] == 'read' for call in push.call_args_list)
+
+
+@pytest.mark.parametrize('finish_reason', ['length', 'content_filter', 'error', None])
+def test_rejects_incomplete_review_even_with_a_tool_call(plugin_instance, monkeypatch, run_async, finish_reason):
+    port, _, _, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
+    create.return_value = response({'decision': 'continue', 'reason': 'Do not adopt truncated work'},
+                                   content=None, finish_reason=finish_reason)
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged'] is False
+    assert result['reason'] == 'structured_review_invalid_response'
+    assert not port.state()['review'].get('result')
     assert not getattr(plugin_instance, '_speech_output_tasks', None)
 
 

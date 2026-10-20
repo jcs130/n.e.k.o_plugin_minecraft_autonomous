@@ -92,7 +92,9 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
                 return refused("structured_review_superseded")
             choice = response.choices[0]
             calls = choice.message.tool_calls or []
-            if choice.finish_reason != "tool_calls" or len(calls) != 1 or calls[0].function.name != "submit_game_review":
+            # Named forced calls can finish with stop on OpenAI-compatible servers.
+            # Still require one complete expected tool and validate every argument below.
+            if choice.finish_reason not in {"stop", "tool_calls"} or len(calls) != 1 or calls[0].function.name != "submit_game_review":
                 return refused("structured_review_invalid_response")
             call = calls[0]
             arguments = json.loads(call.function.arguments)
