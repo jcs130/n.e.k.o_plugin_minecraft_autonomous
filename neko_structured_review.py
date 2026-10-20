@@ -86,7 +86,9 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
                 return refused('structured_review_expired')
             response = await asyncio.wait_for(client.chat.completions.create(
                 model="decision", messages=messages, tools=[REVIEW_TOOL], stream=False,
-                tool_choice={"type": "function", "function": {"name": "submit_game_review"}},
+                # Thinking providers may reject forced tool choices. Validation
+                # below still admits exactly one complete expected transaction.
+                tool_choice="auto",
                 parallel_tool_calls=False, max_completion_tokens=settings.max_output_tokens), timeout=wait_budget)
             if owned_runtime(plugin, settings, target, port, generation) != bound:
                 return refused("structured_review_superseded")
@@ -113,9 +115,14 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
             if (attempt or result.get('is_error') is not True or result.get('error') not in CORRECTABLE
                     or not isinstance(getattr(call, 'id', None), str) or not call.id):
                 break
-            messages = [*messages, {"role": "assistant", "tool_calls": [{"id": call.id, "type": "function",
-                "function": {"name": "submit_game_review", "arguments": call.function.arguments}}]},
-                {"role": "tool", "tool_call_id": call.id, "content": json.dumps(result, ensure_ascii=False)}]
+            # This known refusal happened before effects. Start one bounded
+            # correction from its actual evidence, without synthesizing native
+            # assistant history missing the provider's private reasoning state.
+            # The public host gateway does not transport that provider state.
+            messages = [*messages[:2], {"role": "user", "content": json.dumps({
+                "rejected_candidate": arguments, "rejection": result,
+                "instruction": "上一个候选因上述真实回执未被采用，没有新增目标或语音。请据此纠正并提交一次完整判断；不要把候选当成已执行。"
+            }, ensure_ascii=False)}]
         tasks = [t for t in tuple(getattr(plugin, "_speech_output_tasks", ()))
                  if t.get_loop() is asyncio.get_running_loop()]
         if tasks:

@@ -42,7 +42,7 @@ def test_model_prelude_never_enters_host_chat_or_voice(plugin_instance, monkeypa
     assert create.await_count == 1
     call = create.await_args.kwargs
     assert call['model'] == 'decision' and call['stream'] is False
-    assert call['tool_choice']['function']['name'] == 'submit_game_review'
+    assert call['tool_choice'] == 'auto'
     assert 'Synthetic' in json.dumps(call['messages'], ensure_ascii=False)
     assert 'Protect house' in json.dumps(call['messages'], ensure_ascii=False)
     plugin_instance._test_review_gateway.aclose.assert_awaited_once()
@@ -158,17 +158,22 @@ def test_control_text_in_explicit_voice_is_not_speakable(plugin_module):
 
 def test_rejected_stage_choice_returns_actual_error_once(plugin_instance, monkeypatch, run_async):
     port, _, _, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
-    create.side_effect = [response({'decision': 'revise', 'reason': 'Change the stage', 'goal': 'New stage'}),
+    first = response({'decision': 'revise', 'reason': 'Change the stage', 'goal': 'New stage'})
+    first.choices[0].message.reasoning_content = 'Private provider reasoning; never transport as free text.'
+    create.side_effect = [first,
                           response({'decision': 'continue', 'reason': 'No stage exists to revise'})]
     with session_lease(port.directory):
         result = run_async(plugin_instance.game_decision_heartbeat()).value
     assert result['main_brain_acknowledged'] is True
     assert result['correction_attempts'] == 1
     assert create.await_count == 2
-    correction = create.await_args.kwargs['messages'][-2:]
-    assert correction[0]['role'] == 'assistant' and 'I need' not in json.dumps(correction)
-    assert correction[1]['role'] == 'tool' and correction[1]['tool_call_id'] == 'review-call'
-    assert json.loads(correction[1]['content'])['error'] == 'no_active_review_stage'
+    messages = create.await_args.kwargs['messages']
+    assert [m['role'] for m in messages] == ['system', 'user', 'user']
+    correction = json.loads(messages[-1]['content'])
+    assert correction['rejected_candidate']['decision'] == 'revise'
+    assert correction['rejection']['error'] == 'no_active_review_stage'
+    assert 'Private provider reasoning' not in json.dumps(messages)
+    assert 'I need' not in json.dumps(messages)
     assert port.state()['last_decision']['decision'] == 'continue'
     assert port.mailbox.intent_revision() == 0
 
