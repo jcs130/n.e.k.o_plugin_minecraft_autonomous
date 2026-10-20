@@ -1,7 +1,7 @@
 # Planner prefix continuity
 
-Development adapter 0.6.78 pins host-neutral autonomy 0.2.74 at
-`7ac713e5b517e082b71213023ca9eada4ab4299a`. The game core and viewer pins are
+Development adapter 0.6.79 pins host-neutral autonomy 0.2.75 at
+`c8269ca1f7058e266981fd4956a191a35e8e71f4`. The game core and viewer pins are
 unchanged. This is a dependency update; planning behavior remains in MC friend.
 
 Full-mode temporary read deferral and ahead planning previously rewrote the
@@ -65,3 +65,41 @@ one success. The subsequent history reset followed the connection/identity
 transition, so it does not validate overflow retirement. The same executor
 reconnected naturally. This remains finite deployment evidence, not long-term
 survival, a controlled model comparison or a new release.
+
+
+## Mixed-size replies and the next complete inspection
+
+The later complete inspection found renewed deadlines in the same MTP profile;
+the earlier fourteen-response window did not establish a permanent solution.
+One independent source defect is reproduced at the real controller boundary:
+a large tool reply followed by short speech/help caused the last-exchange
+estimate to fall to a tiny value. The following large reply retired three more
+history groups. Autonomy 0.2.75 takes the largest measured marginal growth from
+at most four recent complete exchanges. It retains opt-in/actual-overflow-only
+activation, the quarter-window bound, fitting history, fresh evidence and the
+original journals. The source regression has 1,394 passing cases; the isolated
+wheel has 189 targeted cases plus the SDK-free fake-body probe.
+
+This source fix does not explain deadlines whose history/prefix never changed.
+A separate local service trial reserves more GPU headroom with
+`GPU_UTIL=0.85` on the same fixed HyperQwen MTP/FP8 image, same weights, vision,
+128K per-request capacity, strict=function and two admissions. The engine now
+reports 155,316 equivalent cache tokens, 204 usable blocks, and 173 blocks per
+full 128K request. Two full 128K contexts still do not fit. This is one RTX 3090
+WSL/desktop measurement, not a portable plugin default. The upstream
+[WSL memory notes](https://github.com/syv-ai/HyperQwen/blob/main/docs/gotchas.md)
+describe silent memory spill and the need for non-cache headroom; shared-memory
+counters alone do not identify every allocation or establish paging as the sole
+root cause.
+
+The service comparison preserved the original body and ten retained history
+groups. A 107,422-token cold request returned in 173.375 seconds; subsequent
+warm requests reached 119,630 tokens with 109,824 cached, returning in 31.188
+seconds. The first six body replies had no deadline, while a separate official
+review still timed out. These finite samples precede deployment of the source
+fix and must not be attributed to 0.2.75 or called long-term acceptance.
+The old container's stop exhausted its 45-second grace period and exited 137;
+GPU running/waiting counters being zero did not prove HTTP/pre-admission work
+was fully drained. The trace and failed clean-exit assertion are retained.
+Neko source/SDK, Java, driver, 250W power cap and private game configuration were
+unchanged. Public release remains 0.6.70; no new tag or Market submission.
