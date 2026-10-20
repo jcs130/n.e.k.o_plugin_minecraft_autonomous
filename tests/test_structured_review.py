@@ -91,6 +91,33 @@ def test_rejects_incomplete_review_even_with_a_tool_call(plugin_instance, monkey
     assert not getattr(plugin_instance, '_speech_output_tasks', None)
 
 
+@pytest.mark.parametrize('budget', [3072, 8192])
+def test_review_honors_configured_output_budget(plugin_instance, monkeypatch, run_async, budget):
+    port, _, raw, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
+    raw['autonomy']['max_output_tokens'] = budget
+    create.return_value = response({'decision': 'continue', 'reason': 'Complete within the configured budget'})
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged'] is True
+    assert create.await_args.kwargs['max_completion_tokens'] == budget
+    assert create.await_count == 1
+
+
+def test_truncated_review_records_budget_failure_without_adoption(plugin_instance, monkeypatch, run_async):
+    port, _, raw, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
+    raw['autonomy']['max_output_tokens'] = 3072
+    create.return_value = response({'decision': 'continue', 'reason': 'Never adopt partial reasoning'},
+                                   finish_reason='length')
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['failure_category'] == 'output_budget_exhausted'
+    assert result['max_output_tokens'] == 3072
+    assert not result['main_brain_acknowledged']
+    assert not port.state()['review'].get('result')
+    assert not getattr(plugin_instance, '_speech_output_tasks', None)
+    assert create.await_count == 1
+
+
 @pytest.mark.parametrize('change', ['stop', 'generation', 'run', 'intent'])
 def test_late_review_cannot_change_a_stopped_or_replaced_body(plugin_instance, monkeypatch, run_async, change):
     port, snapshot, _, _, _, save, _, _, create = configured(plugin_instance, monkeypatch)

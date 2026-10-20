@@ -87,11 +87,14 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
             response = await asyncio.wait_for(client.chat.completions.create(
                 model="decision", messages=messages, tools=[REVIEW_TOOL], stream=False,
                 tool_choice={"type": "function", "function": {"name": "submit_game_review"}},
-                parallel_tool_calls=False, max_completion_tokens=2048), timeout=wait_budget)
+                parallel_tool_calls=False, max_completion_tokens=settings.max_output_tokens), timeout=wait_budget)
             if owned_runtime(plugin, settings, target, port, generation) != bound:
                 return refused("structured_review_superseded")
             choice = response.choices[0]
             calls = choice.message.tool_calls or []
+            if choice.finish_reason == "length":
+                return {**refused("structured_review_invalid_response"),
+                        "failure_category": "output_budget_exhausted", "max_output_tokens": settings.max_output_tokens}
             # Named forced calls can finish with stop on OpenAI-compatible servers.
             # Still require one complete expected tool and validate every argument below.
             if choice.finish_reason not in {"stop", "tool_calls"} or len(calls) != 1 or calls[0].function.name != "submit_game_review":
