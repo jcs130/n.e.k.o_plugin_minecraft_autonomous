@@ -33,3 +33,35 @@ latest fitting exchange plus fresh facts and raw journals. Its default remains
 opt-in; no fitting history is removed early and the 128K capacity is unchanged.
 Full framework regression passed 1,389 tests and 184 isolated-wheel checks;
 the counter/template CPU replay proves prefix preservation, not live latency.
+
+Later observation reopened a separate service-capacity issue: the finite
+post-deployment window did not prevent subsequent deadlines at 115K+ input
+tokens. At the first recurrence, the diagnostic head/tool/first-history hashes
+were stable and no history was retired. The local engine's four admissions
+share a pool whose published budget allows only one full 128K request; a full
+game request and a small independent review can exceed that budget together.
+The human requested actual resident capacity to be improved. A separately
+journaled KVarN trial increased the local engine's cache budget and showed two
+simultaneous requests, but five successful body replies and four deadlines
+failed timeout acceptance. The trial was replaced through another normal,
+drained operation with the same model's MTP predictor and FP8 cache. Its smaller
+recurrent-state cost leaves more room for a long game request plus a small
+independent review. Both retain the same weights, vision and 128K capacity;
+neither holds two complete 128K requests on this card.
+
+The MTP evaluation has naturally returned a 101,451-token prompt with 91,520
+cached tokens in 47.938 seconds, while further observation continues. The cold
+starts, changed inputs and cache states are not a controlled speed comparison.
+This is a user-owned deployment choice: it does not change the public plugin's
+model defaults, SDK, game configuration or dependency pins. Successful engine
+initialization, model responses, actual native actions, sustained goals and
+desktop audio playback remain separate acceptance checks.
+
+The completed bounded MTP record contains 14 body replies and no body deadline,
+with a 47.2895-second median; ten replies finished before an announced server
+maintenance disconnect. A 116,224-token prompt reused 108,992 tokens and returned
+in 37.343 seconds. The official review gateway still recorded one timeout and
+one success. The subsequent history reset followed the connection/identity
+transition, so it does not validate overflow retirement. The same executor
+reconnected naturally. This remains finite deployment evidence, not long-term
+survival, a controlled model comparison or a new release.
