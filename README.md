@@ -32,11 +32,11 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 插件 | `minecraft_autonomous` **0.6.68 开发候选**；Windows x64 / Neko CPython 3.11 |
-| 自主框架 | `agent-mc-autonomy@0.2.64`，提交 `f4b29c9a379903b55fa111c3bed5a110e4c4f4c9` |
+| 插件 | `minecraft_autonomous` **0.6.69 开发候选**；Windows x64 / Neko CPython 3.11 |
+| 自主框架 | `agent-mc-autonomy@0.2.65`，提交 `c5429b56e7a49eb5be16b513fb24332d0f73b7d4` |
 | 游戏核心 | `agent-mc-world@0.5.7-rc.52`，提交 `bba59bb92a0b83d0321671a19f272eef38400cd1` |
 | 核心归档 SHA256 | `8b5fcc50c80914f6375f3ef7d1c5855e60aeb3598ccba7c7886f831f36b75f1f` |
-| 共享观战 | `mc-visual-console@5ad51dce9430d537ae91df8f4aa78906a616a74f` |
+| 共享观战 | `mc-visual-console@dd7c4011abe4e5e7498fe60740b0c23abe7fbb3f` |
 | 宿主公共接口核对 | Neko main `ec09fca56ad146a55855d59f12969a3bac12c9f8`；主程序/SDK 未修改 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT；随包保留素材和第三方许可 |
 
