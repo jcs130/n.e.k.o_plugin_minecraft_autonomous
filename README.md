@@ -4,6 +4,8 @@
 
 游戏规划、原生任务队列、记忆和执行器属于独立的 [Minecraft AI Friend](https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-autonomy)。这里是薄适配器；不修改 Neko 主程序或 SDK。没有新聊天时仍会继续游玩。
 
+当前源码增加模型匹配的 CPU 上下文计数、复盘动作坐标/效果证据和独立的 `heartbeat.review_max_output_tokens`（默认 3072）。绑定精确计数需选定模型、服务地址及分词器/模板哈希；不支持时仍保守回退。以下完整包安装说明对应已发布的 0.6.70。
+
 ## 完整离线包安装
 
 普通用户下载 [0.6.70 发布页](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.70) 中的 **Minecraft-Autonomous-0.6.70-Windows-x64-offline.zip**。它已包含 Node、固定后端及依赖、3D 观战、1.21.1 贴图、音效/音乐、浏览器运行时和 YUI 普通皮肤/YSM 模型，无需安装 Git、Python builder、npm 或手工拼 vendor。当前为公开测试版，已验证范围和限制见 [版本说明](docs/release-0.6.70.md)。
@@ -28,12 +30,12 @@
 
 动作受理、目标达成、音频生成和桌面播放分别记录，不能互相替代。长期无人干预生存、Microsoft 真账号全流程以及千灯纪全部特色模型/资源仍在持续打磨，详见版本说明。源码开发安装见 [源码指南](docs/install-source.md)，模型与声音见 [接入说明](docs/model-and-voice.md)。
 
-## 当前固定组合
+## 当前源码固定组合（0.6.71 开发候选，尚未发布）
 
 | 项目 | 内容 |
 | --- | --- |
-| 插件 | `minecraft_autonomous` **0.6.70 公开测试版**；Windows x64 / Neko CPython 3.11 |
-| 自主框架 | `agent-mc-autonomy@0.2.65`，提交 `c5429b56e7a49eb5be16b513fb24332d0f73b7d4` |
+| 插件 | `minecraft_autonomous` **0.6.71 开发候选**；Windows x64 / Neko CPython 3.11 |
+| 自主框架 | `agent-mc-autonomy@0.2.66`，提交 `1631134643e1a90c2e52585e6355944120d8aa81` |
 | 游戏核心 | `agent-mc-world@0.5.7-rc.52`，提交 `bba59bb92a0b83d0321671a19f272eef38400cd1` |
 | 核心归档 SHA256 | `8b5fcc50c80914f6375f3ef7d1c5855e60aeb3598ccba7c7886f831f36b75f1f` |
 | 共享观战 | `mc-visual-console@dd7c4011abe4e5e7498fe60740b0c23abe7fbb3f` |

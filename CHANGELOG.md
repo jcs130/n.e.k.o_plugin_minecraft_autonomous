@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.71 — Development candidate
+
+- 固定共享框架 0.2.66 / `16311346`：显式支持当前 vLLM 的本地 CPU 精确计数绑定，避免把 UTF-8 字节上界当作实际 token 窗口；未绑定或不支持的输入仍保守回退。
+- 主脑复盘保留经过核实的步骤目标坐标和变化标记；这些是历史现场证据，不构成目标成功或禁止重试的规则。
+- `heartbeat.review_max_output_tokens` 默认 3072，与身体规划输出预算独立；截断仍拒绝，不自动重放。
+- 公开下载版本仍是 0.6.70，本候选尚未创建 Release、tag 或提交 Market。
+
 ## 0.6.69 — Development candidate
 
 - 固定共享框架 0.2.65 / 观战 dd7c4011：修正 1.21.1 图案组件的 layers 容器转换，增加真实协议二进制往返及 Prismarine Item 回归，保留旗帜原始图案和颜色。

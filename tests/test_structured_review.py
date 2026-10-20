@@ -99,8 +99,20 @@ def test_review_honors_configured_output_budget(plugin_instance, monkeypatch, ru
     with session_lease(port.directory):
         result = run_async(plugin_instance.game_decision_heartbeat()).value
     assert result['main_brain_acknowledged'] is True
-    assert create.await_args.kwargs['max_completion_tokens'] == budget
+    assert create.await_args.kwargs['max_completion_tokens'] == min(budget, 3072)
     assert create.await_count == 1
+
+
+def test_review_budget_is_independent_of_body_budget(plugin_instance, monkeypatch, run_async):
+    port, _, raw, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
+    raw['autonomy']['max_output_tokens'] = 8192
+    raw['heartbeat']['review_max_output_tokens'] = 1536
+    create.return_value = response({'decision': 'continue', 'reason': 'Keep the current stage'})
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged'] is True
+    assert create.await_args.kwargs['max_completion_tokens'] == 1536
+    assert raw['autonomy']['max_output_tokens'] == 8192
 
 
 def test_truncated_review_records_budget_failure_without_adoption(plugin_instance, monkeypatch, run_async):

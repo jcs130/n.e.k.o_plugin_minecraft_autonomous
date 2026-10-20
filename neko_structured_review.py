@@ -34,6 +34,7 @@ CORRECTABLE = frozenset({'no_active_review_stage', 'previous_intent_pending',
 
 
 async def deliver_review(plugin, raw, settings, config, port, review, generation):
+    output_budget = min(settings.max_output_tokens, config.review_max_output_tokens)
     common = {"heartbeat_id": review["id"], "trigger": review["trigger"], "offered": True,
               "main_brain_acknowledged": False, "playback_verified": False,
               "transport": "neko_public_model_gateway", "free_text_output": False}
@@ -89,14 +90,14 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
                 # Thinking providers may reject forced tool choices. Validation
                 # below still admits exactly one complete expected transaction.
                 tool_choice="auto",
-                parallel_tool_calls=False, max_completion_tokens=settings.max_output_tokens), timeout=wait_budget)
+                parallel_tool_calls=False, max_completion_tokens=output_budget), timeout=wait_budget)
             if owned_runtime(plugin, settings, target, port, generation) != bound:
                 return refused("structured_review_superseded")
             choice = response.choices[0]
             calls = choice.message.tool_calls or []
             if choice.finish_reason == "length":
                 return {**refused("structured_review_invalid_response"),
-                        "failure_category": "output_budget_exhausted", "max_output_tokens": settings.max_output_tokens}
+                        "failure_category": "output_budget_exhausted", "max_output_tokens": output_budget}
             # Named forced calls can finish with stop on OpenAI-compatible servers.
             # Still require one complete expected tool and validate every argument below.
             if choice.finish_reason not in {"stop", "tool_calls"} or len(calls) != 1 or calls[0].function.name != "submit_game_review":
@@ -131,6 +132,7 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
                 "transport_status": "accepted", "decision": arguments["decision"],
                 "correction_attempts": attempt,
                 "model_wait_budget_seconds": round(wait_budget, 3),
+                "max_output_tokens": output_budget,
                 "decision_error": result.get('error') if result.get('error') in CORRECTABLE else
                                   "review_rejected" if result.get('is_error') else None,
                 "reason": "structured_review_acknowledged" if result.get("acknowledged") else "structured_review_not_acknowledged"}

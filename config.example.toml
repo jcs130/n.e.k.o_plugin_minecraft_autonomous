@@ -62,6 +62,7 @@ enabled = false # Explicitly enable Neko main-character strategic reviews of an 
 target = "" # Empty: current Neko character. Independent runtime does not require Neko.
 min_interval_seconds = 60 # Material changes are coalesced; this is not a fixed model-call interval.
 review_interval_seconds = 180 # Fallback strategic review with fresh facts.
+review_max_output_tokens = 3072 # Independent total review output, including provider reasoning; body budget is unchanged.
 idle_presence_seconds = 45 # Bounded optional character chat in the existing review loop; accepted events reset it.
 
 [speech_output]

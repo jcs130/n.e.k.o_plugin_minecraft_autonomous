@@ -43,7 +43,7 @@ EDITABLE = {
     "viewer": {"url", "auto_open", "renderer_directory", "catalog_file", "bundled_appearance_catalog_file", "default_appearance", "listen_port"},
     "perception": {"enabled"},
     "presentation": {"enabled", "target", "min_interval_seconds"},
-    "heartbeat": {"enabled", "target", "min_interval_seconds", "review_interval_seconds", "idle_presence_seconds", "structured_reviews"},
+    "heartbeat": {"enabled", "target", "min_interval_seconds", "review_interval_seconds", "idle_presence_seconds", "structured_reviews", "review_max_output_tokens"},
     "speech_output": {"enabled", "base_url", "planner_narration", "min_interval_seconds"},
     "extension_pack": {"mode"},
     "server_extension": {"presentation_module", "presentation_sha256"},

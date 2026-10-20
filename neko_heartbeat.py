@@ -26,6 +26,7 @@ class HeartbeatSettings:
     review_interval_seconds: int = 180
     idle_presence_seconds: int = 45
     structured_reviews: bool = True
+    review_max_output_tokens: int = 3072
 
     @classmethod
     def parse(cls, raw):
@@ -37,10 +38,11 @@ class HeartbeatSettings:
         if len(target) > 80:
             raise ValueError("heartbeat.target is too long")
         return cls(policy.enabled, target, policy.min_interval_seconds, policy.review_interval_seconds,
-                   policy.idle_presence_seconds, _boolean(section, "structured_reviews", True))
+                   policy.idle_presence_seconds, _boolean(section, "structured_reviews", True), policy.review_max_output_tokens)
 
     def policy(self):
-        return ReviewPolicy(self.enabled, self.min_interval_seconds, self.review_interval_seconds, self.idle_presence_seconds)
+        return ReviewPolicy(self.enabled, self.min_interval_seconds, self.review_interval_seconds,
+                            self.idle_presence_seconds, self.review_max_output_tokens)
 
 
 def review_port(plugin, settings):
