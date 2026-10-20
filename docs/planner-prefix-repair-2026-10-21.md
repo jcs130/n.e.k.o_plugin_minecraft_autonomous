@@ -124,3 +124,21 @@ responses then took 28.782 and 14.687 seconds. Main-brain reviews have also
 produced real acknowledgements, while expired/corrected review attempts remain
 separate failures. These finite records do not establish permanent timeout
 resolution, complete farm progress or long-term survival acceptance.
+
+The development consumer 0.6.80 was installed through official sync and
+refresh/start after the standalone body's normal drain, owner exit and lease
+release. Neko, the current model container and private game configuration stayed
+unchanged during this source handover. Its finite natural window through 23:06
+UTC has 11 successful body replies and no body deadline, with a 21.875-second
+median; inputs and cache state differ from earlier trials. Real native
+completed/blocked outcomes and one accepted strategic insert were recorded.
+Another review exhausted its remaining 71.23-second lease, so the full chain is
+not timeout-free. Six audio-completed receipts still do not verify desktop
+playback. The identical waiting-reply race was not reobserved naturally during
+this window; the targeted red/green test is the direct verification.
+
+The official 3,155-file/18-entry candidate passed structure and hash checks,
+tests, Ruff and 11 UI data tests. Its vendored source matches all 68 tested
+runtime files in content; one Python file has only checkout CRLF differences,
+not raw byte equality. This remains a development package, with public
+GitHub/Market release still 0.6.70. No new tag or publication was made.
