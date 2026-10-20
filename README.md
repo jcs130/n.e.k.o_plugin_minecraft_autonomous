@@ -30,14 +30,14 @@
 
 动作受理、目标达成、音频生成和桌面播放分别记录，不能互相替代。长期无人干预生存、Microsoft 真账号全流程以及千灯纪全部特色模型/资源仍在持续打磨，详见版本说明。源码开发安装见 [源码指南](docs/install-source.md)，模型与声音见 [接入说明](docs/model-and-voice.md)。
 
-## 当前源码固定组合（0.6.74 开发候选，尚未发布）
+## 当前源码固定组合（0.6.75 开发候选，尚未发布）
 
 | 项目 | 内容 |
 | --- | --- |
-| 插件 | `minecraft_autonomous` **0.6.74 开发候选**；Windows x64 / Neko CPython 3.11 |
-| 自主框架 | `agent-mc-autonomy@0.2.70`，提交 `d738186cc00a2b79761a7cae424050c51268c0c7` |
-| 游戏核心 | `agent-mc-world@0.5.7-rc.56`，提交 `7207ad9d2ddcae4bd14d04158a4832c79904e84e` |
-| 核心归档 SHA256 | `f3fd7d92f2b1ede19eea9d3d31c76b41cbc0de5106ff0a9cd887b729f8cdf190` |
+| 插件 | `minecraft_autonomous` **0.6.75 开发候选**；Windows x64 / Neko CPython 3.11 |
+| 自主框架 | `agent-mc-autonomy@0.2.71`，提交 `467e82efa78660fae88fcc2e38d5c9515fcd814a` |
+| 游戏核心 | `agent-mc-world@0.5.7-rc.58`，提交 `04039c3aedcf596d72822e881c5185076d268ae6` |
+| 核心归档 SHA256 | `afd449a7788ae79058361510a4d1732c77e808978b5674240ea2fb4bd305e662` |
 | 共享观战 | `mc-visual-console@dd7c4011abe4e5e7498fe60740b0c23abe7fbb3f` |
 | 宿主公共接口核对 | Neko main `ec09fca56ad146a55855d59f12969a3bac12c9f8`；主程序/SDK 未修改 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT；随包保留素材和第三方许可 |
