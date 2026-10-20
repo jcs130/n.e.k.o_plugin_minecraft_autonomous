@@ -12,6 +12,28 @@ const channels=['mcviewer:state','mcagent:state'];
 export const itemAppearanceCatalog={fileUrl:new URL('./data-packs/qiandengji/viewer-items/catalog.json',import.meta.url).href,
   sha256:'bc79c58108deb78accf2f281de59e149ab4116ecb1131485ae4c9ee51c4012c8'};
 export const presentationOptions=Object.freeze({stateRefreshMs:30_000});
+// This immutable texture identifies an appearance, not server permissions or
+// live skills/vitals. Reconnects need not repeat MC_GUIDE to render the actual
+// same-player item. Never select it by its generic player_head ID or name.
+function observedBackpackAppearance(bot) {
+  const slots=bot.inventory?.slots;
+  if(bot._client?.state!=='play'||!bot.entity||!Array.isArray(slots)||slots.length>128)return false;
+  return slots.some(item=>{
+    if(item?.name!=='player_head'||!Number.isSafeInteger(item.count)||item.count<1||!Array.isArray(item.components)||item.components.length>128||
+      !Array.isArray(item.removedComponents)||item.removedComponents.some(row=>(typeof row==='string'?row:row?.type)==='profile'))return false;
+    const profiles=item.components.filter(row=>row?.type==='profile');
+    const properties=profiles.length===1?profiles[0].data?.properties:null;
+    if(!Array.isArray(properties)||properties.length>16)return false;
+    const textures=properties.filter(row=>row?.name==='textures');
+    const value=textures.length===1?textures[0].value:null;
+    if(typeof value!=='string'||value.length>16384||!/^[A-Za-z0-9+/]+={0,2}$/.test(value))return false;
+    try{
+      const url=JSON.parse(Buffer.from(value,'base64').toString('utf8'))?.textures?.SKIN?.url;
+      return url==='https://textures.minecraft.net/texture/8dcc6eb40f3bada41e4339888d6d207437598bdbd175c2e731191d5a9a42d3c8'||
+        url==='http://textures.minecraft.net/texture/8dcc6eb40f3bada41e4339888d6d207437598bdbd175c2e731191d5a9a42d3c8';
+    }catch{return false;}
+  });
+}
 function skills(raw, observedAt, channel) {
   if(!record(raw)||raw.schemaVersion!==1||!Array.isArray(raw.skills??[])||!Array.isArray(raw.abilities??[])
     ||(raw.skills?.length??0)>64||(raw.abilities?.length??0)>64)return null;
@@ -112,11 +134,14 @@ export function createPresentationObserver(bot,{now=Date.now,staleMs=12_000,auto
     for(const channel of channels){bot._client.registerChannel(channel,['restBuffer'],true);registered.push(channel);}};
   if(bot._client.state==='play')register();else bot.once('login',register);
   const snapshot=()=>{
-    if(closed||ended||!current||current.playerUuid!==own()||current.entityId!==bot.entity?.id||now()-current.receivedAt<0||now()-current.receivedAt>freshness)return null;
+    if(closed||ended||!own())return null;
+    if(!current||current.playerUuid!==own()||current.entityId!==bot.entity?.id||now()-current.receivedAt<0||now()-current.receivedAt>freshness)
+      return observedBackpackAppearance(bot)?{schemaVersion:1,playerUuid:own(),source:'same_player_observed_item_profile',
+        serverItemPackId:'qiandengji-items-1.21.1'}:null;
     return {...structuredClone(current),serverItemPackId:'qiandengji-items-1.21.1'};
   };
   return {snapshot,capabilities:()=>{const value=snapshot();return {active:!!value,id:'qiandengji',minecraftVersion:bot.version,
-    source:value?.source??null,observedAt:value?.skills.observedAt??null,skills:!!value?.skills,mana:!!value?.skills.mana,refreshError};},refresh,
+    source:value?.source??null,observedAt:value?.skills?.observedAt??null,skills:!!value?.skills,mana:!!value?.skills?.mana,refreshError};},refresh,
     close(){if(closed)return;closed=true;clear();clearInterval(refreshTimer);bot._client.off('custom_payload',payload);bot.off('message',message);bot.off('end',end);bot.off('death',clearBody);bot.off('login',register);
       // Do not unregister a protocol that another explicit extension may share.
       // The connection owns registration; this observer owns only its listeners.
