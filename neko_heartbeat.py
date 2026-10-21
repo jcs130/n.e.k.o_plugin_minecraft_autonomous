@@ -231,7 +231,7 @@ class NekoHeartbeat:
 
     @llm_tool(name="minecraft_autonomy_review", timeout=10,
               description="你是同一Neko主脑，游戏身体独立行动。先用通知heartbeat_id inspect，再短句完成continue/insert/revise + reason。"
-              "continue保留工作；insert新增阶段；仅stage_delivery.can_revise时revise；后二者需goal。用户目标优先，受理不等于完成。"
+              "continue保留工作且必须省略goal；insert新增阶段；仅stage_delivery.can_revise时revise；后二者需goal。用户目标优先，受理不等于完成。"
               "spoken_text可放一句自然打算或感想，不填控制文本。待复盘死亡必须附death_reflection：复制evidence_ref，outcome=lesson及lesson/applicability，或deferred及真实reason。"
               "inspect后按completion_contract先提交最短完整判断，无需解释工具过程。context/记忆召回可选；公开人格自动绑定。"
               "原始证据按evidence_ref/detail_path/detail_offset查询，历史详情不代替新鲜inspect。\n\n" + speaking_skill(),

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.81
+
+- Pin autonomy 0.2.77 at `81ccf2f05a9bc10167796a787519aea4f894282b`.
+  Contradictory continue-plus-goal reviews are refused before effects; one
+  bounded model correction can explicitly select insert/revise.
+- Let structured reviews query referenced historical evidence through the
+  canonical read-only port, up to four pages within the original deadline.
+  Preserve complete bounded game fact originals behind summary references;
+  reads neither dispatch body work nor speak or refresh the inspected scene.
+
+
 ## 0.6.76 — Development candidate
 
 - 固定共享框架 0.2.72 / `e2938079`：原生终态持久写入后立即同步公开 pending，修复慢推理期间仍显示旧任务受理的问题。

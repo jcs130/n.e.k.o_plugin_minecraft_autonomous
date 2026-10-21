@@ -190,6 +190,128 @@ def test_rejected_stage_choice_returns_actual_error_once(plugin_instance, monkey
     assert port.mailbox.intent_revision() == 0
 
 
+def test_continue_with_corrective_goal_must_be_corrected_before_adoption(plugin_instance, monkeypatch, run_async):
+    port, _, _, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
+    goal = 'Inspect why the same planting attempt has no effect'
+    create.side_effect = [response({'decision': 'continue', 'reason': 'Change ineffective work', 'goal': goal}),
+                          response({'decision': 'insert', 'reason': 'Change ineffective work', 'goal': goal})]
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged']
+    assert result['correction_attempts'] == 1
+    assert create.await_count == 2
+    correction = json.loads(create.await_args.kwargs['messages'][-1]['content'])
+    assert correction['rejection']['error'] == 'continue_cannot_deliver_new_goal'
+    command = port.mailbox.claim()
+    assert command['payload']['goal'] == goal
+    assert command['payload']['review_decision'] == 'insert'
+    assert port.mailbox.claim() is None
+
+
+def evidence_response(path, offset=0):
+    value = response({'detail_path': path, 'detail_offset': offset})
+    value.choices[0].message.tool_calls[0].function.name = 'read_game_review_evidence'
+    return value
+
+
+def test_structured_review_can_read_referenced_original_before_final_choice(plugin_instance, monkeypatch, run_async):
+    port, snapshot, _, _, _, save, _, _, create = configured(plugin_instance, monkeypatch)
+    detail = 'ordinary prefix ' * 100 + 'FLOWING_WATER_CANNOT_BE_COLLECTED'
+    snapshot['facts']['parts'].append({'key': 'serverFeedback', 'text': detail})
+    save()
+    create.side_effect = [evidence_response(['evidence', 'facts', 'serverFeedback'], 1000),
+                          response({'decision': 'continue', 'reason': 'No safe new stage yet'})]
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged']
+    assert result['evidence_reads'] == 1 and result['correction_attempts'] == 0
+    assert create.await_count == 2
+    delivered = json.loads(create.await_args.kwargs['messages'][-1]['content'])['evidence_read']
+    assert delivered['historical'] and not delivered['grants_inspection']
+    assert delivered['path'] == ['evidence', 'facts', 'serverFeedback']
+    assert delivered['offset'] == 1000
+    assert 'FLOWING_WATER_CANNOT_BE_COLLECTED' in delivered['json_chunk']
+    assert port.mailbox.intent_revision() == 0
+    assert not getattr(plugin_instance, '_speech_output_tasks', None)
+
+
+def test_long_original_tail_is_reachable_with_one_bounded_read(plugin_instance, monkeypatch, run_async):
+    port, snapshot, _, _, _, save, _, _, create = configured(plugin_instance, monkeypatch)
+    snapshot['facts']['parts'].append({'key': 'serverFeedback',
+        'text': 'historical ordinary data ' * 350 + 'ACTION_NOT_COUNTED_AT_THIS_SITE'})
+    save()
+    async def answer(**kwargs):
+        if create.await_count == 1:
+            inspection = json.loads(kwargs['messages'][1]['content'])['inspection']
+            query = inspection['fact_detail_queries']['serverFeedback']
+            return evidence_response(query['detail_path'], max(0, query['json_characters'] - 768))
+        detail = json.loads(kwargs['messages'][-1]['content'])['evidence_read']
+        assert 'ACTION_NOT_COUNTED_AT_THIS_SITE' in detail['json_chunk']
+        return response({'decision': 'insert', 'reason': 'Read the omitted refusal',
+                         'goal': 'Reassess the site before repeating the operation'})
+    create.side_effect = answer
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged'] and result['evidence_reads'] == 1
+    assert create.await_count == 2
+    assert port.mailbox.claim()['payload']['goal'] == 'Reassess the site before repeating the operation'
+
+
+def test_review_original_reads_are_bounded_and_keep_original_deadline(plugin_instance, monkeypatch, run_async):
+    port, _, _, _, clock, save, _, _, create = configured(plugin_instance, monkeypatch)
+    transport = importlib.import_module(plugin_instance.__class__.__module__ + '.neko_structured_review')
+    actual_wait, waits = transport.asyncio.wait_for, []
+    async def wait_for(coro, timeout):
+        if timeout > 1:
+            waits.append(timeout)
+        return await actual_wait(coro, timeout)
+    monkeypatch.setattr(transport.asyncio, 'wait_for', wait_for)
+    async def answer(**_):
+        clock[0] += 10
+        save()
+        return evidence_response(['evidence', 'standing_goal'])
+    create.side_effect = answer
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert not result['main_brain_acknowledged']
+    assert result['reason'] == 'structured_review_evidence_budget_exhausted'
+    assert result['evidence_reads'] == 4
+    assert create.await_count == 5
+    assert waits[-1] == waits[0] - 40
+    assert not port.state()['review'].get('choice')
+    assert not port.mailbox.ready()
+    assert not getattr(plugin_instance, '_speech_output_tasks', None)
+
+
+def test_read_after_refused_goal_keeps_both_the_rejection_and_original_evidence(plugin_instance, monkeypatch, run_async):
+    port, _, _, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
+    goal = 'Use a revised approach'
+    create.side_effect = [response({'decision': 'continue', 'reason': 'Old plan is ineffective', 'goal': goal}),
+                          evidence_response(['evidence', 'standing_goal']),
+                          response({'decision': 'insert', 'reason': 'Evidence checked', 'goal': goal})]
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged'] and result['evidence_reads'] == 1
+    assert result['correction_attempts'] == 1 and create.await_count == 3
+    contexts = [json.loads(m['content']) for m in create.await_args.kwargs['messages'][2:]]
+    assert contexts[0]['rejection']['error'] == 'continue_cannot_deliver_new_goal'
+    assert contexts[1]['evidence_read']['historical']
+    assert port.mailbox.claim()['payload']['goal'] == goal
+
+
+def test_evidence_read_cannot_switch_to_another_reference(plugin_instance, monkeypatch, run_async):
+    port, _, _, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
+    query = evidence_response(['evidence', 'standing_goal'])
+    query.choices[0].message.tool_calls[0].function.arguments = json.dumps({
+        'detail_path': [], 'evidence_ref': '0' * 24})
+    create.return_value = query
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert not result['main_brain_acknowledged'] and create.await_count == 1
+    assert result['reason'] == 'structured_review_invalid_response'
+    assert not port.mailbox.ready()
+
+
 def test_rejected_review_correction_is_bounded(plugin_instance, monkeypatch, run_async):
     port, _, _, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
     create.return_value = response({'decision': 'revise', 'reason': 'Change the stage', 'goal': 'New stage'})
