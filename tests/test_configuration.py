@@ -6,12 +6,12 @@ def test_backend_compatibility_wrapper_uses_canonical_installer(plugin_module):
     assert adapter.verify_runtime is verify_runtime
     assert adapter.SOURCE == SOURCE
     assert SOURCE["external_viewer"]["source_revision"] == "dd7c4011abe4e5e7498fe60740b0c23abe7fbb3f"
-    assert SOURCE["version"] == "0.5.7-rc.60"
-    assert SOURCE["source_revision"] == "ec0f42ebd8390dcd96bbe754f4a6d26a73da888e"
-    assert SOURCE["sha256"] == "0f5361418a7e70638410ea4e83473c5cb21221a2ae77398c45ce6c7bdd276a57"
+    assert SOURCE["version"] == "0.5.7-rc.65"
+    assert SOURCE["source_revision"] == "245eabb88bfce73594e7b6058c0f10c601526317"
+    assert SOURCE["sha256"] == "b093a449fd87f85d08f2d0cad4f2d90b89e3cf108dec9e13a3868e2164e22269"
 
 
 def test_canonical_distribution_version():
     from importlib.metadata import version
 
-    assert version("agent-mc-autonomy") == "0.2.82"
+    assert version("agent-mc-autonomy") == "0.2.83"
