@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.84 — Development update
+
+- Pin autonomy 0.2.80 at `48c2a69e899412b9c7acb2f84fbf426fdb73c271`.
+  Strategic review retains the complete bounded standing instruction and
+  compares dated native project/method summaries, so routine inventory changes
+  do not hide unchanged sampled milestones or missing method reuse.
+- Observations remain evidence for the character's choice, with no activity
+  quota, automatic goal rewrite, extra model loop or relaxed native barriers.
+  Core rc.60 and the current renderer/model pins are unchanged. Behavior must
+  still be verified in natural gameplay; this is not a public release.
+
 ## 0.6.83 — Development update
 
 - Pin autonomy 0.2.79 at `7fdd91747eff0fd6f2cbd42485bc08c5fece4634`, consuming core rc.60.
