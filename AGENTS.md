@@ -22,6 +22,11 @@
 - Natural-language goals and feedback use the durable command mailbox. Preserve request
   IDs, distinguish insert/resume from explicit replacement, and never turn planner reports
   into verified goal success. Unknown native dispatch blocks replay.
+- Keep maintenance resume evidence separate from the standing goal. Never append old
+  project counts, method indexes or deployment reports to the launch goal; they become
+  standing intent in both body and strategic review. Keep dated records in scoped game
+  memory/original evidence and reacquire current native facts. A known maintainer-added
+  appendix needs an explicit recorded correction, never silent rewriting of human text.
 - Add only the dependencies needed for the selected backend; do not copy a legacy
   deployment, private config, credentials, weights, voice caches or user world saves.
 - Before enabling gameplay, require a core whose source, build, default entry and
