@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.83 — Development update
+
+- Pin autonomy 0.2.79 at `7fdd91747eff0fd6f2cbd42485bc08c5fece4634`, consuming core rc.60.
+  Ten explicitly selected work/movement routines use the existing body queue,
+  exact-cell harvest/replant, bounded water routes and original mount/glide
+  inputs. Work outcome/remaining evidence is separate from script completion.
+- No automatic routine selection, learned-method promotion, model change,
+  isolated training launch or Neko/SDK change. The current renderer remains
+  pinned; upstream optional experiment-page source was synchronized separately.
+
 ## 0.6.82
 
 - Pin autonomy 0.2.78 at `1d7b254fea68891f20ac4d3405a9bc43526653de`,
