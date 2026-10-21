@@ -115,6 +115,29 @@ def test_review_budget_is_independent_of_body_budget(plugin_instance, monkeypatc
     assert raw['autonomy']['max_output_tokens'] == 8192
 
 
+def test_canonical_brief_checkpoint_is_before_persona_without_provider_extensions(plugin_instance, monkeypatch, run_async):
+    port, _, raw, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
+    raw['autonomy']['max_output_tokens'] = 8192
+    async def answer(**_):
+        assert attempt_journal(port)[0]['event'] == 'model_request_started'
+        return response({'decision': 'continue', 'reason': 'Keep useful work'})
+    create.side_effect = answer
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    args = create.await_args.kwargs
+    packet = json.loads(args['messages'][1]['content'])
+    guidance = packet['inspection']['completion_contract']['reasoning_guidance']
+    output = packet['inspection']['completion_contract']['output_guidance']
+    assert args['messages'][0]['content'].startswith(guidance+'\n'+output+'\n')
+    assert packet['actor']['persona'] == 'Synthetic'
+    assert result['model_attempts'][0]['brief_checkpoint_guidance'] is True
+    started = attempt_journal(port)[0]
+    assert started['event'] == 'model_request_started' and started['brief_checkpoint_guidance'] is True
+    assert args['max_completion_tokens'] == 3072 and args['tool_choice'] == 'auto'
+    assert not {'reasoning_effort', 'thinking', 'chat_template_kwargs', 'extra_body'} & args.keys()
+    assert result['main_brain_acknowledged'] and not port.mailbox.ready()
+
+
 def test_truncated_review_records_budget_failure_without_adoption(plugin_instance, monkeypatch, run_async):
     port, _, raw, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
     raw['autonomy']['max_output_tokens'] = 3072
@@ -406,8 +429,9 @@ def test_cancelled_gateway_attempt_is_retained_without_adoption(plugin_instance,
     with session_lease(port.directory), pytest.raises(transport.asyncio.CancelledError):
         run_async(plugin_instance.game_decision_heartbeat())
     rows = attempt_journal(port)
-    assert len(rows) == 1 and rows[0]['event'] == 'model_attempt'
-    assert rows[0]['outcome'] == 'caller_cancelled'
+    assert [row['event'] for row in rows] == ['model_request_started', 'model_attempt']
+    assert rows[0]['attempt_id'] == rows[1]['attempt_id']
+    assert rows[1]['outcome'] == 'caller_cancelled'
     assert not port.state()['review'].get('choice') and not port.mailbox.ready()
     assert not plugin_instance._structured_review_busy
 
@@ -421,7 +445,7 @@ def test_untrusted_provider_labels_are_not_persisted(plugin_instance, monkeypatc
     with session_lease(port.directory):
         result = run_async(plugin_instance.game_decision_heartbeat()).value
     assert not result['main_brain_acknowledged']
-    row = attempt_journal(port)[0]
+    row = next(row for row in attempt_journal(port) if row['event'] == 'model_attempt')
     assert row['finish_reason'] == 'other' and row['tool_names'] == ['other'] and row['usage'] == {}
     assert 'PRIVATE_' not in json.dumps(attempt_journal(port))
 

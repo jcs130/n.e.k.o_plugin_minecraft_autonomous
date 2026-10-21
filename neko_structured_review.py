@@ -83,7 +83,11 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
         packet = {"review_id": review["id"], "actor": profile["stable"],
                   "selected_context": profile["dynamic"], "inspection": inspection,
                   "recent_messages": (recent or {}).get("recent_messages", [])}
-        messages = [{"role": "system", "content": (
+        contract = inspection.get('completion_contract', {})
+        guidance = '\n'.join(contract[key] for key in ['reasoning_guidance', 'output_guidance']
+                             if isinstance(contract.get(key), str))
+        brief_checkpoint = bool(contract.get('reasoning_guidance'))
+        messages = [{"role": "system", "content": guidance + '\n' + (
             "你是正在玩Minecraft的当前Neko角色。人格和已选记忆见下面的角色投影；未提供的记忆不要编造。"
             "根据新鲜现场作高层判断，用户新反馈优先；原生身体和队列独立运行。"
             "用submit_game_review提交最终判断；需要被摘要省略的证据时，可先用read_game_review_evidence查原文。"
@@ -108,7 +112,7 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
                 # below still admits exactly one complete expected transaction.
                 tool_choice="auto",
                 parallel_tool_calls=False, max_completion_tokens=output_budget),
-                wait_budget=wait_budget, output_budget=output_budget)
+                wait_budget=wait_budget, output_budget=output_budget, brief_checkpoint=brief_checkpoint)
             if owned_runtime(plugin, settings, target, port, generation) != bound:
                 return refused("structured_review_superseded")
             choice = response.choices[0]
@@ -201,6 +205,8 @@ def record_delivery(port, result):
             'submitted': result.get('submitted') is True,
             'main_brain_acknowledged': result.get('main_brain_acknowledged') is True,
             'model_attempt_ids': [row['attempt_id'] for row in result['model_attempts']],
+            'decision': result.get('decision') if result.get('decision') in {'continue', 'insert', 'revise'} else None,
+            'decision_error': result.get('decision_error'),
             'failure_category': result.get('failure_category'),
             'evidence_reads': result.get('evidence_reads', 0),
             'correction_attempts': result.get('correction_attempts', 0)})

@@ -35,3 +35,25 @@ budgets, and makes no claim of repaired latency or autonomous project progress.
 The dependency remains autonomy 0.2.80. This is an adapter-only development change;
 the independent body, core and renderer need no replacement. Public release and
 Market publication are outside this maintenance operation.
+
+## Brief checkpoint guidance in 0.6.86
+
+Autonomy 0.2.81 adds a host-neutral `reasoning_guidance` to the existing completion
+contract. The adapter projects this public instruction and the existing short
+output guidance before role/context material. It asks for brief deliberation and
+an honest final decision rather than exhausting the output budget. All persona
+and selected memory input remains available; decision alternatives and native
+evidence/ownership checks are unchanged. This is advisory prompt guidance, not a
+provider `reasoning_effort` setting or hard reasoning-token limit. No unsupported
+gateway parameter is sent, no timeout is increased and no model is restarted.
+
+The journal now records actual request entry before awaiting the gateway, and
+marks whether each request carried this contract. A start without a terminal
+receipt is incomplete evidence, not proof the request remains in flight. Final
+transport receipts and delivery acknowledgement remain separate. Natural samples
+must distinguish the earlier adapter from guided requests by their recorded flag
+and deployment timestamps. A short successful response alone cannot prove lasting
+project improvement, farming diversification or learned method reuse.
+
+Only the adapter's review dependency changes to 0.2.81; the already running body
+may remain 0.2.80. The fixed core/renderer and public 0.6.70 release are unchanged.
