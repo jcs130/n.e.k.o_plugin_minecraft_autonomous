@@ -57,3 +57,28 @@ project improvement, farming diversification or learned method reuse.
 
 Only the adapter's review dependency changes to 0.2.81; the already running body
 may remain 0.2.80. The fixed core/renderer and public 0.6.70 release are unchanged.
+
+## Opt-in shared-model coordination in 0.6.87
+
+Autonomy 0.2.82 owns a bounded review inference window and the matching body
+admission check. `autonomy.review_model_pool` is empty by default. Only set the
+same explicit identifier in body and adapter after verifying that their actual
+bindings share an inference resource. The adapter begins the canonical window
+immediately before its first real model await, keeps it over bounded evidence/
+correction calls, and releases the same ID in `finally`. Coordination time is
+charged to the original opportunity deadline. The journal links the actual
+request to the window ID; no provider parameters or new model loop are added.
+
+The body continues native polling, work and reflexes, while ordinary new slow
+requests wait. Existing in-flight responses, user feedback, urgent native events,
+death, stop, unknown barriers and original queue ownership retain their rules.
+Expiry and scope/intent/session changes invalidate a hold. Optional coordination
+errors are categorical and do not turn an otherwise valid review into a new game
+action. A host crash leaves at most the original bounded window, not a permanent
+pause. A late release cannot remove a newer window.
+
+Both independent runtime and adapter must consume 0.2.82 for the admission check
+to take effect. Installation alone is not evidence of shared-model pacing or
+successful strategic review. Acceptance needs actual window/request timing,
+continued native receipts and resumption after release; short fresh sessions
+cannot establish a causal latency improvement or a finished long-term project.

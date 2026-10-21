@@ -8,6 +8,7 @@ commentary model. Only the existing explicit spoken_text transport can speak.
 import asyncio
 import json
 import math
+import sqlite3
 
 from agent_mc_autonomy.host_context import HostContextPort
 from openai import APIConnectionError, APIStatusError
@@ -62,6 +63,7 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
     gateway = None
     client_opened = False
     wait_budget = None
+    model_window = None
     try:
         gateway = plugin.ctx.models
         if gateway is None:
@@ -105,6 +107,18 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
                            if type(expires) in (int, float) and math.isfinite(expires) else 25)
             if wait_budget <= 0:
                 return refused('structured_review_expired')
+            if settings.review_model_pool and model_window is None:
+                window_started=port.now()
+                common['shared_model_window']={'enabled':True,'granted':False,'released':None}
+                try:
+                    model_window=port.begin_model_inference(review['id'],settings.review_model_pool)
+                except (OSError,ValueError,sqlite3.Error):
+                    common['shared_model_window']['coordination_error']='review_store_unavailable'
+                if model_window:
+                    common['shared_model_window'].update(granted=True,id=model_window['id'],expires_at=model_window['expires_at'])
+                wait_budget=max(0,wait_budget-max(0,port.now()-window_started))
+                if wait_budget<=0:
+                    return refused('structured_review_expired')
             response = await model_attempt(port, review['id'], common['model_attempts'], client.chat.completions.create(
                 model="decision", messages=messages,
                 tools=[REVIEW_TOOL, EVIDENCE_TOOL] if evidence_reads < 4 else [REVIEW_TOOL], stream=False,
@@ -112,7 +126,8 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
                 # below still admits exactly one complete expected transaction.
                 tool_choice="auto",
                 parallel_tool_calls=False, max_completion_tokens=output_budget),
-                wait_budget=wait_budget, output_budget=output_budget, brief_checkpoint=brief_checkpoint)
+                wait_budget=wait_budget, output_budget=output_budget, brief_checkpoint=brief_checkpoint,
+                shared_window_id=model_window['id'] if model_window else None)
             if owned_runtime(plugin, settings, target, port, generation) != bound:
                 return refused("structured_review_superseded")
             choice = response.choices[0]
@@ -191,8 +206,15 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
             if client_opened and callable(getattr(gateway, "aclose", None)):
                 await gateway.aclose()
         finally:
-            with plugin._control_lock:
-                plugin._structured_review_busy = False
+            try:
+                if model_window:
+                    try:
+                        common['shared_model_window']['released']=port.end_model_inference(model_window['id'])
+                    except (OSError,ValueError,sqlite3.Error):
+                        common['shared_model_window'].update(released=False,release_error='review_store_unavailable')
+            finally:
+                with plugin._control_lock:
+                    plugin._structured_review_busy = False
 
 
 def record_delivery(port, result):

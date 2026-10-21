@@ -138,6 +138,84 @@ def test_canonical_brief_checkpoint_is_before_persona_without_provider_extension
     assert result['main_brain_acknowledged'] and not port.mailbox.ready()
 
 
+@pytest.mark.parametrize('outcome',['success','timeout','cancelled'])
+def test_shared_model_window_brackets_actual_review_and_releases_on_every_exit(plugin_instance,monkeypatch,run_async,outcome):
+    port,_,raw,_,_,_,_,_,create=configured(plugin_instance,monkeypatch)
+    raw['autonomy']['review_model_pool']='shared-local-test'
+    transport=importlib.import_module(plugin_instance.__class__.__module__+'.neko_structured_review')
+    seen=[]
+    async def answer(**_):
+        window=port.model_inference_window('shared-local-test')
+        assert window is not None
+        seen.append(window['id'])
+        if outcome=='timeout':
+            raise TimeoutError()
+        if outcome=='cancelled':
+            raise transport.asyncio.CancelledError()
+        return response({'decision':'continue','reason':'Keep ongoing work'})
+    create.side_effect=answer
+    with session_lease(port.directory):
+        if outcome=='cancelled':
+            with pytest.raises(transport.asyncio.CancelledError):
+                run_async(plugin_instance.game_decision_heartbeat())
+        else:
+            result=run_async(plugin_instance.game_decision_heartbeat()).value
+            assert result['main_brain_acknowledged'] is (outcome=='success')
+            assert result['shared_model_window']['released'] is True
+    assert seen and port.model_inference_window('shared-local-test') is None
+    assert 'model_inference_window' not in port.state()
+    attempt=next(row for row in attempt_journal(port) if row['event']=='model_attempt')
+    assert attempt['shared_model_window_id']==seen[0]
+    assert create.await_count==1 and not port.mailbox.ready()
+
+
+def test_shared_window_release_error_does_not_change_an_adopted_review(plugin_instance,monkeypatch,run_async):
+    port,_,raw,_,_,_,_,_,create=configured(plugin_instance,monkeypatch)
+    raw['autonomy']['review_model_pool']='shared-local-test'
+    def fail(_):raise OSError('PRIVATE_SQLITE_PATH')
+    monkeypatch.setattr(port,'end_model_inference',fail)
+    create.return_value=response({'decision':'continue','reason':'Valid final choice'})
+    with session_lease(port.directory):
+        result=run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged'] and create.await_count==1
+    assert result['shared_model_window']['released'] is False
+    assert result['shared_model_window']['release_error']=='review_store_unavailable'
+    assert port.model_inference_window('shared-local-test') is None  # Acknowledged review cannot hold the body.
+    assert 'PRIVATE_' not in json.dumps(result)
+
+
+def test_coordination_time_is_charged_to_the_original_review_deadline(plugin_instance,monkeypatch,run_async):
+    port,_,raw,_,clock,save,_,_,create=configured(plugin_instance,monkeypatch)
+    raw['autonomy']['review_model_pool']='shared-local-test'
+    begin=port.begin_model_inference
+    def delayed(*args):
+        result=begin(*args)
+        clock[0]+=5
+        save()
+        return result
+    monkeypatch.setattr(port,'begin_model_inference',delayed)
+    create.return_value=response({'decision':'continue','reason':'Keep current work'})
+    with session_lease(port.directory):
+        result=run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged']
+    request=next(row for row in attempt_journal(port) if row['event']=='model_request_started')
+    assert request['wait_budget_seconds']<=173
+
+
+def test_optional_coordination_failure_keeps_the_existing_review_path(plugin_instance,monkeypatch,run_async):
+    port,_,raw,_,_,_,_,_,create=configured(plugin_instance,monkeypatch)
+    raw['autonomy']['review_model_pool']='shared-local-test'
+    def fail(*_):
+        raise OSError('PRIVATE_COORDINATION_PATH')
+    monkeypatch.setattr(port,'begin_model_inference',fail)
+    create.return_value=response({'decision':'continue','reason':'Valid original review'})
+    with session_lease(port.directory):
+        result=run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged'] and create.await_count==1
+    assert result['shared_model_window']=={'enabled':True,'granted':False,'released':None,'coordination_error':'review_store_unavailable'}
+    assert 'PRIVATE_' not in json.dumps(result)
+
+
 def test_truncated_review_records_budget_failure_without_adoption(plugin_instance, monkeypatch, run_async):
     port, _, raw, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
     raw['autonomy']['max_output_tokens'] = 3072

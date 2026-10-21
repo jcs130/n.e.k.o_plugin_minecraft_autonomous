@@ -55,7 +55,7 @@ def _token_counts(usage):
     return {key: value for key, value in fields.items() if type(value) is int and 0 <= value <= 1_000_000_000}
 
 
-async def model_attempt(port, review_id, records, request, *, wait_budget, output_budget, brief_checkpoint=False):
+async def model_attempt(port, review_id, records, request, *, wait_budget, output_budget, brief_checkpoint=False,shared_window_id=None):
     """Measure the actual gateway await, including calls cancelled before return.
 
     Only categorical/length/usage metadata survives. A provider-success receipt
@@ -65,6 +65,7 @@ async def model_attempt(port, review_id, records, request, *, wait_budget, outpu
     row = {'attempt_id': str(uuid.uuid4()), 'attempt': len(records) + 1, 'started_at': port.now(),
            'wait_budget_seconds': round(wait_budget, 3), 'max_output_tokens': output_budget,
            'brief_checkpoint_guidance': brief_checkpoint is True,
+           'shared_model_window_id':identifier(shared_window_id,r'[a-f0-9]{32}'),
            'finish_reason': None, 'tool_count': 0, 'tool_names': [], 'usage': {}}
     row['start_journal_recorded'] = append_receipt(port, {'event': 'model_request_started',
         'heartbeat_id': identifier(review_id, r'[a-f0-9]{12}'), **row})

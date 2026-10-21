@@ -34,7 +34,7 @@ OPERATOR_UNAVAILABLE = {"available": False, "reason": "operator_capability_unava
                         "guidance": "当前框架尚不支持账户入口。请安装匹配的核心与自主框架后启用；没有读取或发起 Microsoft 授权。"}
 
 EDITABLE = {
-    "autonomy": {"enabled", "min_decision_seconds", "idle_decision_seconds", "max_decisions", "max_tool_rounds", "context_tokens", "context_mode", "context_history_headroom_tokens", "max_output_tokens", "model_timeout_seconds"},
+    "autonomy": {"enabled", "min_decision_seconds", "idle_decision_seconds", "max_decisions", "max_tool_rounds", "context_tokens", "context_mode", "context_history_headroom_tokens", "max_output_tokens", "model_timeout_seconds", "review_model_pool"},
     "server": {"host", "port", "username", "auth", "version", "connection_type"},
     "operator": {"port"},
     "decision_policy": {"enabled","routine_output_tokens","complex_output_tokens","routine_parameters","complex_parameters"},
