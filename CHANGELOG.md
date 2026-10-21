@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.82
+
+- Pin autonomy 0.2.78 at `1d7b254fea68891f20ac4d3405a9bc43526653de`,
+  consuming core rc.59's explicit `mc_goal.revise.progress` correction.
+  Recorded counts are labeled as reports rather than current observations;
+  revisions retain both values and do not certify a milestone or project.
+- No automatic goal rewrite, crop counting, model switch or host/SDK change.
+
 ## 0.6.81
 
 - Pin autonomy 0.2.77 at `81ccf2f05a9bc10167796a787519aea4f894282b`.
