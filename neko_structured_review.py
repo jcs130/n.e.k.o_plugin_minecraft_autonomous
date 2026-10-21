@@ -15,6 +15,7 @@ from plugin.sdk.plugin import TransportError
 
 from .neko_commentary import SPEAK, save_commentary
 from .neko_recent_context import current_request, owned_runtime
+from .review_diagnostics import append_receipt, identifier, model_attempt, model_failure_category
 
 REVIEW_TOOL = {"type": "function", "function": {
     "name": "submit_game_review",
@@ -49,7 +50,8 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
     output_budget = min(settings.max_output_tokens, config.review_max_output_tokens)
     common = {"heartbeat_id": review["id"], "trigger": review["trigger"], "offered": True,
               "main_brain_acknowledged": False, "playback_verified": False,
-              "transport": "neko_public_model_gateway", "free_text_output": False, "evidence_reads": 0}
+              "transport": "neko_public_model_gateway", "free_text_output": False, "evidence_reads": 0,
+              "model_attempts": []}
     def refused(reason):
         return {**common, "submitted": False, "reason": reason}
 
@@ -99,13 +101,14 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
                            if type(expires) in (int, float) and math.isfinite(expires) else 25)
             if wait_budget <= 0:
                 return refused('structured_review_expired')
-            response = await asyncio.wait_for(client.chat.completions.create(
+            response = await model_attempt(port, review['id'], common['model_attempts'], client.chat.completions.create(
                 model="decision", messages=messages,
                 tools=[REVIEW_TOOL, EVIDENCE_TOOL] if evidence_reads < 4 else [REVIEW_TOOL], stream=False,
                 # Thinking providers may reject forced tool choices. Validation
                 # below still admits exactly one complete expected transaction.
                 tool_choice="auto",
-                parallel_tool_calls=False, max_completion_tokens=output_budget), timeout=wait_budget)
+                parallel_tool_calls=False, max_completion_tokens=output_budget),
+                wait_budget=wait_budget, output_budget=output_budget)
             if owned_runtime(plugin, settings, target, port, generation) != bound:
                 return refused("structured_review_superseded")
             choice = response.choices[0]
@@ -176,10 +179,7 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
                 "reason": "structured_review_acknowledged" if result.get("acknowledged") else "structured_review_not_acknowledged"}
     except (APIConnectionError, APIStatusError, TransportError,
             TimeoutError, OSError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
-        category = ('deadline_exceeded' if isinstance(error, TimeoutError) else
-                    'provider_http_error' if isinstance(error, APIStatusError) else
-                    'provider_connection_error' if isinstance(error, APIConnectionError) else
-                    'gateway_transport_error' if isinstance(error, TransportError) else 'invalid_or_unavailable_response')
+        category = model_failure_category(error)
         return {**refused("structured_review_unavailable"), "failure_category": category,
                 "model_wait_budget_seconds": round(wait_budget, 3) if wait_budget is not None else None}
     finally:
@@ -193,5 +193,17 @@ async def deliver_review(plugin, raw, settings, config, port, review, generation
 
 def record_delivery(port, result):
     """Small categorical UI receipt, never a model transcript or audio claim."""
+    # Preserve earlier length/transport failures when a later heartbeat replaces
+    # the UI's latest receipt. Never journal arguments, persona or free text.
+    if result.get('model_attempts'):
+        recorded = append_receipt(port, {'event': 'review_delivery', 'at': port.now(),
+            'heartbeat_id': identifier(result.get('heartbeat_id'), r'[a-f0-9]{12}'),
+            'submitted': result.get('submitted') is True,
+            'main_brain_acknowledged': result.get('main_brain_acknowledged') is True,
+            'model_attempt_ids': [row['attempt_id'] for row in result['model_attempts']],
+            'failure_category': result.get('failure_category'),
+            'evidence_reads': result.get('evidence_reads', 0),
+            'correction_attempts': result.get('correction_attempts', 0)})
+        result['delivery_journal_recorded'] = recorded
     save_commentary(port.directory / "structured-review.json", {
         **result, "at": port.now(), "extra_commentary_model_calls": 0})

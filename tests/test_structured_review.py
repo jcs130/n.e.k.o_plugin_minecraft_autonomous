@@ -335,6 +335,109 @@ def test_transport_timeout_does_not_retry_an_unknown_review(plugin_instance, mon
     assert not port.state()['review'].get('choice')
 
 
+def attempt_journal(port):
+    return [json.loads(line) for line in (port.directory / 'structured-review-attempts.jsonl').read_text('utf-8').splitlines()]
+
+
+def test_actual_gateway_finish_and_usage_survive_later_timeout(plugin_instance, monkeypatch, run_async):
+    port, snapshot, raw, _, clock, save, _, _, create = configured(plugin_instance, monkeypatch)
+    raw['autonomy']['max_output_tokens'] = 8192
+    truncated = response({'decision': 'continue', 'reason': 'PRIVATE_TOOL_ARGUMENT'},
+                         content='PRIVATE_MODEL_CONTENT', finish_reason='length')
+    truncated.choices[0].message.reasoning_content = 'PRIVATE_REASONING'
+    truncated.usage = SimpleNamespace(prompt_tokens=4200, completion_tokens=3072, total_tokens=7272,
+        completion_tokens_details=SimpleNamespace(reasoning_tokens=3072),
+        prompt_tokens_details=SimpleNamespace(cached_tokens=4096))
+    create.side_effect = [truncated, TimeoutError('PRIVATE_TRANSPORT_DETAIL')]
+    with session_lease(port.directory):
+        first = run_async(plugin_instance.game_decision_heartbeat()).value
+        clock[0] += 100  # A second offer must respect the canonical 90s backoff.
+        snapshot['native_outcomes'] = [{'tool': 'mc_do', 'execution_id': 'task-7', 'phase': 'blocked',
+            'receipt': 'Actual path refusal', 'observation_only': False,
+            'original_event': {'run': 'native-1', 'cursor': 7}}]
+        snapshot['tool_failure'] = {'tool': 'mc_do', 'error': 'Actual new refusal',
+            'native_execution': {'phase': 'blocked'}, 'native_event': {'run': 'native-1', 'cursor': 7}}
+        save()
+        port.observe(snapshot)  # The independent body publishes the next real boundary.
+        second = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert first['failure_category'] == 'output_budget_exhausted'
+    assert second.get('failure_category') == 'deadline_exceeded', second
+    latest = json.loads((port.directory / 'structured-review.json').read_text('utf-8'))
+    assert latest['failure_category'] == 'deadline_exceeded'
+    rows = attempt_journal(port)
+    attempts = [row for row in rows if row['event'] == 'model_attempt']
+    assert [row['outcome'] for row in attempts] == ['response_received', 'deadline_exceeded']
+    assert attempts[0]['finish_reason'] == 'length'
+    assert attempts[0]['usage'] == {'prompt_tokens': 4200, 'completion_tokens': 3072, 'total_tokens': 7272,
+                                   'reasoning_tokens': 3072, 'cached_tokens': 4096}
+    assert attempts[0]['tool_names'] == ['submit_game_review']
+    assert attempts[0]['reasoning_characters'] == len('PRIVATE_REASONING')
+    assert attempts[0]['max_output_tokens'] == 3072
+    assert attempts[1]['finish_reason'] is None
+    deliveries = [row for row in rows if row['event'] == 'review_delivery']
+    assert [row['failure_category'] for row in deliveries] == ['output_budget_exhausted', 'deadline_exceeded']
+    assert 'PRIVATE_' not in json.dumps(rows)
+    assert create.await_count == 2 and not port.mailbox.ready()
+
+
+def test_every_evidence_and_correction_round_gets_metadata_only(plugin_instance, monkeypatch, run_async):
+    port, _, _, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
+    create.side_effect = [evidence_response(['evidence', 'standing_goal']),
+        response({'decision': 'continue', 'reason': 'PRIVATE_REASON', 'goal': 'PRIVATE_NEW_STAGE'}),
+        response({'decision': 'insert', 'reason': 'PRIVATE_REASON', 'goal': 'PRIVATE_NEW_STAGE'})]
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged'] and result['evidence_reads'] == 1
+    rows = attempt_journal(port)
+    attempts = [row for row in rows if row['event'] == 'model_attempt']
+    assert [row['attempt'] for row in attempts] == [1, 2, 3]
+    assert [row['tool_names'] for row in attempts] == [
+        ['read_game_review_evidence'], ['submit_game_review'], ['submit_game_review']]
+    assert all(row['usage'] == {} for row in attempts)  # Older gateways may omit usage.
+    assert len(result['model_attempts']) == 3
+    assert 'PRIVATE_' not in json.dumps(rows)
+    assert port.mailbox.claim()['payload']['goal'] == 'PRIVATE_NEW_STAGE'
+
+
+def test_cancelled_gateway_attempt_is_retained_without_adoption(plugin_instance, monkeypatch, run_async):
+    port, _, _, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
+    transport = importlib.import_module(plugin_instance.__class__.__module__ + '.neko_structured_review')
+    create.side_effect = transport.asyncio.CancelledError()
+    with session_lease(port.directory), pytest.raises(transport.asyncio.CancelledError):
+        run_async(plugin_instance.game_decision_heartbeat())
+    rows = attempt_journal(port)
+    assert len(rows) == 1 and rows[0]['event'] == 'model_attempt'
+    assert rows[0]['outcome'] == 'caller_cancelled'
+    assert not port.state()['review'].get('choice') and not port.mailbox.ready()
+    assert not plugin_instance._structured_review_busy
+
+
+def test_untrusted_provider_labels_are_not_persisted(plugin_instance, monkeypatch, run_async):
+    port, _, _, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
+    value = response({'decision': 'continue', 'reason': 'unused'}, finish_reason='PRIVATE_FINISH_LABEL')
+    value.choices[0].message.tool_calls[0].function.name = 'PRIVATE_TOOL_LABEL'
+    value.usage = SimpleNamespace(prompt_tokens=True, completion_tokens=-1, total_tokens=float('inf'))
+    create.return_value = value
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert not result['main_brain_acknowledged']
+    row = attempt_journal(port)[0]
+    assert row['finish_reason'] == 'other' and row['tool_names'] == ['other'] and row['usage'] == {}
+    assert 'PRIVATE_' not in json.dumps(attempt_journal(port))
+
+
+def test_optional_audit_io_failure_cannot_change_review_adoption(plugin_instance, monkeypatch, run_async):
+    port, _, _, _, _, _, _, _, create = configured(plugin_instance, monkeypatch)
+    (port.directory / 'structured-review-attempts.jsonl').mkdir()
+    create.return_value = response({'decision': 'continue', 'reason': 'Keep safe work'})
+    with session_lease(port.directory):
+        result = run_async(plugin_instance.game_decision_heartbeat()).value
+    assert result['main_brain_acknowledged'] and create.await_count == 1
+    assert result['model_attempts'][0]['journal_recorded'] is False
+    assert result['delivery_journal_recorded'] is False
+    assert port.state()['review']['result']['acknowledged']
+
+
 def test_review_wait_uses_remaining_native_lease(plugin_instance, monkeypatch, run_async):
     port, _, _, _, clock, _, _, _, create = configured(plugin_instance, monkeypatch)
     transport = importlib.import_module(plugin_instance.__class__.__module__ + '.neko_structured_review')
