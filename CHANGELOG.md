@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.94 — Development update
+
+- Pin autonomy 0.2.88 at `5b506eab8910343861eaf6a790eceb09feebbd45`.
+  Actual full-context window retirement now also retires the identical recent
+  native receipt copy, preventing old terminal payloads from reappearing after
+  their history is evicted. Preserve the newest terminal, original journals,
+  current facts, pending barriers and all history that fits.
+- Keep the optional website identity support, core rc.66, renderer, model and
+  existing 180-second deadline. Development package only; long-running gameplay
+  and latency still require live evidence.
+
 ## 0.6.93 — Development update
 
 - Add explicit optional Qiandengji website invitation onboarding using the byte-pinned official MIT account helper from Skill 1.1.0. Credentials stay in private files; panel replies contain only allowlisted account state.
