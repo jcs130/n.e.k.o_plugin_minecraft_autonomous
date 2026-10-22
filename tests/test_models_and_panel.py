@@ -235,7 +235,7 @@ def test_web_default_roundtrips_without_start_or_account_change(plugin_instance,
     assert isinstance(result, Ok) and result.value["running_session_changed"] is False
     state = run_async(plugin_instance.dashboard())
     assert state["settings"]["viewer"]["default_appearance"] == appearance
-    assert state["settings"]["server"] == {**raw["server"], "port": 25565, "auth": "offline", "connection_type": "custom"}
+    assert state["settings"]["server"] == {**raw["server"], "port": 25565, "auth": "offline", "connection_type": "custom", "login_config_file": ""}
     assert plugin_module.Settings.parse(raw).identity == original_identity
     assert writes == [patch] and plugin_instance._worker is None
     assert isinstance(run_async(plugin_instance.save_settings({"viewer": {"default_appearance": 'server"<private>'}})), Err)

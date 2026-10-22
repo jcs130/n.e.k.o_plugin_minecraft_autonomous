@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.93 — Development update
+
+- Add explicit optional Qiandengji website invitation onboarding using the byte-pinned official MIT account helper from Skill 1.1.0. Credentials stay in private files; panel replies contain only allowlisted account state.
+- Reuse saved identities, query pending/unknown requests, and require ready plus verified game account creation and matching role/address before importing. Embedded startup checks fresh status and uses the existing core's scoped password login/PLAY gate.
+- Existing roles retain their original connection. No replacement framework/model/persona/memory, second MCP body, automatic signup/start, core update or public release.
+
 ## 0.6.84 — Development update
 
 - Pin autonomy 0.2.80 at `48c2a69e899412b9c7acb2f84fbf426fdb73c271`.

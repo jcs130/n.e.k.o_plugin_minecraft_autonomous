@@ -23,6 +23,9 @@ auth = "offline" # Use microsoft for authenticated public servers.
 version = "1.21.1"
 login_config_file = "" # Optional private login configuration; never commit it.
 
+[qiandengji]
+identity_file = "" # Optional website invitation identity path; existing game roles keep this empty.
+
 [backend]
 node = "" # Empty: select the prepared offline runtime. Explicit custom paths bypass all implicit runtime defaults.
 directory = "" # Empty: select the same prepared runtime; custom installations must match the pinned core.

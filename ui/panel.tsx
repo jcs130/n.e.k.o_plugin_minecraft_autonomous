@@ -30,6 +30,10 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const [extensionDraft, setExtensionDraft] = useState<string | null>(null)
   const [characterDraft, setCharacterDraft] = useState<string | null>(null)
   const [narrationDraft, setNarrationDraft] = useState<boolean | null>(null)
+  const [identityFile, setIdentityFile] = useState<string | null>(null)
+  const [inviteFile, setInviteFile] = useState("")
+  const [agentName, setAgentName] = useState("")
+  const [portalResult, setPortalResult] = useState<any>(null)
   useEffect(() => {
     if (editing || busy) return
     return startPanelRefresh({refresh:props.api.refresh,document})
@@ -58,6 +62,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         throw new Error(detail.message || "请求未成功，请检查回执。")
       }
       if (id === "check_model" || id === "check_direct_model") setModelCheck(result)
+      if (id === "qiandengji_account") setPortalResult(result)
       setNotice("请求已受理，请核对更新后的状态和回执。")
       await props.api.refresh()
       return true
@@ -225,6 +230,26 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>此 headless 后端可读取背包地图图像；现代 3D 画面还需匹配的观战适配。没有真实图像时按文字运行。</Text>
         <Accordion open={false} title="上下文预算与最近图像"><JsonView data={{context:runtime.context,perception:runtime.perception}} /></Accordion>
       </Stack></Accordion>
+      <Accordion open={false} title="千灯纪网站接入（可选）"><Stack gap={10}>
+        <Text>已有 ag_ 游戏角色继续原连接，不要重新建号。网站绑定旧角色需在原角色内完成验证；邀请链接用于创建未使用的新角色。保留当前框架、模型、人设和记忆。</Text>
+        <Inline><FileDownload href="https://mc.kangqiang.site/join" label="千灯纪连接中心与邀请指引" openExternal />
+          <FileDownload href="https://mc.kangqiang.site/agent-api.html" label="官方 Agent 接入说明" openExternal /></Inline>
+        <Text>将专属邀请链接保存在运行机器的私有文本文件中。下面只填写绝对文件路径；不要粘贴链接正文、邀请码、API 密钥、游戏密码或主人的网站密码。官网工具会先保存独立身份和游戏密码，再发送注册请求。</Text>
+        <Field label="私有身份 JSON 文件路径（首次创建填新路径；以后续用）"><Input value={identityFile ?? settings.qiandengji?.identity_file ?? ""} onChange={v=>{setIdentityFile(v);setPortalResult(null)}} /></Field>
+        <Inline>
+          <Button disabled={busy||!(identityFile??settings.qiandengji?.identity_file)} onClick={()=>call("qiandengji_account",{action:"status",identity_file:identityFile??settings.qiandengji?.identity_file})}>查询原身份状态</Button>
+          <Button disabled={busy||runtime.game_connected||!(identityFile??settings.qiandengji?.identity_file)} onClick={()=>call("qiandengji_account",{action:"activate",identity_file:identityFile??settings.qiandengji?.identity_file})}>激活游戏账号（先查原请求）</Button>
+          <Button disabled={busy||external||runtime.game_connected||!portalResult?.ready} onClick={()=>call("qiandengji_account",{action:"import",identity_file:identityFile??settings.qiandengji?.identity_file})}>重新核对 ready 并导入连接</Button>
+        </Inline>
+        <Text>pending / unknown 时继续查询原身份，不重复创建。只有游戏建号成功、状态 ready、角色及地址一致才允许导入。导入不自动开玩；嵌入式开始前会再次查询，再由原生连接等待服务器认证并进入真实世界。外部执行器沿用它的原启动配置，此面板不接管或切换其账号。</Text>
+        {portalResult&&<JsonView data={portalResult} />}
+        <Accordion open={false} title="使用新邀请创建角色"><Stack gap={8}>
+          <Field label="未使用的角色名（ag_ 开头，总长不超过 16 位）"><Input value={agentName} onChange={setAgentName} /></Field>
+          <Field label="专属邀请链接的私有文本文件路径"><Input value={inviteFile} onChange={setInviteFile} /></Field>
+          <Button disabled={busy||runtime.game_connected||!agentName||!inviteFile||!identityFile} onClick={()=>call("qiandengji_account",{action:"register",username:agentName,invite_url_file:inviteFile,identity_file:identityFile})}>用官网工具创建新邀请身份</Button>
+          <Text>若身份文件已存在，只能查询并续用。注册或激活结果不明时保留文件；这里不重发未知请求，不启动另一套 MCP 或身体。</Text>
+        </Stack></Accordion>
+      </Stack></Accordion>
       <Accordion open={false} title="账户与皮肤详情"><Stack gap={10}>
         <Text>当前认证：{settings.server?.auth === "microsoft" ? "Microsoft 授权账号" : "离线昵称"}。离线昵称不能登录要求正版验证的服务器。Microsoft 授权后的实际角色名以本机账户页为准。</Text>
         {state.operator?.available ? <FileDownload href={state.operator.url} label="打开本机账户页：授权、状态与取消" openExternal /> : <Alert tone="info" message={state.operator?.guidance || "账户接口暂不可用。启用本机账户端口并显式启动匹配的执行器；Java 客户端请使用自身登录入口。"} />}
@@ -256,6 +281,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             <Field label="认证方式"><Select value={draft.server.auth} options={[{value:"offline",label:"离线昵称"},{value:"microsoft",label:"Microsoft 正版账号授权"}]} onChange={v=>change("server","auth",v)} /></Field>
             <Field label="请求 Java 版本"><Select value={draft.server.version} options={["1.21.1"]} onChange={v=>change("server","version",v)} /></Field>
             {field("operator","port","本机账户端口（0 关闭；启用后下次显式启动生效）","number")}
+            {field("server","login_config_file","私有游戏登录配置文件路径（不填密码）")}
             <Field label="运行方式"><Select value={draft.runtime.mode} options={[{value:"embedded",label:"Neko 嵌入式"},{value:"external",label:"独立运行观察入口"}]} onChange={v=>change("runtime","mode",v)} /></Field>
             {field("runtime","data_directory","共享数据目录")}{field("backend","directory","已验证后端目录")}{field("viewer","url","外部观战地址")}
             {field("viewer","renderer_directory","共享渲染器目录（可选）")}{field("viewer","catalog_file","版本资源目录 JSON（可选）")}{field("viewer","listen_port","本机观战端口","number")}

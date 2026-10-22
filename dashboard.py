@@ -22,6 +22,7 @@ from .neko_presentation import PresentationSettings
 from .neko_speech import output_settings
 from .neko_tools import unwrap
 from .prepared_runtime import resolve_host_runtime
+from .qiandengji_account import configured_identity
 
 try:
     from agent_mc_autonomy.operator import operator_link
@@ -35,7 +36,8 @@ OPERATOR_UNAVAILABLE = {"available": False, "reason": "operator_capability_unava
 
 EDITABLE = {
     "autonomy": {"enabled", "min_decision_seconds", "idle_decision_seconds", "max_decisions", "max_tool_rounds", "context_tokens", "context_mode", "context_history_headroom_tokens", "max_output_tokens", "model_timeout_seconds", "review_model_pool"},
-    "server": {"host", "port", "username", "auth", "version", "connection_type"},
+    "server": {"host", "port", "username", "auth", "version", "connection_type", "login_config_file"},
+    "qiandengji": {"identity_file"},
     "operator": {"port"},
     "decision_policy": {"enabled","routine_output_tokens","complex_output_tokens","routine_parameters","complex_parameters"},
     "runtime": {"mode", "data_directory", "bundle_root", "bundle_manifest_sha256"},
@@ -190,6 +192,7 @@ class Dashboard:
             heartbeat_state["delivery_state"] = ("final_decision" if (review.get("result") or {}).get("acknowledged") else "inspected_awaiting_final" if review.get("inspected_at") else "notification_" + str(review.get("notification_status", "not_delivered")))
             heartbeat_state["next"] = "主脑尚未完成最终判断；重新检查当前心跳后提交简短判断。" if heartbeat_state["delivery_failure"] else None
             return {"settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
+                                 "qiandengji": {"identity_file": configured_identity(raw)},
                                  "heartbeat": asdict(heartbeat), "host_context": asdict(HostContextSettings.parse(raw)), "planner": public_planner(raw.get("planner", {})),
                                  "speech_output": {"enabled": raw.get("speech_output", {}).get("enabled", False),
                                     "base_url": raw.get("speech_output", {}).get("base_url", ""),
@@ -219,6 +222,7 @@ class Dashboard:
             original = await self.config.dump()
             merged = {**original, **{key: {**original.get(key, {}), **value} for key, value in settings.items()}}
             parsed = Settings.parse(merged)
+            configured_identity(merged)
             extension_mode(merged)
             direct = planner_settings(merged.get("planner", {}))
             if direct:
@@ -231,7 +235,7 @@ class Dashboard:
             with self._control_lock:
                 if set(settings) - {"viewer", "presentation", "heartbeat", "host_context", "speech_output"} and self._worker and self._worker.snapshot().get("worker_alive"):
                     return Err({"code": "settings_runtime_active", "message": "运行参数须先显式停止嵌入式运行再保存；观战地址可单独保存，模型槽绑定可在宿主修改。"})
-                fence = bool(set(settings) & {"server", "runtime", "autonomy", "heartbeat", "host_context", "speech_output"})
+                fence = bool(set(settings) & {"server", "runtime", "autonomy", "heartbeat", "host_context", "speech_output", "qiandengji"})
                 if fence:
                     self._generation += 1
                     self._configuration_writes += 1
