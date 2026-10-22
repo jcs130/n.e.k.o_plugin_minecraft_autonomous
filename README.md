@@ -1,5 +1,7 @@
 # Minecraft Autonomous · 我的世界自主游玩
 
+开发依赖 0.2.86：死亡教训已保存/待复盘分别反馈，相同报告不重复写入，并在原循环内有界退避；这不代表行为改善已验证。
+
 让 Neko 带着自己的性格进入 Minecraft：自主选择目标、持续行动，用户反馈随时改变计划，当前猫娘用已有声音解说。支持 Java **1.21.1**，可以连接本机或他人的兼容服务器。
 
 游戏规划、原生任务队列、记忆和执行器属于独立的 [Minecraft AI Friend](https://github.com/jcs130/minecraft-ai-friend/tree/main/packages/agent-mc-autonomy)。这里是薄适配器；不修改 Neko 主程序或 SDK。没有新聊天时仍会继续游玩。
