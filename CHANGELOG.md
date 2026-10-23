@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.97 — Development update
+
+- Pin autonomy 0.2.91 and core rc.73. The explicit llama.cpp profile generates
+  from skill-specific required fields and alternatives derived from the native
+  registry; other providers keep the existing flat contract.
+- Preserve typed no-dispatch corrections across world drift and clock expiry,
+  and bound repeated syntax corrections. Arguments, replacement activities and
+  coordinates are never guessed or rewritten. Native validation, stop, unknown
+  inventory, the single queue and model deadlines remain in force.
+- Keep the current model, account and optional website onboarding. Development
+  package only; actual action results and long-term play need separate evidence.
+
 ## 0.6.94 — Development update
 
 - Pin autonomy 0.2.88 at `5b506eab8910343861eaf6a790eceb09feebbd45`.
