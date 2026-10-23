@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.99 — Development update
+
+- Pin autonomy 0.2.93 and upstream core rc.80. Preserve sparse visible surfaces
+  and optional anchored paging while consuming bounded observations, structured
+  partial/blocked/unknown receipts and strict typed inputs.
+- Keep the unknown-outcome journal and restart fence for new MCP receipts that
+  have no execution object or transport error. Reconcile only the original
+  request; do not replay it or infer successful work from a normal RPC return.
+- Include native combat/checkpoint restoration, bounded journey discoveries
+  and explicit method-cost evaluation. Practice workers and extra model loops
+  remain opt-in. Keep the existing model, account, renderer and sole queue.
+- Client development deployment only; no server or public release changes.
+
 ## 0.6.98 — Development update
 
 - Pin autonomy 0.2.92 and core rc.76, including upstream rc.74/rc.75 context
