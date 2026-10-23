@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.98 — Development update
+
+- Pin autonomy 0.2.92 and core rc.76, including upstream rc.74/rc.75 context
+  readers, literal terminal recovery evidence and compact-schema fixes.
+- Voxel observations now default to sparse visible non-air surfaces. Occluded
+  interiors and air grids are omitted; invisible, unloaded and detail omissions
+  remain explicit. Oversized reads return actual bounded data and anchored
+  optional continuation instead of a size rejection. Dense collision grids are
+  still available explicitly. No automatic coordinate repair or write clipping.
+- Keep the current model, account, renderer and sole native queue. Client-only
+  development deployment; no server changes or public release.
+
 ## 0.6.97 — Development update
 
 - Pin autonomy 0.2.91 and core rc.73. The explicit llama.cpp profile generates
