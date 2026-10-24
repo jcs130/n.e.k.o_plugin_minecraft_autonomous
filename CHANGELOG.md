@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.100 — Development update
+
+- Pin autonomy 0.2.94. A successful immediate action completion without a new
+  native task now ends the model chain and uses the existing bounded idle
+  backoff. Keep its original receipt and distinguish already-satisfied arrival
+  from new movement or project progress.
+- Keep core rc.80, arrival rules, submitted coordinates, pending work and unknown
+  dispatch barriers. No server or public release changes.
+
 ## 0.6.99 — Development update
 
 - Pin autonomy 0.2.93 and upstream core rc.80. Preserve sparse visible surfaces
