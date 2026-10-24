@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.101 — Development update
+
+- Pin autonomy 0.2.95 and core rc.82. A failed inventory click now reconciles
+  a complete authoritative slots/cursor frame already received, restoring later
+  explicit inventory access without waiting for another snapshot or replaying
+  the click. The original operation remains failed.
+- Preserve incomplete-frame, cursor, unsent-click and unknown-dispatch fences,
+  the current model/account/renderer, and the existing no-task completion yield.
+  No server or public release changes.
+
 ## 0.6.100 — Development update
 
 - Pin autonomy 0.2.94. A successful immediate action completion without a new
