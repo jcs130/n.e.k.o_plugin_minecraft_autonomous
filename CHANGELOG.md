@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.103 — Development update
+
+- Pin autonomy 0.2.97: active body inference and native tasks no longer count
+  as idle-presence time. Start the idle timer after work ends, preserving urgent,
+  state-change and periodic reviews. The live inference marker expires and is
+  cleared on every exit path.
+- Keep core rc.86, complete tool declarations, history, deadlines, native queue,
+  inventory/unknown/stop safeguards and model routing unchanged. Natural cache
+  hit rates and latency require separate observation after deployment.
+
 ## 0.6.102 — Development update
 
 - Consume autonomy 0.2.96 and shared core rc.86. Reuse the same offline CPU
