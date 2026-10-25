@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.106 — Development repair
+
+- Consume autonomy 0.2.100 and core rc.90: crop items can interact with composters, with separate block-level, item-consumption and bone-meal readback.
+- Pass through native scout paging semantics instead of the obsolete total 512-cell summary.
+- Preserve the existing viewer/resources, explicit model routing, account/memory and native safety boundaries.
+
 ## 0.6.105 — Development update
 
 - Consume autonomy 0.2.99 with fixed core rc.89 and shared viewer 8b89927d. Include upstream viewer readiness, idle-motion progress, native appearance and HUD changes while preserving original 1.21.1 resources.
