@@ -52,6 +52,7 @@ EDITABLE = {
     "host_context": {"enabled", "character_api_url"},
     "fast": {"mode", "endpoint", "model", "api_key_env", "min_confidence"},
     "memory": {"mode", "endpoint", "model", "api_key_env", "timeout_ms", "provider", "library_id", "project_id", "scope_id", "search_mode", "learning_enabled", "read_preference", "agent_id"},
+    "knowledge": {"minedojo_index_file", "retrieval"},
     "planner": {"route", *HttpPlannerConfig.__dataclass_fields__},
 }
 
@@ -75,6 +76,7 @@ def public_config(settings):
                              "presentation_sha256": getattr(settings, "server_presentation_sha256", "")},
         "fast": asdict(settings.fast),
         "memory": asdict(settings.memory),
+        "knowledge": asdict(settings.knowledge),
     }
 
 

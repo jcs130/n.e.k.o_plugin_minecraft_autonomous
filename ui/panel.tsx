@@ -353,6 +353,12 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             {field("fast","api_key_env","API Key 所在环境变量名（不填密钥）")}
             {field("fast","min_confidence","最低置信度 0–1","number")}
           </Grid>}
+          <Accordion open={false} title="外部游戏参考资料"><Stack gap={10}>
+            <Text>可选读取已准备好的 MineDojo 历史 Wiki 索引。留空不接入；参考资料与自己的游戏记忆分开，内容仍需按当前版本和现场核对。</Text>
+            {field("knowledge","minedojo_index_file","本机索引绝对路径（可选）")}
+            <Field label="本地检索方式"><Select value={draft.knowledge?.retrieval || "hybrid"} options={[{value:"hybrid",label:"关键词 + CPU 词元向量"},{value:"lexical",label:"仅关键词"},{value:"local-vector",label:"仅 CPU 词元向量"}]} onChange={v=>change("knowledge","retrieval",v)} /></Field>
+            <Text>保存不下载数据、不构建索引、不启动游戏或模型。准备方法见安装核心的 docs/minedojo-knowledge.md。</Text>
+          </Stack></Accordion>
           <Accordion open={false} title="游戏记忆"><Stack gap={10}>
             <Text>记录游戏中的地点、方法与经验，按服务器和角色隔离。默认本地保存，不需要模型；开启外部检索后会发送游戏笔记和查询，服务不可用时回退本地搜索。</Text>
             <Field label="检索方式"><Select value={draft.memory?.mode || "local"} options={[{value:"local",label:"本地关键词（默认）"},{value:"local-vector",label:"离线 CPU 词元向量 + 关键词"},{value:"vector",label:"本地记忆 + 向量模型"},{value:"remote",label:"外挂记忆服务"}]} onChange={v=>change("memory","mode",v)} /></Field>

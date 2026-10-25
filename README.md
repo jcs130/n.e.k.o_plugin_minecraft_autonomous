@@ -96,6 +96,8 @@ tokenizer/template 计数。默认模型绑定、思考预算和原始记录不�
 
 `perception.mineral_vision` 默认关闭。显式开启仅允许查询 32 格内已接收的遮挡矿物；未加载地形仍未知，实体可见性、行动和服务器权限不变。真实图像输入仍由 `perception.enabled` 单独控制。DSH 更新复用范围见[能力核对](docs/research/dsh-shared-capabilities-20261025.md)。
 
+可选的 `[knowledge]` 配置将 `minedojo_index_file`（本机绝对 SQLite 路径）和 `retrieval`（`hybrid`、`lexical`、`local-vector`）转发到共享核心的 MineDojo 参考索引。留空不接入，不自动下载语料或调用模型。准备方法见核心的 `docs/minedojo-knowledge.md`；运行时通过 `mc_knowledge {action:"sources"}` 查看来源，显式 `source:"minedojo"` 搜索后按返回 ID/offset 有界读取。历史 Wiki 与自己的游戏笔记分开，不能作为当前库存、服务器规则、授权或已学会方法的证据。
+
 基础外部检索只匹配本机游戏笔记。可选 `learning_enabled` 接入 PowerContext 1.3 的任务证据、Experience/Skill 候选、Dream 整理与限量历史召回，也可通过通用 HTTP 桥接接入其他服务。PowerContext 需要该服务器、账号和角色专用的已有 Scope；候选在记忆服务中人工审核，插件不会自动批准、安装技能或训练权重。换电脑需迁移本地笔记与提交回执。具体地址与接口边界见共享核心的 [游戏记忆文档](https://github.com/jcs130/minecraft-ai-friend/blob/main/packages/agent-mc-world/docs/game-memory.md)。本地检查未连接真实云账号或家庭记忆服务。
 
 ```text

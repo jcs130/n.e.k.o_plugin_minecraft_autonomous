@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.104 — Development update
+
+- Consume autonomy 0.2.98 and fixed core rc.88, with optional MineDojo reference-index discovery and bounded reads. Add configuration for a separately prepared local index and CPU retrieval; empty paths leave it unconfigured, with no automatic corpus/model download.
+- Keep historical references separate from personal game memory and current-world evidence. Retain the pinned external renderer/resources and existing idle review, inventory, stop, unknown-result and single-queue safeguards.
+
 ## 0.6.103 — Development update
 
 - Pin autonomy 0.2.97: active body inference and native tasks no longer count

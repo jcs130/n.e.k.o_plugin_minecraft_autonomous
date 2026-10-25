@@ -52,6 +52,10 @@ mode = "auto" # Byte-checked optional pack; ordinary servers do not register its
 enabled = true # Only actual core PNG artifacts. Bind optional vision slot in Neko.
 mineral_vision = false # Explicit opt-in: loaded minerals within 32 blocks, not unseen terrain or action permission.
 
+[knowledge]
+minedojo_index_file = "" # Optional absolute path to an explicitly prepared reference SQLite index.
+retrieval = "hybrid" # hybrid, lexical or local-vector; CPU only, no model or dataset download.
+
 [host_context]
 enabled = true
 character_api_url = "" # Optional explicit local public /api/characters endpoint; no port scanning.

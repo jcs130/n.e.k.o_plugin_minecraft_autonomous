@@ -45,6 +45,10 @@ image_input = false # Explicit capability; do not guess from the model name.
 enabled = true
 mineral_vision = false # Opt-in loaded-mineral queries only; physical permissions stay unchanged.
 
+[knowledge]
+minedojo_index_file = "" # Optional absolute path to a separately prepared historical Wiki index.
+retrieval = "hybrid" # Local CPU retrieval; an empty path leaves this source unconfigured.
+
 [memory]
 mode = "local" # local | local-vector (offline CPU token similarity) | vector | remote.
 agent_id = "" # Empty preserves existing note ownership; changing this does not move notes.
