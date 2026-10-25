@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.102 — Development update
+
+- Consume autonomy 0.2.96 and shared core rc.86. Reuse the same offline CPU
+  notebook retrieval and observation policy as DSH, with Neko configuration
+  controls for `local-vector`, optional stable note ownership and mineral
+  queries (default off). Preserve legacy note ownership unless explicitly set.
+- Keep personality/model selection in Neko and game memory in the core. Saving
+  configuration starts no game/model and cannot modify an active embedded
+  account. Do not copy DSH's plugin loader, persona presets or memory store.
+- Preserve inventory reconciliation, permissions, unknown outcomes, original
+  notes and the existing renderer. Record source/package/live acceptance
+  separately; no public release change.
+
 ## 0.6.101 — Development update
 
 - Pin autonomy 0.2.95 and core rc.82. A failed inventory click now reconciles

@@ -307,6 +307,8 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           {field("presentation","target","解说角色（留空跟随 Neko 当前角色）")}
           {field("presentation","min_interval_seconds","普通解说最小间隔（秒，含决策心跳）","number")}
           <Switch checked={draft.perception.enabled} label="接收核心真实图像（无图像或模型时文字回退）" onChange={v=>change("perception","enabled",v)} />
+          <Switch checked={draft.perception.mineral_vision === true} label="允许查询已接收区块中被遮挡的矿物（默认关闭）" onChange={v=>change("perception","mineral_vision",v)} />
+          <Text>关闭时依靠真实视线与历史笔记。开启仅允许查询 32 格内已接收的矿物，不显示未加载地形，不改变画面、移动或施工权限。</Text>
           <Accordion open={false} title="模型 API 接入"><Stack gap={10}>
             <Field label="动作规划使用的模型"><Select value={draft.planner?.route || "host"} options={[{value:"host",label:"使用 Neko 模型绑定（默认）"},{value:"direct",label:"单独配置模型服务"}]} onChange={v=>change("planner","route",v)} /></Field>
             {draft.planner?.route === "direct" && <Stack gap={10}>
@@ -353,8 +355,9 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           </Grid>}
           <Accordion open={false} title="游戏记忆"><Stack gap={10}>
             <Text>记录游戏中的地点、方法与经验，按服务器和角色隔离。默认本地保存，不需要模型；开启外部检索后会发送游戏笔记和查询，服务不可用时回退本地搜索。</Text>
-            <Field label="检索方式"><Select value={draft.memory?.mode || "local"} options={[{value:"local",label:"本地关键词（默认）"},{value:"vector",label:"本地记忆 + 向量模型"},{value:"remote",label:"外挂记忆服务"}]} onChange={v=>change("memory","mode",v)} /></Field>
-            {(draft.memory?.mode || "local") !== "local" && <Grid cols={2}>
+            <Field label="检索方式"><Select value={draft.memory?.mode || "local"} options={[{value:"local",label:"本地关键词（默认）"},{value:"local-vector",label:"离线 CPU 词元向量 + 关键词"},{value:"vector",label:"本地记忆 + 向量模型"},{value:"remote",label:"外挂记忆服务"}]} onChange={v=>change("memory","mode",v)} /></Field>
+            {draft.memory?.mode === "local-vector" && <Text>使用本地 CPU 比较词元相似度并合并关键词结果，不下载模型、不使用 GPU 或外部服务。它不是神经语义检索，历史记录仍需现场复核。</Text>}
+            {["vector","remote"].includes(draft.memory?.mode || "local") && <Grid cols={2}>
               {field("memory","endpoint",draft.memory?.mode === "vector" ? "完整 embeddings 地址" : "记忆服务根地址")}
               {field("memory","api_key_env","密钥所在环境变量名称")}
               {field("memory","timeout_ms","等待上限（毫秒）","number")}
@@ -372,6 +375,8 @@ export default function Panel(props: PluginSurfaceProps<any>) {
                 <Text>使用该角色游戏专用的记忆范围。开启后可以提交任务证据、整理待审核经验并按需召回；候选需在记忆服务中人工审核，生成技能不会自动安装。</Text>
               </Stack>}
             </Stack>}
+            {field("memory","agent_id","笔记角色标识（可选）")}
+            <Text>留空沿用现有角色笔记。填写新标识会切换到该标识的笔记，旧记录仍保留，不自动迁移或合并；账号和背包不变。</Text>
             <Text>基础检索只增强本机游戏笔记；经验整理可召回专用范围内的历史经验。换电脑时要迁移本地笔记与提交回执；历史库存和地点仍须现场复核。</Text>
           </Stack></Accordion>
           <Accordion open={false} title="自适应规划深度（可选）"><Stack gap={10}>

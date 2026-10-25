@@ -1,6 +1,6 @@
 # Minecraft Autonomous · 我的世界自主游玩
 
-开发版本 0.6.101 固定框架 0.2.95 / 核心 rc.82：库存操作未获确认时，若服务端已经返回完整槽位和光标状态，会保留该次失败并同步权威状态，恢复后续显式物品操作；不重放旧点击。缺失快照、游标、权限和未知派发边界保持，当前模型与观战版本不变。公开离线包仍为 0.6.70。
+开发版本 0.6.102 固定框架 0.2.96 / 核心 rc.86：复用 DSH 更新采用的共享游戏笔记与感知合同，新增离线 CPU 混合检索、可选稳定笔记标识和默认关闭的矿物查询开关。原库存确认、未知派发与唯一队列保持；Neko 继续提供当前角色与模型，公开离线包仍为 0.6.70。
 
 此前开发版本 0.6.96 固定框架 0.2.90 / 核心 rc.70：新增显式可选的 llama.cpp 工具语法适配，长字符串边界仍由原生完整 schema 在派发前校验，CPU 计数使用实际发送的声明。默认模型路由和游戏启动方式不变；千灯纪邀请接入、现有人设和记忆继续沿用。当前为开发版本，公开离线包仍为 0.6.70。
 
@@ -91,6 +91,10 @@ tokenizer/template 计数。默认模型绑定、思考预算和原始记录不�
 支持 API Key、外部管理的 Bearer 令牌、OpenAI / Google 官方 OAuth 及 Google ADC。OAuth 可选依赖需单独安装，在运行机器执行 `auth-login`，使用系统凭据库保存授权。Claude 支持 API Key 或外部有效 Bearer，不冒称通用 Claude 订阅账号登录。配置、参数、授权命令和厂商限制见 [共享模型接入文档](https://github.com/jcs130/minecraft-ai-friend/blob/main/packages/agent-mc-autonomy/docs/model-providers.md)。读取模型列表不会推理；显式测试模型会消耗一次调用额度。
 
 游戏记忆在核心的 `mc_memory` 中统一实现，可按需搜索摘要、读取原文、保存方法与失败证据。默认不需要模型；`[memory]` 可选择向量模型、Mem0、阿里云百炼、PowerContext 或通用 HTTP 桥接。配置面板提供相同选项，密钥只填写环境变量名。服务异常时回退本地检索，历史记忆始终要求现场复核。
+
+也可选择 `local-vector`：复用共享核心的离线 CPU 词元向量与关键词混合检索，不下载模型、不占用 GPU、不请求外部服务。这是词元相似度，并非神经语义模型。可选 `memory.agent_id` 将笔记绑定到稳定角色标识；留空沿用原笔记，修改只切换笔记范围，不自动迁移/合并旧记录或改变账号。
+
+`perception.mineral_vision` 默认关闭。显式开启仅允许查询 32 格内已接收的遮挡矿物；未加载地形仍未知，实体可见性、行动和服务器权限不变。真实图像输入仍由 `perception.enabled` 单独控制。DSH 更新复用范围见[能力核对](docs/research/dsh-shared-capabilities-20261025.md)。
 
 基础外部检索只匹配本机游戏笔记。可选 `learning_enabled` 接入 PowerContext 1.3 的任务证据、Experience/Skill 候选、Dream 整理与限量历史召回，也可通过通用 HTTP 桥接接入其他服务。PowerContext 需要该服务器、账号和角色专用的已有 Scope；候选在记忆服务中人工审核，插件不会自动批准、安装技能或训练权重。换电脑需迁移本地笔记与提交回执。具体地址与接口边界见共享核心的 [游戏记忆文档](https://github.com/jcs130/minecraft-ai-friend/blob/main/packages/agent-mc-world/docs/game-memory.md)。本地检查未连接真实云账号或家庭记忆服务。
 

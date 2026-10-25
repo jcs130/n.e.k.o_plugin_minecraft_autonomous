@@ -43,7 +43,7 @@ EDITABLE = {
     "runtime": {"mode", "data_directory", "bundle_root", "bundle_manifest_sha256"},
     "backend": {"node", "directory"},
     "viewer": {"url", "auto_open", "renderer_directory", "catalog_file", "bundled_appearance_catalog_file", "default_appearance", "listen_port"},
-    "perception": {"enabled"},
+    "perception": {"enabled", "mineral_vision"},
     "presentation": {"enabled", "target", "min_interval_seconds"},
     "heartbeat": {"enabled", "target", "min_interval_seconds", "review_interval_seconds", "idle_presence_seconds", "structured_reviews", "review_max_output_tokens"},
     "speech_output": {"enabled", "base_url", "planner_narration", "min_interval_seconds"},
@@ -51,7 +51,7 @@ EDITABLE = {
     "server_extension": {"presentation_module", "presentation_sha256"},
     "host_context": {"enabled", "character_api_url"},
     "fast": {"mode", "endpoint", "model", "api_key_env", "min_confidence"},
-    "memory": {"mode", "endpoint", "model", "api_key_env", "timeout_ms", "provider", "library_id", "project_id", "scope_id", "search_mode", "learning_enabled", "read_preference"},
+    "memory": {"mode", "endpoint", "model", "api_key_env", "timeout_ms", "provider", "library_id", "project_id", "scope_id", "search_mode", "learning_enabled", "read_preference", "agent_id"},
     "planner": {"route", *HttpPlannerConfig.__dataclass_fields__},
 }
 
@@ -70,7 +70,7 @@ def public_config(settings):
                    "bundled_appearance_catalog_file": settings.viewer_bundled_appearance_catalog_file,
                    "default_appearance": settings.viewer_default_appearance,
                    "listen_port": settings.viewer_listen_port},
-        "perception": {"enabled": settings.vision_enabled},
+        "perception": {"enabled": settings.vision_enabled, "mineral_vision": settings.mineral_vision},
         "server_extension": {"presentation_module": getattr(settings, "server_presentation_module", ""),
                              "presentation_sha256": getattr(settings, "server_presentation_sha256", "")},
         "fast": asdict(settings.fast),

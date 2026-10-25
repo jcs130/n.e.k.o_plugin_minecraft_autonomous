@@ -43,6 +43,11 @@ image_input = false # Explicit capability; do not guess from the model name.
 
 [perception]
 enabled = true
+mineral_vision = false # Opt-in loaded-mineral queries only; physical permissions stay unchanged.
+
+[memory]
+mode = "local" # local | local-vector (offline CPU token similarity) | vector | remote.
+agent_id = "" # Empty preserves existing note ownership; changing this does not move notes.
 
 [fast]
 mode = "rules" # system_one enables an explicitly configured local/remote provider.

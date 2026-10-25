@@ -50,6 +50,7 @@ mode = "auto" # Byte-checked optional pack; ordinary servers do not register its
 
 [perception]
 enabled = true # Only actual core PNG artifacts. Bind optional vision slot in Neko.
+mineral_vision = false # Explicit opt-in: loaded minerals within 32 blocks, not unseen terrain or action permission.
 
 [host_context]
 enabled = true
@@ -85,7 +86,8 @@ min_confidence = 0.75
 
 # Retrieval is implemented by agent-mc-world, shared with other Agent frameworks.
 [memory]
-mode = "local" # local | vector | remote
+mode = "local" # local | local-vector (offline CPU token similarity) | vector | remote
+agent_id = "" # Optional stable note owner; empty preserves the existing namespace. Does not move old notes.
 endpoint = "" # Full embeddings URL in vector mode; memory API base URL in remote mode.
 model = "" # Required only in vector mode.
 api_key_env = "" # Environment variable NAME; never put the secret in this file.
