@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.105 — Development update
+
+- Consume autonomy 0.2.99 with fixed core rc.89 and shared viewer 8b89927d. Include upstream viewer readiness, idle-motion progress, native appearance and HUD changes while preserving original 1.21.1 resources.
+- Keep provider selection explicit and account, memory, native queue and unknown-result safeguards unchanged. Online model configuration and live gameplay are verified separately from the package.
+
 ## 0.6.104 — Development update
 
 - Consume autonomy 0.2.98 and fixed core rc.88, with optional MineDojo reference-index discovery and bounded reads. Add configuration for a separately prepared local index and CPU retrieval; empty paths leave it unconfigured, with no automatic corpus/model download.
