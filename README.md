@@ -38,17 +38,19 @@
 
 动作受理、目标达成、音频生成和桌面播放分别记录，不能互相替代。长期无人干预生存、Microsoft 真账号全流程以及千灯纪全部特色模型/资源仍在持续打磨，详见版本说明。源码开发安装见 [源码指南](docs/install-source.md)，模型与声音见 [接入说明](docs/model-and-voice.md)。
 
-## 当前源码固定组合（0.6.89 开发候选，尚未发布）
+## 当前源码固定组合（0.6.104 开发候选，尚未发布）
 
 | 项目 | 内容 |
 | --- | --- |
-| 插件 | `minecraft_autonomous` **0.6.89 开发候选**；Windows x64 / Neko CPython 3.11 |
-| 自主框架 | `agent-mc-autonomy@0.2.84`，提交 `cb969fe9b4ce0e60d2ee1da67324860b25086701` |
-| 游戏核心 | `agent-mc-world@0.5.7-rc.65`，提交 `245eabb88bfce73594e7b6058c0f10c601526317` |
-| 核心归档 SHA256 | `b093a449fd87f85d08f2d0cad4f2d90b89e3cf108dec9e13a3868e2164e22269` |
+| 插件 | `minecraft_autonomous` **0.6.104 开发候选**；Windows x64 / Neko CPython 3.11 |
+| 自主框架 | `agent-mc-autonomy@0.2.98`，提交 `172cad843d4a97f312003dba737d122c3c71c1af` |
+| 游戏核心 | `agent-mc-world@0.5.7-rc.88`，提交 `fe9a4af9bd590dff4a3464a00925959ae7f3b54f` |
+| 核心归档 SHA256 | `4511bc893db6cab5a0f56500e0b3cbc713f9dd7876c00ec799ca91a48ff70720` |
 | 共享观战 | `mc-visual-console@dd7c4011abe4e5e7498fe60740b0c23abe7fbb3f` |
-| 宿主公共接口核对 | Neko main `ec09fca56ad146a55855d59f12969a3bac12c9f8`；主程序/SDK 未修改 |
+| 宿主公共接口核对 | Neko main `b4821ec`（2026-10-25）；适配层测试使用该源码通过，运行版另行确认 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT；随包保留素材和第三方许可 |
+
+2026-10-25 已核对核心上游 `8b5e9293`（`agent-mc-world@0.5.7-rc.89`）与共享观战上游 `d60328fe`。当前框架的 `core_distribution/source.json` 仍固定 rc.88 与 `dd7c4011`；更新源码或通过离线测试不会自动更换插件运行版的校验归档、观战资源或生产部署。
 
 本候选固定框架的原生身份修复：普通任务和脚本可能同号，协调器、原始证据、观战回执和离线恢复评估按类型与编号核对。
 同类型迟到受理仍受保护，缺类型的旧证据不自动确认终态或解除未知。核心保留迟到放置保护拒绝修复。

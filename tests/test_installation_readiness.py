@@ -1,4 +1,7 @@
 import json
+import logging
+from contextlib import nullcontext
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -43,24 +46,46 @@ def test_dashboard_metadata_does_not_hash_backend(plugin_instance, plugin_module
     ({"viewer": {"renderer_directory": "SECRET"}}, "viewer.renderer_directory"),
 ])
 def test_hosted_rejection_survives_real_host_serialization(plugin_instance, run_async, monkeypatch, patch, field, sdk_root):
-    import ast
-
-    # Execute the actual read-only host result-normalization branch without
-    # starting its child process, service, watchdog or network transport.
-    host_source = sdk_root / "plugin/core/host.py"
-    tree = ast.parse(host_source.read_text(encoding="utf-8"))
-    branches = [node for node in ast.walk(tree) if isinstance(node, ast.If)
-                and ast.unparse(node.test) == "hasattr(result, 'is_ok') and callable(result.is_ok)"
-                and "ret['data'] = result.value" in ast.unparse(node)]
-    assert branches
     update = AsyncMock()
     monkeypatch.setattr(plugin_instance.config, "update", update)
     generation = plugin_instance._generation
-    result = run_async(plugin_instance.save_settings_hosted(patch))
-    scope = {"result": result, "ret": {}}
-    for branch in branches:
-        exec(compile(ast.Module(body=[branch], type_ignores=[]), str(host_source), "exec"), scope)
-    transport = json.loads(json.dumps(scope["ret"]))
+    if (sdk_root / "plugin/core/entry_executor.py").is_file():
+        # Newer hosts route all entry results through the shared executor.
+        # Exercise that real codec without starting the host or a game client.
+        from plugin.core.entry_executor import EntryExecutor, execute_entry_command
+
+        context = SimpleNamespace(
+            _handler_scope=lambda _: nullcontext(),
+            _run_scope=lambda _: nullcontext(),
+            _lanlan_scope=lambda _: nullcontext(),
+        )
+        executor = EntryExecutor(
+            plugin_id="minecraft_autonomous", context=context, instance=plugin_instance,
+            entries={"save_settings_hosted": plugin_instance.save_settings_hosted},
+            metadata={}, events={}, default_timeout=3,
+            refresh=lambda: None, should_persist=lambda _: False, persist=None,
+            logger=logging.getLogger(__name__),
+        )
+        transport = run_async(execute_entry_command(executor, {
+            "req_id": "settings-rejection", "entry_id": "save_settings_hosted",
+            "args": {"settings": patch},
+        }))
+    else:
+        import ast
+
+        # Older hosts normalize Result in host.py itself.
+        host_source = sdk_root / "plugin/core/host.py"
+        tree = ast.parse(host_source.read_text(encoding="utf-8"))
+        branches = [node for node in ast.walk(tree) if isinstance(node, ast.If)
+                    and ast.unparse(node.test) == "hasattr(result, 'is_ok') and callable(result.is_ok)"
+                    and "ret['data'] = result.value" in ast.unparse(node)]
+        assert branches
+        result = run_async(plugin_instance.save_settings_hosted(patch))
+        scope = {"result": result, "ret": {}}
+        for branch in branches:
+            exec(compile(ast.Module(body=[branch], type_ignores=[]), str(host_source), "exec"), scope)
+        transport = scope["ret"]
+    transport = json.loads(json.dumps(transport))
     assert transport["success"] is True
     hosted_response = {"result": transport["data"]}
     assert hosted_response["result"]["success"] is False
