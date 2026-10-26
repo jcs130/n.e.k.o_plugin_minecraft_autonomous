@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.109 — Installation repair
+
+- Offer an explicit prepared-runtime upgrade button when a saved offline binding is incompatible. Keep account, model, memory and data settings; active embedded play must stop first, and external/custom runtimes are not selected automatically.
+- Keep framework 0.2.103/core rc.99 and Windows short-cache/extended-path verification. Pin the framework test-platform follow-up without changing runtime bytes.
+- Deliver one complete Windows package with a Chinese installation guide and upgrade instructions; GitHub Release and Market remain 0.6.70.
+
 ## 0.6.108 — Development update
 
 - Consume autonomy 0.2.103 and core rc.99: retain death terminal states, actionable goal-plan repair, observed command recovery and declared read-only server queries.

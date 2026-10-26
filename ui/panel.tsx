@@ -4,7 +4,7 @@ import {
   Alert, Accordion, JsonView, FileDownload, useState, useEffect,
 } from "@neko/plugin-ui"
 import type { PluginSurfaceProps } from "@neko/plugin-ui"
-import { installationGuidance } from "./installation-guidance.js"
+import { installationGuidance, preparedRuntimeSelection } from "./installation-guidance.js"
 import { applyConnectionPreset } from "./connection-presets.js"
 import { startPanelRefresh } from "./panel-refresh.js"
 
@@ -49,6 +49,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const usingHostModel = hostModel ?? settings.planner?.route !== "direct"
   const withNarration = narrationDraft ?? (settings.speech_output?.enabled || !settings.autonomy?.enabled)
   const installation = installationGuidance(state.installation, external, state.viewer_url)
+  const preparedSelection = preparedRuntimeSelection(settings, state.installation)
   const action = (id: string) => actions.find(a => a.entry_id === id || a.id === id)
   const call = async (id: string, args: any) => {
     setBusy(true); setNotice(""); setFailure(false); setFieldError(null)
@@ -108,6 +109,11 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       <Card title="连接与启动"><Stack gap={12}>
         <Text>选好服务器，点击开始即可。默认自带 YUI 模型、3D 观战、贴图和声音，跟随当前猫娘解说；无需填写 Node、资源路径或音色密钥。</Text>
         <Text>{installation.preparedRuntime}</Text>
+        {preparedSelection && <Stack gap={6}>
+          <Button disabled={busy||runtime.game_connected||runtime.worker_alive||runtime.autonomy_running}
+            onClick={()=>call("save_settings",{settings:preparedSelection})}>使用已安装的新版运行环境</Button>
+          <Text>先停止旧版游玩并运行新版安装入口，再点此按钮。只重选本机运行资源，保留账号、模型、记忆和其它设置；不会自动开始游戏。</Text>
+        </Stack>}
         <Inline><Text>{runtime.model_status?.model ? `当前实际动作规划模型：${runtime.model_status.model}。` : settings.planner?.route === "direct" ? `动作规划使用已配置的独立模型：${settings.planner.model || "待填写"}。` : "动作规划复用本插件已绑定的 Neko 模型。首次使用只需在官方页面绑定 decision，以后直接开始。"}</Text>
           <FileDownload href={`${props.host?.origin || ""}/model-api`} label="Neko 模型 API" openExternal />
           <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=config`} label="本插件模型绑定" openExternal /></Inline>

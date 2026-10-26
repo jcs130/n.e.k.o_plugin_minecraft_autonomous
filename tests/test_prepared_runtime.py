@@ -2,6 +2,7 @@
 
 import copy
 import json
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -133,3 +134,50 @@ def test_incompatible_bound_runtime_does_not_start(prepared, plugin_instance, pl
     result = run_async(plugin_instance.start())
     assert isinstance(result, Err) and "prepare.cmd" in result.error["message"]
     assert plugin_instance._worker is None
+
+
+@pytest.mark.parametrize("worker_alive", [False, True])
+def test_explicit_prepared_upgrade_preserves_user_configuration(prepared, plugin_instance, monkeypatch, run_async, worker_alive):
+    host, bundle, _ = prepared
+    old = {
+        "server": {"host": "localhost", "username": "MyRole"},
+        "planner": {"route": "host"},
+        "memory": {"mode": "local"},
+        "runtime": {"mode": "embedded", "data_directory": "my-data", "bundle_root": "old-runtime", "bundle_manifest_sha256": "b" * 64},
+        "backend": {"node": "old-node", "directory": "old-backend"},
+        "viewer": {"renderer_directory": "old-renderer", "catalog_file": "old-catalog", "bundled_appearance_catalog_file": "old-appearances", "auto_open": False},
+    }
+    original = copy.deepcopy(old)
+    from agent_mc_autonomy.runtime_bundle import BundleError
+    def check(root, **options):
+        if root != bundle.root:
+            raise BundleError("runtime_bundle_source_mismatch")
+        assert options["full"] is False
+        return {}
+    monkeypatch.setattr(host, "verify_bundle", check)
+    assert host.resolve_host_runtime(old)[1] == "incompatible"
+    monkeypatch.setattr(plugin_instance.config, "dump", AsyncMock(side_effect=lambda: copy.deepcopy(old)))
+    async def update(patch):
+        for section, values in patch.items():
+            old.setdefault(section, {}).update(copy.deepcopy(values))
+    writer = AsyncMock(side_effect=update)
+    monkeypatch.setattr(plugin_instance.config, "update", writer)
+    if worker_alive:
+        plugin_instance._worker = SimpleNamespace(snapshot=lambda: {"worker_alive": True})
+    patch = {"backend": {"node": "", "directory": ""},
+             "viewer": {"renderer_directory": "", "catalog_file": "", "bundled_appearance_catalog_file": ""},
+             "runtime": {"bundle_root": "", "bundle_manifest_sha256": ""}}
+    result = run_async(plugin_instance.save_settings(patch))
+    if worker_alive:
+        assert isinstance(result, Err) and result.error["code"] == "settings_runtime_active"
+        assert old == original and writer.await_count == 0
+        return
+    assert isinstance(result, Ok) and plugin_instance._worker is None
+    for section in ["server", "planner", "memory"]:
+        assert old[section] == original[section]
+    assert old["runtime"]["data_directory"] == "my-data"
+    assert old["runtime"]["mode"] == "embedded"
+    assert old["viewer"]["auto_open"] is False
+    selected, state = host.resolve_host_runtime(old)
+    assert state == "prepared" and selected["runtime"]["bundle_root"] == str(bundle.root)
+    assert selected["backend"]["directory"] == str(bundle.backend)
