@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.107 — Development update
+
+- Consume autonomy 0.2.101 and the integrated core rc.95: authored opening spells recheck real admission, read-only scripts retain fast combat availability, and unavailable current facts stay explicitly unknown.
+- Include scoped task progress, batch message reads with result revisions and idempotent retries of identical attributed game notes.
+- Preserve the composter repair, pinned viewer/resources, explicit model routing, account/memory and native safety boundaries.
+
 ## 0.6.106 — Development repair
 
 - Consume autonomy 0.2.100 and core rc.90: crop items can interact with composters, with separate block-level, item-consumption and bone-meal readback.
