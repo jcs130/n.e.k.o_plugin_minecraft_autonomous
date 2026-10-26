@@ -2,6 +2,7 @@ import importlib
 import json
 import os
 import uuid
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -136,6 +137,52 @@ def test_imported_account_start_queries_ready_and_checks_private_login(plugin_mo
         run_async(m.preflight(raw, plugin_module.Settings.parse(raw)))
 
 
+def test_imported_identity_accepts_managed_password_without_skipping_ready(plugin_module, tmp_path, run_async, monkeypatch):
+    from agent_mc_autonomy.server_login import prepare_login as managed_login
+
+    m = module(plugin_module)
+    source, value = identity(tmp_path)
+    raw = {'server': {'host': 'micro.kangqiang.site', 'port': 25702, 'username': value['username'],
+                      'auth': 'offline', 'version': '1.21.1'},
+           'qiandengji': {'identity_file': str(source)}}
+    data = tmp_path / 'plugin-data'
+    path = managed_login(data, plugin_module.Settings.parse(raw), value['gamePassword'])
+    raw['server']['login_config_file'] = str(path)
+    settings = plugin_module.Settings.parse(raw)
+    invoke = AsyncMock(return_value=ready())
+    monkeypatch.setattr(m, '_invoke', invoke)
+    run_async(m.preflight(raw, settings, data_root=data))
+    invoke.assert_awaited_once()
+    invoke.return_value = ready(state='pending', gameAccountCreated=False)
+    with pytest.raises(m.AccountError, match='account_not_ready_query_status'):
+        run_async(m.preflight(raw, settings, data_root=data))
+    path.write_text('{}', encoding='utf-8')
+    with pytest.raises(m.AccountError, match='private_login_mismatch'):
+        run_async(m.preflight(raw, settings, data_root=data))
+
+
+@pytest.mark.parametrize('reason, guidance', [
+    ('private_login_mismatch', '登录'), ('invalid_private_identity', '身份文件'),
+    ('imported_account_connection_mismatch', '服务器'),
+    ('account_result_unknown_query_status', '查询'),
+])
+def test_start_preserves_safe_account_diagnosis(plugin_instance, plugin_module, run_async, monkeypatch, reason, guidance):
+    raw = {'autonomy': {'enabled': True}, 'server': {'host': 'fixture.test', 'username': 'Alice'}}
+    monkeypatch.setattr(plugin_instance.config, 'dump', AsyncMock(return_value=raw))
+    monkeypatch.setattr(plugin_module, 'resolve_host_runtime', lambda value: (value, 'custom'))
+    monkeypatch.setattr(plugin_module, 'qiandengji_preflight', AsyncMock(side_effect=module(plugin_module).AccountError(reason)))
+    result = run_async(plugin_instance.start('live here'))
+    assert isinstance(result, Err) and result.error['reason'] == reason
+    assert guidance in result.error['message']
+    assert plugin_instance._worker is None
+
+
+def test_plugin_api_link_uses_host_ui_route():
+    source = (Path(__file__).resolve().parents[1] / 'ui/panel.tsx').read_text('utf-8')
+    assert '/ui/model-api' in source
+    assert '}/model-api' not in source
+
+
 @pytest.mark.skipif(os.name == 'nt', reason='POSIX mode check; Windows uses the user-private data directory')
 def test_world_readable_identity_rejected(plugin_module, tmp_path):
     m = module(plugin_module)
@@ -208,3 +255,24 @@ def test_portal_rejection_stops_plugin_before_native_worker_creation(plugin_inst
     result = run_async(plugin_instance.start('live here'))
     assert isinstance(result, Err) and result.error['code'] == 'qiandengji_account_not_ready'
     assert plugin_instance._worker is None
+
+
+def test_installed_plugin_data_keeps_generated_login_outside_package(
+    plugin_module, tmp_path, monkeypatch
+):
+    m = module(plugin_module)
+    source, account = identity(tmp_path)
+    package = tmp_path / "installed" / "minecraft_autonomous"
+    package.mkdir(parents=True)
+    monkeypatch.setattr(m, "__file__", str(package / "qiandengji_account.py"))
+    data = package / "local" / "data"
+
+    login = m.prepare_login(source, account, data)
+
+    assert login == source.parent / "qiandengji" / account["clientId"] / "login.json"
+    assert not login.is_relative_to(package)
+    assert not data.exists()
+    assert json.loads(login.read_text("utf-8")) == m.login_material(account)
+    assert m.prepare_login(source, account, data) == login
+    with pytest.raises(m.AccountError, match="identity_outside_plugin_required"):
+        m.private_path(str(package / "forbidden.private"), missing=True)

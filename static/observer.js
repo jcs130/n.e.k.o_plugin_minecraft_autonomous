@@ -16,12 +16,10 @@ const node = (tag, content, className) => {
 };
 let savedState = null,
     configuredUrl = "",
-    activeUrl = "",
     failedRead = false;
 let timer,
     clockTimer,
     request,
-    frameTimer,
     closed = false;
 let onScreen = true;
 const visible = () => !closed && !document.hidden && onScreen;
@@ -48,21 +46,8 @@ function freshness() {
     byId("connection").className = `connection${fresh ? "" : " muted"}`;
 }
 
-function unloadViewer() {
-    clearTimeout(frameTimer);
-    byId("frame-slot").replaceChildren();
-    byId("frame-slot").hidden = true;
-    byId("viewer-empty").hidden = false;
-    byId("unload-viewer").hidden = true;
-    activeUrl = "";
-}
-
 function viewer(view) {
-    if (configuredUrl !== view.viewerUrl) {
-        unloadViewer();
-        configuredUrl = view.viewerUrl;
-    }
-    byId("load-viewer").disabled = !configuredUrl;
+    configuredUrl = view.viewerUrl;
     const link = byId("open-viewer");
     link.hidden = !configuredUrl;
     if (configuredUrl) link.href = configuredUrl;
@@ -74,58 +59,17 @@ function viewer(view) {
     text(
         "viewer-empty-detail",
         configuredUrl
-            ? "点击后连接你配置的可视化页面。请核对账号、位置与右侧最新观测是否一致。"
+            ? "打开完整 3D 画面；生命、任务与决策记录保留在本页，方便来回查看。"
             : "在「配置与控制」中填写与当前角色配套的可视化页面。右侧与下方可直接查看框架的实际观测。",
     );
-    if (!activeUrl) {
-        text("viewer-badge", configuredUrl ? "等待载入" : "未配置");
-        text(
-            "viewer-note",
-            configuredUrl
-                ? "已配置观战地址；画面与当前角色的绑定尚未核验。"
-                : "尚无画面连接，未核验角色绑定。",
-        );
-    }
-}
-
-byId("load-viewer").addEventListener("click", () => {
-    if (!configuredUrl || activeUrl) return;
-    activeUrl = configuredUrl;
-    const frame = document.createElement("iframe");
-    frame.title = "Minecraft 现代观战页面";
-    frame.referrerPolicy = "no-referrer";
-    frame.setAttribute(
-        "sandbox",
-        "allow-scripts allow-same-origin allow-pointer-lock",
+    text("viewer-badge", configuredUrl ? "可打开观战" : "未配置");
+    text(
+        "viewer-note",
+        configuredUrl
+            ? "请核对画面中的账号、位置与本页最新观测。已配置地址不代表角色绑定已验证。"
+            : "尚无画面连接，未核验角色绑定。",
     );
-    frame.setAttribute("allow", "fullscreen");
-    frame.src = activeUrl;
-    frame.addEventListener("load", () => {
-        if (!frame.isConnected) return;
-        text("viewer-badge", "已请求载入");
-        text(
-            "viewer-note",
-            "请核对画面中的账号与位置；页面载入不代表角色绑定已验证。空白时可单独打开。",
-        );
-    });
-    byId("frame-slot").replaceChildren(frame);
-    byId("frame-slot").hidden = false;
-    byId("viewer-empty").hidden = true;
-    byId("unload-viewer").hidden = false;
-    text("viewer-badge", "正在载入");
-    text("viewer-note", "正在打开配置的观战页面，尚未核验角色绑定。");
-    frameTimer = setTimeout(() => {
-        if (frame.isConnected)
-            text(
-                "viewer-note",
-                "若画面空白，请单独打开并检查观战服务是否允许嵌入；当前角色绑定仍需核对。",
-            );
-    }, 15000);
-});
-byId("unload-viewer").addEventListener("click", () => {
-    unloadViewer();
-    viewer(observationView(savedState || {}));
-});
+}
 
 function records(id, rows, heading, detail, empty) {
     const container = byId(id);
@@ -158,13 +102,16 @@ function render(state) {
             ? "独立框架 · Neko 观察入口"
             : "Neko 嵌入式框架",
     );
-    for (const [id, value] of [
-        ["health", view.health],
-        ["food", view.food],
+    for (const [id, value, maximum] of [
+        ["health", view.health, view.healthMax],
+        ["food", view.food, 20],
     ]) {
-        text(id, value === null ? "尚无数据" : `${value} / 20`);
-        byId(`${id}-meter`).hidden = value === null;
-        if (value !== null) byId(`${id}-meter`).value = value;
+        text(id, value === null ? "尚无数据" : maximum === null ? `${value} · 上限未同步` : `${value} / ${maximum}`);
+        byId(`${id}-meter`).hidden = value === null || maximum === null;
+        if (value !== null && maximum !== null) {
+            byId(`${id}-meter`).max = maximum;
+            byId(`${id}-meter`).value = value;
+        }
     }
     text("place", view.place);
     text(
@@ -326,7 +273,6 @@ window.addEventListener("pagehide", () => {
     closed = true;
     clearTimeout(timer);
     clearInterval(clockTimer);
-    clearTimeout(frameTimer);
     request?.abort();
 });
 window.addEventListener("pageshow", () => {

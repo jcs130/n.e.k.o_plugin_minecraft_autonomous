@@ -5,6 +5,10 @@ import json
 import threading
 import uuid
 
+from .platform_dependencies import selected_layer as selected_layer
+
+# isort: split
+# Platform resources must be selected before framework/native imports.
 from agent_mc_autonomy.configuration import Settings
 from agent_mc_autonomy.mailbox import Mailbox, observation
 from agent_mc_autonomy.runner import run_session
@@ -21,7 +25,7 @@ from .neko_narration import NekoNarration
 from .neko_presentation import NekoPresentation
 from .neko_tools import NekoAutonomyTools
 from .prepared_runtime import require_prepared_runtime, resolve_host_runtime
-from .qiandengji_account import AccountError
+from .qiandengji_account import AccountError, start_failure
 from .qiandengji_account import preflight as qiandengji_preflight
 from .qiandengji_panel import QiandengjiPanel
 
@@ -115,7 +119,7 @@ class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, NekoAutonomyTools, N
             if not settings.enabled:
                 return Err({"code": "autonomy_disabled", "message": "先在配置中启用 autonomy；插件不会自动进入游戏。"})
             settings.require_server()
-            await qiandengji_preflight(planner_raw, settings)
+            await qiandengji_preflight(planner_raw, settings, data_root=settings.data_root(self.data_path()))
             require_prepared_runtime(prepared)
             entry = verify_runtime(settings.runtime_directory(self.cache_path()))
             data_root = settings.data_root(self.data_path())
@@ -139,8 +143,8 @@ class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, NekoAutonomyTools, N
                 self._worker = Worker(play, data / "host-error.log")
                 self._worker.start(goal.strip())
                 return Ok({"accepted": True, **self._worker.snapshot()})
-        except AccountError:
-            return Err({"code": "qiandengji_account_not_ready", "message": "已导入的千灯纪身份尚未通过本次 ready 核对；请查询原身份状态，未启动游戏。"})
+        except AccountError as error:
+            return Err(start_failure(error))
         except (OSError, ValueError, KeyError) as error:
             return Err({"code": "configuration_error", "message": str(error)})
         except TransportError:

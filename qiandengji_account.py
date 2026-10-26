@@ -23,6 +23,25 @@ class AccountError(ValueError):
     """Only locally defined codes cross the host boundary, never API text."""
 
 
+def start_failure(error):
+    messages = {
+        'private_absolute_file_required': '身份文件路径无效。请在“千灯纪网站账户接入”选择原私有身份文件。',
+        'identity_outside_plugin_required': '身份文件须放在插件目录以外的本人私有目录，升级不会搬运凭据。',
+        'private_file_unavailable': '原身份文件或登录文件不可读。请检查文件是否移动及当前用户权限。',
+        'invalid_private_identity': '身份文件格式不匹配。请使用官网生成的原 Agent 身份文件，不能用登录配置或网站密码代替。',
+        'imported_account_connection_mismatch': '连接与已导入身份不匹配。请核对服务器、端口、原昵称和游戏版本，或重新导入原身份连接。',
+        'private_login_mismatch': '私有登录配置与该账号不匹配。请在“服务器登录密码”保存原账号的 /login 密码，或重新导入原身份。',
+        'private_identity_changed': '核对期间身份文件发生变化。请保留原文件，重新查询原身份状态。',
+        'account_result_unknown_query_status': '官网身份查询未确认。请检查网络和 Node 是否可用，再查询原身份状态；不要重新注册。',
+        'official_helper_integrity_failed': '随包接入工具校验失败。请重新安装完整的正式插件包。',
+        'account_response_mismatch_query_status': '官网返回的角色或地址与原身份不匹配。请查询原身份状态，未启动游戏。',
+        'account_not_ready_query_status': '官网尚未确认原游戏账号 ready。请查询原身份状态；pending/unknown 时等待原请求结果，未启动游戏。',
+    }
+    reason = str(error) if str(error) in messages else 'account_check_failed'
+    return {'code': 'qiandengji_account_not_ready', 'reason': reason,
+            'message': messages.get(reason, '千灯纪身份核对未完成，请查询原身份状态。未启动游戏。')}
+
+
 def private_path(value, *, missing=False):
     if not isinstance(value, str) or not value or len(value) > 4096 or any(ord(c) < 32 for c in value):
         raise AccountError("private_absolute_file_required")
@@ -56,10 +75,11 @@ def configured_identity(raw):
     return value
 
 
-def read_identity(value):
-    path = private_path(value)
+def parse_identity(text):
     try:
-        data = json.loads(path.read_text("utf-8-sig"))
+        if not isinstance(text, str) or len(text.encode('utf-8')) > 16384:
+            raise ValueError()
+        data = json.loads(text.lstrip('\ufeff'))
         if not isinstance(data, dict) or data.get("schemaVersion") != 1 or data.get("portal") != PORTAL:
             raise ValueError()
         if not NAME.fullmatch(data.get("username", "")) or not re.fullmatch(r"[A-Za-z0-9_-]{43}", data.get("clientSecret", "")):
@@ -72,7 +92,15 @@ def read_identity(value):
             raise ValueError()
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         raise AccountError("invalid_private_identity") from None
-    return path, data
+    return data
+
+
+def read_identity(value):
+    path = private_path(value)
+    try:
+        return path, parse_identity(path.read_text("utf-8-sig"))
+    except (OSError, UnicodeError):
+        raise AccountError("invalid_private_identity") from None
 
 
 def public_result(result):
@@ -183,7 +211,11 @@ def prepare_login(source, identity, directory):
     _, original = read_identity(str(source))
     if any(original[key] != identity[key] for key in ("username", "clientId", "gameRequestId", "gamePassword")):
         raise AccountError("private_identity_changed")
-    directory = Path(directory) / "qiandengji" / identity["clientId"]
+    directory = Path(directory)
+    # SDK data directories can live inside the installed plugin package.
+    if directory.resolve().is_relative_to(Path(__file__).parent.resolve()):
+        directory = Path(source).resolve().parent
+    directory = directory / "qiandengji" / identity["clientId"]
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     private_path(str(directory / "game-password.private"), missing=True)
     secret = (identity["gamePassword"] + "\n").encode("utf-8")
@@ -193,7 +225,7 @@ def prepare_login(source, identity, directory):
     return directory / "login.json"
 
 
-async def preflight(raw, settings):
+async def preflight(raw, settings, *, data_root=None):
     value = configured_identity(raw)
     if not value:
         return
@@ -201,14 +233,23 @@ async def preflight(raw, settings):
     if (settings.host != "micro.kangqiang.site" or settings.port != 25702 or settings.username != identity["username"]
             or settings.auth != "offline" or settings.version != VERSION):
         raise AccountError("imported_account_connection_mismatch")
+    # The password form creates a scoped, managed login file (DPAPI on Windows).
+    # It is a valid alternative to the original helper's plaintext layout.
+    # Fresh website readiness and exact identity/connection checks still apply.
+    managed = False
+    if data_root is not None:
+        from agent_mc_autonomy.server_login import public_login
+        state = public_login(data_root, settings)
+        managed = state['managed'] and state['configured']
     login = private_path(settings.login_config_file)
     try:
         config = json.loads(login.read_text("utf-8"))
-        if config != login_material(identity):
-            raise ValueError()
-        secret = private_path(str(login.parent / "game-password.private"))
-        if secret.read_text("utf-8") != identity["gamePassword"] + "\n":
-            raise ValueError()
+        if not managed:
+            if config != login_material(identity):
+                raise ValueError()
+            secret = private_path(str(login.parent / "game-password.private"))
+            if secret.read_text("utf-8") != identity["gamePassword"] + "\n":
+                raise ValueError()
     except (OSError, ValueError):
         raise AccountError("private_login_mismatch") from None
     result = await _invoke(["status", "--identity-file", str(Path(value))], node=settings.node)

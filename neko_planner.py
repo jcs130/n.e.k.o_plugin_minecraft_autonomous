@@ -1,5 +1,6 @@
 """Public Neko model-slot adapters. Provider credentials stay in the host."""
 
+import copy
 import json
 import time
 
@@ -17,9 +18,24 @@ def error_code(error):
         detail = body.get("error", body)
         if isinstance(detail, dict) and detail.get("code") in {
             "model_usage_not_bound", "model_usage_not_declared", "model_capability_mismatch",
+            "unsupported_parameter", "invalid_request",
         }:
             return detail["code"]
     return "model_gateway_unavailable"
+
+
+def host_history(messages):
+    """Project internal replay data onto Neko's public Chat message subset."""
+    rows = []
+    for message in messages:
+        row = {key: copy.deepcopy(value) for key, value in message.items()
+               if key in {"role", "content", "name", "tool_calls", "tool_call_id"}}
+        # An unavailable response has no assistant content. Keep its empty
+        # placeholder valid without changing canonical history or audit data.
+        if row.get("role") == "assistant" and row.get("content") is None and not row.get("tool_calls"):
+            row["content"] = ""
+        rows.append(row)
+    return rows
 
 
 class NekoPlanner:
@@ -56,7 +72,7 @@ class NekoPlanner:
         for _ in range(2):
             try:
                 response = await client.chat.completions.create(
-                    model=route, messages=messages if route == "vision" else text_only(messages),
+                    model=route, messages=host_history(messages if route == "vision" else text_only(messages)),
                     tools=tools, parallel_tool_calls=False, max_completion_tokens=max_output_tokens or self.max_output_tokens,
                 )
                 choice = response.choices[0]

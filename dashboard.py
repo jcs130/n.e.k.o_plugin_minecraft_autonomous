@@ -1,6 +1,7 @@
 """Public hosted UI state/actions, with bounded read-only audit sampling."""
 
 import json
+import math
 import uuid
 from dataclasses import asdict
 
@@ -25,6 +26,7 @@ from .neko_speech import output_settings
 from .neko_tools import unwrap
 from .prepared_runtime import resolve_host_runtime
 from .qiandengji_account import configured_identity
+from .qiandengji_onboarding import public_selection
 
 try:
     from agent_mc_autonomy.operator import operator_link
@@ -176,10 +178,16 @@ class Dashboard:
             snapshot = result.get("observation", result)
             directory = settings.data_root(self.data_path()) / "sessions" / settings.identity / "host"
             state = {key: snapshot.get(key) for key in (
-                "phase", "game_connected", "autonomy_running", "updated_at", "decisions", "source", "live_verified",
+                "phase", "game_connected", "autonomy_running", "worker_alive", "updated_at", "decisions", "source", "live_verified",
                 "standing_goal", "current_goal", "context", "host_context", "model_status", "fast_focus", "perception", "planner_error", "planner_diagnostic", "viewer", "viewer_window")}
             state["facts"] = [{"key": str(p.get("key", ""))[:80], "text": str(p.get("text", ""))[:900],
                                "has_more": len(str(p.get("text", ""))) > 900} for p in snapshot.get("facts", {}).get("parts", [])[:24]]
+            observation = snapshot.get("facts", {}).get("observation")
+            if isinstance(observation, dict) and observation:
+                state["vitals"] = {"at": observation.get("at")}
+                for key in ("health", "food"):
+                    value = observation.get(key)
+                    state["vitals"][key] = value if type(value) in (int, float) and math.isfinite(value) and value >= 0 else None
             state["pending"] = [{k: p.get(k) for k in ("kind", "id", "phase", "terminal")} for p in snapshot.get("pending", [])[:16]]
             heartbeat = HeartbeatSettings.parse(raw)
             port = review_port(self, settings)
@@ -197,7 +205,7 @@ class Dashboard:
                 heartbeat_state["structured_delivery"] = load_commentary(port.directory / "structured-review.json")
             heartbeat_state["delivery_state"] = ("final_decision" if (review.get("result") or {}).get("acknowledged") else "inspected_awaiting_final" if review.get("inspected_at") else "notification_" + str(review.get("notification_status", "not_delivered")))
             heartbeat_state["next"] = "主脑尚未完成最终判断；重新检查当前心跳后提交简短判断。" if heartbeat_state["delivery_failure"] else None
-            return {"server_login": public_login(settings.data_root(self.data_path()), settings),
+            return {"website_account": public_selection(raw), "server_login": public_login(settings.data_root(self.data_path()), settings),
                     "settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
                                  "qiandengji": {"identity_file": configured_identity(raw)},
                                  "heartbeat": asdict(heartbeat), "host_context": asdict(HostContextSettings.parse(raw)), "planner": public_planner(raw.get("planner", {})),

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.111 (candidate)
+
+- Keep the standard official Market workflow and package. Include a verified Windows CPython 3.11 x64 dependency resource in that same package; select it inside the plugin without changing Neko or its shared interpreter.
+- Fix the Plugin API button to `/ui/model-api` and distinguish identity-file, account/connection, login-material and website-readiness errors.
+- Accept the password form's scoped Windows-encrypted login material for imported identities while preserving fresh ready validation and native authentication.
+- Replace required private paths with an identity file chooser and a private invitation form. Keep interrupted account requests for status checks and generate login material outside the installed plugin directory.
+- Consume verified framework 0.2.108/core rc.106, retaining actionable reflection inputs, confirmed weapon preparation, bounded navigation failure handling, operation evidence and survival safeguards.
+- Accept verified runtime resources through both logical and canonical Windows app-data paths, including packaged hosts, without weakening member or source verification.
+- Project provider reasoning and replay metadata out of requests to Neko's documented model gateway, preserving original audit/history data and exact tool-call receipts. Keep safe gateway rejection codes visible.
+- Confirm game stop inside the plugin panel so sandboxed hosts do not depend on browser modal dialogs; prevent a second start while the first connection is being prepared.
+- Show native current health when its maximum is unknown; keep custom health above 20 and hide the percentage meter until a valid maximum is observed.
+- Open the complete 3D viewer directly from the status page instead of embedding a page whose security policy blocks framing. Keep read-only status, queue and audit views in the plugin.
+
 ## 0.6.110 (candidate)
 
 - Add a write-only existing-server login password form. Credentials are scoped to the server and player; Windows storage uses current-user encryption. Refreshing or leaving the field empty preserves an existing credential. Active external bodies are not changed.
@@ -10,7 +23,7 @@
 
 - Offer an explicit prepared-runtime upgrade button when a saved offline binding is incompatible. Keep account, model, memory and data settings; active embedded play must stop first, and external/custom runtimes are not selected automatically.
 - Keep framework 0.2.103/core rc.99 and Windows short-cache/extended-path verification. Pin the framework test-platform follow-up without changing runtime bytes.
-- Deliver one complete Windows package with a Chinese installation guide and upgrade instructions; GitHub Release and Market remain 0.6.70.
+- Deliver one complete Windows package with a Chinese installation guide and upgrade instructions; publish v0.6.109 on GitHub and Market.
 
 ## 0.6.108 — Development update
 

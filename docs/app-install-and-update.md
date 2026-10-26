@@ -12,7 +12,7 @@ Windows 用户目前使用官网 [Windows 完整包](https://mc.kangqiang.site/d
 
 Neko App 先与 Market 配对，然后把安装请求交给本机插件管理器。管理器核对市场登记的下载地址、版本、包 SHA256 和 payload hash，预检冲突，再执行安装事务。市场只有一份登记包时，不能通过网页按钮把另一份 Windows ZIP 当成这份包安装。
 
-本次核查的官方 `plugin-market-release.yml` 固定 `ubuntu-latest`，没有平台输入。官方 CLI 还检查插件的发布工作流必须保持标准模板。要让市场默认交付 Windows 二进制，需要官方可信构建/发行支持 Windows 目标；替换附件、手写或改写官方证据会破坏来源校验，不作为解决方案。
+官方 `plugin-market-release.yml` 使用 `ubuntu-latest`，发布工作流保持标准模板。0.6.111 候选保留这份包的 Linux vendor，另在插件自己的 `assets/python-runtime` 内携带逐成员验证的 Windows CPython 3.11 x64 依赖，导入时按实际平台选择。这样沿用官方同一个包、来源锁和更新事务，无需修改 Neko/SDK 或工作流。须先用同一份官方产物完成 Windows 冷导入、宿主已加载依赖和 Linux 验收；候选源码存在不等于 Market 已发布。
 
 ## 更新到底会自动做什么
 
@@ -32,4 +32,4 @@ DeepSeek 官方 [思考模式](https://api-docs.deepseek.com/guides/thinking_mod
 
 ## 官方来源核对
 
-截至2026-10-26，官方最新源码固定`3f12697fb722d61e37bb9e4c0ead33205b2d5651`：[Market工作流](https://github.com/Project-N-E-K-O/N.E.K.O/blob/3f12697fb722d61e37bb9e4c0ead33205b2d5651/.github/workflows/plugin-market-release.yml)、[App更新控制](https://github.com/Project-N-E-K-O/N.E.K.O/blob/3f12697fb722d61e37bb9e4c0ead33205b2d5651/frontend/plugin-manager/src/stores/pluginUpdates.ts)、[安装确认与事务](https://github.com/Project-N-E-K-O/N.E.K.O/blob/3f12697fb722d61e37bb9e4c0ead33205b2d5651/frontend/plugin-manager/src/composables/usePluginPackageInstaller.ts)。当前没有已生效的Windows市场目标配置；不应把未应用的上游提案字段写进用户安装步骤。
+此前核对的官方源码固定`3f12697fb722d61e37bb9e4c0ead33205b2d5651`：[Market工作流](https://github.com/Project-N-E-K-O/N.E.K.O/blob/3f12697fb722d61e37bb9e4c0ead33205b2d5651/.github/workflows/plugin-market-release.yml)、[App更新控制](https://github.com/Project-N-E-K-O/N.E.K.O/blob/3f12697fb722d61e37bb9e4c0ead33205b2d5651/frontend/plugin-manager/src/stores/pluginUpdates.ts)、[安装确认与事务](https://github.com/Project-N-E-K-O/N.E.K.O/blob/3f12697fb722d61e37bb9e4c0ead33205b2d5651/frontend/plugin-manager/src/composables/usePluginPackageInstaller.ts)。本插件通过自己的平台资源适配现有协议，不要求用户应用宿主补丁或未采纳的发行字段。

@@ -1,4 +1,5 @@
 import base64
+import copy
 import importlib
 import json
 import struct
@@ -88,6 +89,50 @@ def test_missing_decision_is_visible_without_dispatch_or_leaking(plugin_module, 
     assert run_async(planner.NekoPlanner(None, 1024).decide([], []))["model_status"]["route"] == "unavailable"
 
 
+@pytest.mark.parametrize("images", [False, True])
+def test_host_history_projects_provider_reasoning_without_changing_originals(plugin_module, run_async, images):
+    planner = module(plugin_module, "neko_planner")
+    create = AsyncMock(return_value=model_response())
+    calls = [{"id": "original-call", "type": "function", "function": {"name": "mc_queue", "arguments": "{}"}}]
+    content = [{"type": "text", "text": "fresh facts"},
+               {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}] if images else "fresh facts"
+    history = [{"role": "user", "content": "original facts"},
+               {"role": "assistant", "content": None, "tool_calls": calls,
+                "reasoning_content": "provider-private reasoning", "reasoning": "legacy reasoning",
+                "_provider_state": {"scope": "a different provider", "data": {"signature": "private"}}},
+               {"role": "tool", "tool_call_id": "original-call", "content": "actual receipt"},
+               {"role": "user", "content": content}]
+    original = copy.deepcopy(history)
+    run_async(planner.NekoPlanner(gateway(create), 1024).decide(history, []))
+    wire = create.call_args.kwargs["messages"]
+    assert wire[1] == {"role": "assistant", "content": None, "tool_calls": calls}
+    assert wire[2] == history[2] and wire[-1]["content"] == content
+    assert all(set(row) <= {"role", "content", "name", "tool_calls", "tool_call_id"} for row in wire)
+    assert history == original
+    assert "provider-private" not in json.dumps(wire)
+
+
+def test_host_history_keeps_unavailable_placeholder_valid_for_gateway(plugin_module, run_async):
+    planner = module(plugin_module, "neko_planner")
+    create = AsyncMock(return_value=model_response())
+    history = [{"role": "user", "content": "facts"}, {"role": "assistant", "content": None},
+               {"role": "user", "content": "retry facts"}]
+    run_async(planner.NekoPlanner(gateway(create), 1024).decide(history, []))
+    assert create.call_args.kwargs["messages"][1] == {"role": "assistant", "content": ""}
+    assert history[1]["content"] is None
+
+
+def test_host_request_rejection_exposes_safe_code_without_provider_body(plugin_module, run_async):
+    planner = module(plugin_module, "neko_planner")
+    error = APIStatusError("private detail", response=httpx.Response(400, request=httpx.Request("POST", "http://unused")),
+                           body={"error": {"code": "unsupported_parameter", "message": "private detail", "param": "private value"}})
+    create = AsyncMock(side_effect=error)
+    result = run_async(planner.NekoPlanner(gateway(create), 1024).decide([{"role": "user", "content": "facts"}], []))
+    assert result["model_status"]["reason"] == "unsupported_parameter"
+    assert "private" not in json.dumps(result)
+    assert create.await_count == 1 and result["tool_calls"] == []
+
+
 def test_legacy_sdk_model_check_reports_missing_gateway(plugin_instance, run_async, monkeypatch):
     monkeypatch.delattr(type(plugin_instance.ctx), "models")
     result = run_async(plugin_instance.check_model(mode="text"))
@@ -143,6 +188,20 @@ def test_dashboard_has_bounded_actual_data_and_no_secret_config(plugin_instance,
     assert len(result["audit"]["decisions"]) == 20 and result["audit"]["sample_tokens"] == 200
     assert "not-for-ui" not in json.dumps(result)
     assert plugin_instance._worker is None
+
+
+def test_dashboard_uses_native_vitals_without_private_inventory_or_invented_maximum(plugin_instance, run_async, tmp_path, monkeypatch):
+    monkeypatch.setattr(plugin_instance.config, "dump", AsyncMock(return_value={
+        "runtime": {"mode": "external", "data_directory": str(tmp_path)},
+        "server": {"host": "example.test", "username": "Alice"}}))
+    monkeypatch.setattr(plugin_instance, "status", AsyncMock(return_value=Ok({
+        "phase": "running", "worker_alive": True,
+        "facts": {"observation": {"at": "2026-10-27T07:17:35+08:00", "health": 22, "food": 18,
+                                  "inventory": {"private": "not-for-ui"}}, "parts": []}})))
+    result = run_async(plugin_instance.dashboard())
+    assert result["runtime"]["worker_alive"] is True
+    assert result["runtime"]["vitals"] == {"at": "2026-10-27T07:17:35+08:00", "health": 22, "food": 18}
+    assert "not-for-ui" not in json.dumps(result)
 
 
 def test_settings_save_validates_without_starting_or_copying_provider_keys(plugin_instance, run_async, monkeypatch):

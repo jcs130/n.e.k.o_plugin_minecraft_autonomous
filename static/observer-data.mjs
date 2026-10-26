@@ -35,11 +35,18 @@ export function observationView(state = {}, now = Date.now()) {
     const vital = (label) => {
         const match = String(body).match(
             new RegExp(
-                `${label}\\s*[:：]?\\s*(\\d+(?:\\.\\d+)?)\\s*[/／]\\s*20`,
+                `${label}\\s*[:：]?\\s*(\\d+(?:\\.\\d+)?)(?:\\s*[/／]\\s*(\\d+(?:\\.\\d+)?))?`,
             ),
         );
-        return match ? Math.min(20, Number(match[1])) : null;
+        if (!match) return { value: null, max: null };
+        const value = Number(match[1]), maximum = Number(match[2]);
+        return { value, max: Number.isFinite(maximum) && maximum > 0 && maximum >= value ? maximum : null };
     };
+    const health = vital("生命"), food = vital("饥饿");
+    const native = runtime.vitals && typeof runtime.vitals === "object" ? runtime.vitals : null;
+    const finiteReading = value => typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+    const healthValue = native ? finiteReading(native.health) : health.value;
+    const foodValue = native ? finiteReading(native.food) : food.max === 20 ? food.value : null;
     const timestamp =
         typeof runtime.updated_at === "string"
             ? Date.parse(runtime.updated_at)
@@ -54,8 +61,9 @@ export function observationView(state = {}, now = Date.now()) {
             Number.isFinite(age) &&
             age >= -30000 &&
             age <= 30000,
-        health: vital("生命"),
-        food: vital("饥饿"),
+        health: healthValue,
+        healthMax: native ? null : health.max,
+        food: foodValue !== null && foodValue <= 20 ? foodValue : null,
         place: String(
             facts.find((row) => row.key === "place")?.text || "尚无位置观测",
         ),

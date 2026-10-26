@@ -21,6 +21,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const [mode, setMode] = useState("append")
   const [requestId, setRequestId] = useState("")
   const [busy, setBusy] = useState(false)
+  const [stopConfirm, setStopConfirm] = useState(false)
   const [notice, setNotice] = useState("")
   const [failure, setFailure] = useState(false)
   const [fieldError, setFieldError] = useState<any>(null)
@@ -35,6 +36,9 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const [identityFile, setIdentityFile] = useState<string | null>(null)
   const [inviteFile, setInviteFile] = useState("")
   const [agentName, setAgentName] = useState("")
+  const [inviteLink, setInviteLink] = useState("")
+  const [identityBody, setIdentityBody] = useState("")
+  const [identityName, setIdentityName] = useState("")
   const [portalResult, setPortalResult] = useState<any>(null)
   const [loginPassword, setLoginPassword] = useState("")
   const [loginEnabled, setLoginEnabled] = useState<boolean | null>(null)
@@ -44,6 +48,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   }, [props.api.refresh,editing,busy])
   const settings = state.settings || {}
   const runtime = state.runtime || {}
+  const stateReady = !!state.settings && !!state.runtime && !state.error
   const audit = state.audit || {}
   const external = settings.runtime?.mode === "external"
   const connection = connectionDraft ?? {...settings.server,host:settings.server?.host||"127.0.0.1",port:settings.server?.port??25565,
@@ -67,8 +72,15 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         throw new Error(detail.message || "请求未成功，请检查回执。")
       }
       if (id === "check_model" || id === "check_direct_model") setModelCheck(result)
-      if (id === "qiandengji_account") setPortalResult(result)
-      setNotice("请求已受理，请核对更新后的状态和回执。")
+      if (id === "qiandengji_account") {
+        setPortalResult(result)
+        if (result?.imported) {
+          setConnectionDraft(null); setIdentityBody(""); setInviteLink("")
+        }
+      }
+      setNotice(id === "qiandengji_account" && result?.imported
+        ? `已接入 ${result.username}，服务器和自动登录已配置。选好模型后点击“开始自主游玩”即可。`
+        : "请求已受理，请核对更新后的状态和回执。")
       await props.api.refresh()
       return true
     } catch (error: any) {
@@ -98,8 +110,68 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       if (await call("save_settings",{settings:{...draft,planner:{...draft.planner,parameters},decision_policy:{...draft.decision_policy,routine_parameters:routine,complex_parameters:complex}}})) setEditing(false)
     } catch { setFailure(true); setNotice("模型参数须为有效的 JSON 对象，请检查格式。") }
   }
+  const qiandengServer = connection.host === "micro.kangqiang.site" && Number(connection.port) === 25702
+  const accountSelected = state.website_account?.selected || !!settings.qiandengji?.identity_file || !!portalResult?.username
+  const accountSetup = <Stack gap={10}>
+    <Text>已有游戏账号可直接填下方昵称与 /login 密码，无需重新创建。新 Agent 请选择身份文件，或使用官网邀请；连接信息和私有保存位置由插件处理。</Text>
+    {state.website_account?.username && <Text>已保存的 Agent：{state.website_account.username}{state.website_account.imported ? " · 已接入" : " · 待核对接入"}</Text>}
+    <Field label="选择已有 Agent 身份文件"><input type="file" accept=".json,application/json"
+      aria-label="选择已有 Agent 身份文件" disabled={busy||external||runtime.game_connected||runtime.worker_alive}
+      onChange={async(event:any)=>{
+        const file = event.target.files?.[0]
+        if (!file) return
+        setIdentityBody(""); setIdentityName(""); setPortalResult(null)
+        try {
+          if (file.size > 16384) throw new Error("身份文件过大，请选择官网生成的原 Agent 身份 JSON。")
+          setIdentityBody(await file.text()); setIdentityName(file.name); setFailure(false); setNotice("")
+        } catch (error:any) { setFailure(true); setNotice(error?.message || "身份文件不可读，请重新选择。") }
+        event.target.value = ""
+      }} /></Field>
+    {identityName && <Text>已选择：{identityName}。内容仅发送给当前 Neko 运行机器，不会在面板回显。</Text>}
+    <Inline>
+      <Button disabled={busy||external||runtime.game_connected||runtime.worker_alive||!identityBody}
+        onClick={()=>call("qiandengji_account",{action:"import",identity_json:identityBody})}>接入所选账号</Button>
+      <Button disabled={busy||!accountSelected} onClick={()=>call("qiandengji_account",{action:"status"})}>查询已保存账号</Button>
+      <Button disabled={busy||external||runtime.game_connected||runtime.worker_alive||!accountSelected}
+        onClick={()=>call("qiandengji_account",{action:"import"})}>重新核对并接入</Button>
+      <Button disabled={busy||external||runtime.game_connected||runtime.worker_alive||!accountSelected||portalResult?.game_account_created!==false}
+        onClick={()=>call("qiandengji_account",{action:"activate"})}>激活此 Agent 游戏账号</Button>
+    </Inline>
+    {portalResult && <Text>{portalResult.username || "原账号"}：{portalResult.ready ? "游戏账号已就绪" : "游戏账号尚未就绪，请继续查询原请求"}{portalResult.imported ? "，已接入" : ""}。</Text>}
+    <Accordion open={false} title="用官网邀请创建新 Agent"><Stack gap={8}>
+      <FileDownload href="https://mc.kangqiang.site/join" label="打开千灯纪连接中心，获取自己的 Agent 邀请" openExternal />
+      <Field label="新 Agent 昵称（ag_ 开头，最多 16 位）"><Input value={agentName} placeholder="例如 ag_MyNeko" onChange={setAgentName} /></Field>
+      <Field label="专属邀请链接"><Input type="password" value={inviteLink} placeholder="粘贴官网“邀请自己的 Agent”生成的链接" onChange={setInviteLink} /></Field>
+      <Button disabled={busy||external||runtime.game_connected||runtime.worker_alive||!agentName||!inviteLink||accountSelected}
+        onClick={()=>call("qiandengji_account",{action:"register",username:agentName,invite_url:inviteLink})}>创建此 Agent 账号</Button>
+      <Text>插件自动保存私有身份。创建后查询状态，再激活并接入；结果不明时只查询原请求，不重复建号。已有账号不需要这一步。</Text>
+    </Stack></Accordion>
+    <Accordion open={false} title="旧版私有文件路径（高级）"><Stack gap={8}>
+      <Field label="原身份文件绝对路径"><Input value={identityFile ?? settings.qiandengji?.identity_file ?? ""} onChange={v=>{setIdentityFile(v);setPortalResult(null)}} /></Field>
+      <Inline>
+        <Button disabled={busy||!(identityFile??settings.qiandengji?.identity_file)} onClick={()=>call("qiandengji_account",{action:"status",identity_file:identityFile??settings.qiandengji?.identity_file})}>查询原身份状态</Button>
+        <Button disabled={busy||external||runtime.game_connected||runtime.worker_alive||!(identityFile??settings.qiandengji?.identity_file)} onClick={()=>call("qiandengji_account",{action:"import",identity_file:identityFile??settings.qiandengji?.identity_file})}>核对并导入原身份连接</Button>
+      </Inline>
+      <Field label="旧版邀请文件路径"><Input value={inviteFile} onChange={setInviteFile} /></Field>
+      <Button disabled={busy||external||runtime.game_connected||!agentName||!inviteFile||!identityFile} onClick={()=>call("qiandengji_account",{action:"register",username:agentName,invite_url_file:inviteFile,identity_file:identityFile})}>使用原私有文件创建邀请身份</Button>
+      {portalResult && <JsonView data={portalResult} />}
+    </Stack></Accordion>
+  </Stack>
 
   return <Page title="Minecraft 自主游玩" subtitle="Java 1.21.1 · 原生任务队列 · Neko 高层目标与演出">
+    {stopConfirm&&<div role="dialog" aria-modal="true" aria-labelledby="stop-title"
+      style={{position:"fixed",inset:0,zIndex:1000,background:"#0009",display:"grid",placeItems:"center",padding:16}}>
+      <div style={{maxWidth:520,background:"#172235",color:"#f1f5f9",border:"1px solid #475569",borderRadius:12,padding:20}}>
+        <h2 id="stop-title">停止本次自主游玩？</h2>
+        <p>停止规划并等待动作收尾，保留账号、物品与历史；服务器和 Neko 继续运行。</p>
+        <Inline>
+          <Button tone="danger" disabled={busy} onClick={async()=>{
+            if(await call("panel_stop",{}))setStopConfirm(false)
+          }}>确认停止游玩</Button>
+          <Button disabled={busy} onClick={()=>setStopConfirm(false)}>继续游玩</Button>
+        </Inline>
+      </div>
+    </div>}
     <Stack gap={18}>
       {state.error && <Alert tone="danger" message="配置或观测暂不可用。请先检查插件配置。" />}
       {runtime.phase === "failed" && <Alert tone="danger" message="框架最近记录为运行失败；下方保留最后观测，刷新页面不会自动恢复游玩。" />}
@@ -119,12 +191,13 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <Text>先停止旧版游玩并运行新版安装入口，再点此按钮。只重选本机运行资源，保留账号、模型、记忆和其它设置；不会自动开始游戏。</Text>
         </Stack>}
         <Inline><Text>{runtime.model_status?.model ? `当前实际动作规划模型：${runtime.model_status.model}。` : settings.planner?.route === "direct" ? `动作规划使用已配置的独立模型：${settings.planner.model || "待填写"}。` : "动作规划复用本插件已绑定的 Neko 模型。首次使用只需在官方页面绑定 decision，以后直接开始。"}</Text>
-          <FileDownload href={`${props.host?.origin || ""}/model-api`} label="Neko 模型 API" openExternal />
+          <FileDownload href={`${props.host?.origin || ""}/ui/model-api`} label="Neko 模型 API" openExternal />
           <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=config`} label="本插件模型绑定" openExternal /></Inline>
         <Inline>
           <Button disabled={busy||runtime.game_connected} onClick={()=>setConnectionDraft({...connection,host:"127.0.0.1",port:25565,version:"1.21.1",connection_type:"local"})}>本机原版</Button>
           <Button disabled={busy||runtime.game_connected} onClick={()=>setConnectionDraft(applyConnectionPreset({server:connection},"qiandeng").server)}>千灯纪公网</Button>
         </Inline>
+        {qiandengServer && <Card title="千灯纪账号接入">{accountSetup}</Card>}
         <Grid cols={2}>
           <Field label="服务器地址"><Input disabled={busy||runtime.game_connected} value={connection.host||""} placeholder="域名或 IP；本机填 127.0.0.1" onChange={v=>setConnection("host",v)} /></Field>
           <Field label="端口"><Input disabled={busy||runtime.game_connected} type="number" value={connection.port??25565} onChange={v=>setConnection("port",Number(v))} /></Field>
@@ -158,7 +231,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>默认使用 Neko 官方本机地址 http://127.0.0.1:48911。自定义端口可在高级设置修改；留空角色跟随当前猫娘。</Text>
         </Stack></Accordion>
         <Inline>
-          <Button tone="primary" disabled={busy||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
+          <Button tone="primary" disabled={!stateReady||busy||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
             if(loginPassword||loginEnabled!==null) {
               setFailure(true);setNotice("请先点击“保存连接与登录”，再开始游玩。");return
             }
@@ -166,11 +239,12 @@ export default function Panel(props: PluginSurfaceProps<any>) {
               appearance:appearanceDraft??settings.viewer?.default_appearance??"bundled:yui-ysm",
               extension_mode:extensionDraft??settings.extension_pack?.mode??"auto",
               character:characterDraft??settings.heartbeat?.target??"",narration:!!withNarration}))setConnectionDraft(null)
-          }}>{runtime.game_connected?"正在自主游玩":"开始自主游玩"}</Button>
+          }}>{!stateReady?"正在读取连接…":runtime.game_connected?"正在自主游玩":runtime.phase==="starting"?"正在连接…":"开始自主游玩"}</Button>
           <Button disabled={busy||runtime.game_connected||!connectionDraft} onClick={async()=>{
             if(await call("save_settings",{settings:{server:connection}}))setConnectionDraft(null)
           }}>仅保存连接</Button>
-          <ActionButton action={action("panel_stop")} />
+          <Button tone="danger" disabled={busy||(!runtime.worker_alive&&!runtime.game_connected&&runtime.phase!=="starting")}
+            onClick={()=>setStopConfirm(true)}>停止游玩</Button>
           {state.viewer_url&&<FileDownload href={state.viewer_url} label="打开 3D 观战" openExternal tone="primary" />}
           {state.operator?.available&&<FileDownload href={state.operator.url} label="账户授权" openExternal />}
         </Inline>
@@ -211,7 +285,6 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             if (ok) { setGoal(""); setRequestId("") }
           }}>投递目标</Button>
           {!external && <Button disabled={busy || !goal.trim()} onClick={async () => { await call("panel_start", {goal}) }}>按此目标开始</Button>}
-          <ActionButton action={action("panel_stop")} />
         </Inline>
         {requestId && <Text>请求 ID：{requestId}。确认不明时保持相同内容重试。</Text>}
         <Text>受理、原生动作完成、规划器报告和实际目标达成是不同状态。主脑决定阶段目标，独立框架继续规划和执行；正常工作无需重新派发。</Text>
@@ -244,7 +317,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           {slot:"fast",purpose:"可选聊天模型快速选择",fallback:"未配置或无效时使用规则；在设置中选择 Neko 模型槽后启用"},
         ]} columns={[{key:"slot",label:"用途槽"},{key:"purpose",label:"用途"},{key:"fallback",label:"回退"}]} />
         <Text>System One 模式可接官方 Jev 或兼容的本地 Decider，使用专用 /v1/systemone 接口。默认规则模式不调用快模型。快速选择只提供规划关注点，原生反射与任务队列继续掌管动作。</Text>
-        <Text>主 API 用于猫娘对话；辅助 API 用于宿主的记忆、视觉和 Agent 等职责。插件不会自动继承辅助密钥：请在管理器的「插件 API」（/model-api）创建模型，再在本插件详情绑定 decision / vision / fast。多个用途可共用一个兼容模型，密钥始终由宿主管理。</Text>
+        <Text>主 API 用于猫娘对话；辅助 API 用于宿主的记忆、视觉和 Agent 等职责。插件不会自动继承辅助密钥：请在管理器的「插件 API」（/ui/model-api）创建模型，再在本插件详情绑定 decision / vision / fast。多个用途可共用一个兼容模型，密钥始终由宿主管理。</Text>
         <Grid cols={2}><JsonView data={runtime.model_status || {route:"尚无模型调用记录"}} /><JsonView data={runtime.fast_focus || {configured_mode:settings.fast?.mode || "rules"}} /></Grid>
         <Text>下面的手动检查会调用 Neko 已绑定模型；图像检查使用合成色块，不代表真实游戏画面验收。外部运行的模型不受此检查影响。</Text>
         <Inline><Button disabled={busy} onClick={async()=>{await call("check_model",{mode:"text"})}}>检查文字与工具调用</Button>
@@ -257,26 +330,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>此 headless 后端可读取背包地图图像；现代 3D 画面还需匹配的观战适配。没有真实图像时按文字运行。</Text>
         <Accordion open={false} title="上下文预算与最近图像"><JsonView data={{context:runtime.context,perception:runtime.perception}} /></Accordion>
       </Stack></Accordion>
-      <Accordion open={false} title="千灯纪网站接入（可选）"><Stack gap={10}>
-        <Text>已有 ag_ 游戏角色继续原连接，不要重新建号。网站绑定旧角色需在原角色内完成验证；邀请链接用于创建未使用的新角色。保留当前框架、模型、人设和记忆。</Text>
-        <Inline><FileDownload href="https://mc.kangqiang.site/join" label="千灯纪连接中心与邀请指引" openExternal />
-          <FileDownload href="https://mc.kangqiang.site/agent-api.html" label="官方 Agent 接入说明" openExternal /></Inline>
-        <Text>将专属邀请链接保存在运行机器的私有文本文件中。下面只填写绝对文件路径；不要粘贴链接正文、邀请码、API 密钥、游戏密码或主人的网站密码。官网工具会先保存独立身份和游戏密码，再发送注册请求。</Text>
-        <Field label="私有身份 JSON 文件路径（首次创建填新路径；以后续用）"><Input value={identityFile ?? settings.qiandengji?.identity_file ?? ""} onChange={v=>{setIdentityFile(v);setPortalResult(null)}} /></Field>
-        <Inline>
-          <Button disabled={busy||!(identityFile??settings.qiandengji?.identity_file)} onClick={()=>call("qiandengji_account",{action:"status",identity_file:identityFile??settings.qiandengji?.identity_file})}>查询原身份状态</Button>
-          <Button disabled={busy||runtime.game_connected||!(identityFile??settings.qiandengji?.identity_file)} onClick={()=>call("qiandengji_account",{action:"activate",identity_file:identityFile??settings.qiandengji?.identity_file})}>激活游戏账号（先查原请求）</Button>
-          <Button disabled={busy||external||runtime.game_connected||!portalResult?.ready} onClick={()=>call("qiandengji_account",{action:"import",identity_file:identityFile??settings.qiandengji?.identity_file})}>重新核对 ready 并导入连接</Button>
-        </Inline>
-        <Text>pending / unknown 时继续查询原身份，不重复创建。只有游戏建号成功、状态 ready、角色及地址一致才允许导入。导入不自动开玩；嵌入式开始前会再次查询，再由原生连接等待服务器认证并进入真实世界。外部执行器沿用它的原启动配置，此面板不接管或切换其账号。</Text>
-        {portalResult&&<JsonView data={portalResult} />}
-        <Accordion open={false} title="使用新邀请创建角色"><Stack gap={8}>
-          <Field label="未使用的角色名（ag_ 开头，总长不超过 16 位）"><Input value={agentName} onChange={setAgentName} /></Field>
-          <Field label="专属邀请链接的私有文本文件路径"><Input value={inviteFile} onChange={setInviteFile} /></Field>
-          <Button disabled={busy||runtime.game_connected||!agentName||!inviteFile||!identityFile} onClick={()=>call("qiandengji_account",{action:"register",username:agentName,invite_url_file:inviteFile,identity_file:identityFile})}>用官网工具创建新邀请身份</Button>
-          <Text>若身份文件已存在，只能查询并续用。注册或激活结果不明时保留文件；这里不重发未知请求，不启动另一套 MCP 或身体。</Text>
-        </Stack></Accordion>
-      </Stack></Accordion>
+      {!qiandengServer && <Accordion open={false} title="千灯纪网站接入（可选）">{accountSetup}</Accordion>}
       <Accordion open={false} title="账户与皮肤详情"><Stack gap={10}>
         <Text>当前认证：{settings.server?.auth === "microsoft" ? "Microsoft 授权账号" : "离线昵称"}。离线昵称不能登录要求正版验证的服务器。Microsoft 授权后的实际角色名以本机账户页为准。</Text>
         {state.operator?.available ? <FileDownload href={state.operator.url} label="打开本机账户页：授权、状态与取消" openExternal /> : <Alert tone="info" message={state.operator?.guidance || "账户接口暂不可用。启用本机账户端口并显式启动匹配的执行器；Java 客户端请使用自身登录入口。"} />}

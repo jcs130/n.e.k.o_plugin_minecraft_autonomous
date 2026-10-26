@@ -18,6 +18,11 @@ if not (VENDOR / "agent_mc_autonomy/__init__.py").is_file():
     raise pytest.UsageError("Run the real SDK's neko-plugin sync for this plugin before testing.")
 # SDK release checks launch plain pytest, outside the runtime dependency loader.
 sys.path.insert(0, str(VENDOR))
+# Match the real entry's platform selection before collecting tests which
+# directly import framework dependencies from an official Linux-built package.
+_platform_spec = importlib.util.spec_from_file_location('test_platform_bootstrap', ROOT / 'platform_dependencies.py')
+_platform_module = importlib.util.module_from_spec(_platform_spec)
+_platform_spec.loader.exec_module(_platform_module)
 SDK_ROOTS = [*([Path(os.environ["NEKO_ROOT"])] if os.environ.get("NEKO_ROOT") else []), *ROOT.parents]
 for candidate in SDK_ROOTS:
     if (candidate / "plugin/sdk/plugin/__init__.py").is_file():
@@ -57,6 +62,8 @@ def plugin_instance(monkeypatch, tmp_path, run_async, plugin_module):
         raise AssertionError("Unit tests must not connect, launch processes, or send messages.")
 
     monkeypatch.setenv("NEKO_STORAGE_SELECTED_ROOT", str(tmp_path))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / 'local-app-data'))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / 'xdg-data'))
     monkeypatch.setattr(socket, "create_connection", forbidden_io)
     monkeypatch.setattr(socket.socket, "connect", forbidden_io)
     monkeypatch.setattr(socket.socket, "connect_ex", forbidden_io)
