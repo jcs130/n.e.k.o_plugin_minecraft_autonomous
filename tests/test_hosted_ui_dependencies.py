@@ -36,4 +36,12 @@ def test_panel_dependency_graph_is_supported_by_host(monkeypatch):
             "path": "ui/panel-refresh.js",
             "source": (root / "ui/panel-refresh.js").read_text(encoding="utf-8"),
         },
+        {
+            "path": "ui/native-controls.tsx",
+            "source": (root / "ui/native-controls.tsx").read_text(encoding="utf-8"),
+        },
+        {
+            "path": "ui/deepseek-presets.js",
+            "source": (root / "ui/deepseek-presets.js").read_text(encoding="utf-8"),
+        },
     ]

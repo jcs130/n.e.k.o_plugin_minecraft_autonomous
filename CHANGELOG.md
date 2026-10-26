@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.110 (candidate)
+
+- Add a write-only existing-server login password form. Credentials are scoped to the server and player; Windows storage uses current-user encryption. Refreshing or leaving the field empty preserves an existing credential. Active external bodies are not changed.
+- Expose optional native combat, survival reflex, journey, idle, scaffold and container pacing controls in a collapsed advanced section. Defaults stay with the core.
+- Add explicit DeepSeek thinking-off, low, high, max and adaptive presets. Adaptive requests use the same model and existing coordinator; ordinary work can disable thinking while failures/new intent use low thinking.
+
 ## 0.6.109 — Installation repair
 
 - Offer an explicit prepared-runtime upgrade button when a saved offline binding is incompatible. Keep account, model, memory and data settings; active embedded play must stop first, and external/custom runtimes are not selected automatically.

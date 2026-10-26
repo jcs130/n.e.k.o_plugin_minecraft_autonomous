@@ -9,7 +9,9 @@ from agent_mc_autonomy.decision_profiles import validate_policy
 from agent_mc_autonomy.host_context import HostContextPort
 from agent_mc_autonomy.host_context import metadata as host_context_metadata
 from agent_mc_autonomy.model_config import HttpPlannerConfig, planner_settings
+from agent_mc_autonomy.native_settings import GROUPS
 from agent_mc_autonomy.readiness import installation_readiness, validation_feedback
+from agent_mc_autonomy.server_login import prepare_login, public_login
 from agent_mc_autonomy.viewer import viewer_observation
 from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
 
@@ -37,6 +39,7 @@ OPERATOR_UNAVAILABLE = {"available": False, "reason": "operator_capability_unava
 EDITABLE = {
     "autonomy": {"enabled", "min_decision_seconds", "idle_decision_seconds", "max_decisions", "max_tool_rounds", "context_tokens", "context_mode", "context_history_headroom_tokens", "max_output_tokens", "model_timeout_seconds", "review_model_pool"},
     "server": {"host", "port", "username", "auth", "version", "connection_type", "login_config_file"},
+    "native": {*GROUPS, "scaffold_blocks", "remote_textures"},
     "qiandengji": {"identity_file"},
     "operator": {"port"},
     "decision_policy": {"enabled","routine_output_tokens","complex_output_tokens","routine_parameters","complex_parameters"},
@@ -77,6 +80,7 @@ def public_config(settings):
         "fast": asdict(settings.fast),
         "memory": asdict(settings.memory),
         "knowledge": asdict(settings.knowledge),
+        "native": settings.native.public_config(),
     }
 
 
@@ -193,7 +197,8 @@ class Dashboard:
                 heartbeat_state["structured_delivery"] = load_commentary(port.directory / "structured-review.json")
             heartbeat_state["delivery_state"] = ("final_decision" if (review.get("result") or {}).get("acknowledged") else "inspected_awaiting_final" if review.get("inspected_at") else "notification_" + str(review.get("notification_status", "not_delivered")))
             heartbeat_state["next"] = "主脑尚未完成最终判断；重新检查当前心跳后提交简短判断。" if heartbeat_state["delivery_failure"] else None
-            return {"settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
+            return {"server_login": public_login(settings.data_root(self.data_path()), settings),
+                    "settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
                                  "qiandengji": {"identity_file": configured_identity(raw)},
                                  "heartbeat": asdict(heartbeat), "host_context": asdict(HostContextSettings.parse(raw)), "planner": public_planner(raw.get("planner", {})),
                                  "speech_output": {"enabled": raw.get("speech_output", {}).get("enabled", False),
@@ -223,6 +228,8 @@ class Dashboard:
                 return Err({"code": "operator_capability_unavailable", "message": OPERATOR_UNAVAILABLE["guidance"]})
             original = await self.config.dump()
             merged = {**original, **{key: {**original.get(key, {}), **value} for key, value in settings.items()}}
+            if "native" in settings:
+                merged["native"] = settings["native"]
             parsed = Settings.parse(merged)
             configured_identity(merged)
             extension_mode(merged)
@@ -242,7 +249,9 @@ class Dashboard:
                     self._generation += 1
                     self._configuration_writes += 1
             try:
-                await self.config.update(settings)
+                replace_native = bool(settings.get("native") and original.get("native"))
+                patch = {**settings, **({"native": {**settings["native"], "__replace__": True}} if replace_native else {})}
+                await self.config.update(patch)
                 if set(settings) & {"host_context", "heartbeat"}:
                     port = review_port(self, parsed)
                     with self._control_lock:
@@ -258,6 +267,51 @@ class Dashboard:
             return Ok({"saved": True, "running_session_changed": False, "applies": "next_explicit_start_or_observer_read"})
         except (ValueError, TypeError) as error:
             return Err(validation_feedback(error))
+
+    @ui.action(label="保存服务器登录", tone="primary")
+    @plugin_entry(id="configure_server_login", name="配置私有服务器登录", kind="service",
+                  description="保存当前服务器和账号的私有登录凭据；密码不回显，不连接、不注册、不发送游戏命令。",
+                  input_schema={"type": "object", "properties": {
+                      "connection": {"type": "object"}, "enabled": {"type": "boolean"},
+                      "password": {"type": "string", "writeOnly": True, "maxLength": 128}}, "required": ["enabled"]})
+    async def configure_server_login(self, enabled: bool, password: str = "", connection: dict | None = None, **_):
+        fenced = False
+        try:
+            if type(enabled) is not bool or not isinstance(password, str):
+                raise ValueError("login_password_invalid")
+            raw = await self.config.dump()
+            current = Settings.parse(raw)
+            if current.runtime_mode == "external":
+                return Err({"code": "external_runtime_use_standalone_config", "message": "独立身体请在原私有运行配置中修改登录，面板不覆盖它。"})
+            connection = {} if connection is None else connection
+            if not isinstance(connection, dict) or set(connection) - (EDITABLE["server"] - {"login_config_file"}):
+                raise ValueError("login_connection_invalid")
+            selected = Settings.parse({**raw, "server": {**raw.get("server", {}), **connection}})
+            with self._control_lock:
+                if self._worker and self._worker.snapshot().get("worker_alive"):
+                    return Err({"code": "settings_runtime_active", "message": "请先停止游玩，再修改服务器登录。"})
+                self._configuration_writes += 1
+                fenced = True
+            login_file = ""
+            if enabled:
+                selected.require_server()
+                if not password and current.identity == selected.identity and current.login_config_file:
+                    state = public_login(selected.data_root(self.data_path()), selected)
+                    if state["managed"] and not state["configured"]:
+                        raise ValueError("login_material_invalid")
+                    login_file = current.login_config_file
+                else:
+                    login_file = str(prepare_login(selected.data_root(self.data_path()), selected, password))
+            result = await self.save_settings({"server": {**connection, "login_config_file": login_file}})
+            if isinstance(result, Err):
+                return result
+            return Ok({"saved": True, "enabled": enabled, "applies": "next_explicit_start", "command_sent": False})
+        except (OSError, ValueError):
+            return Err({"code": "server_login_not_saved", "message": "未保存登录。请填写服务器与原玩家昵称；首次启用或更换账号须填写密码（1–128字符，无空白）。留空只保留当前账号已保存的凭据。"})
+        finally:
+            if fenced:
+                with self._control_lock:
+                    self._configuration_writes -= 1
 
     @ui.action(label="保存插件设置", tone="primary")
     @plugin_entry(id="save_settings_hosted", name="托管面板保存设置", kind="service",

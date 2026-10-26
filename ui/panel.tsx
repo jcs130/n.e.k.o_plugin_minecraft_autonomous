@@ -7,6 +7,8 @@ import type { PluginSurfaceProps } from "@neko/plugin-ui"
 import { installationGuidance, preparedRuntimeSelection } from "./installation-guidance.js"
 import { applyConnectionPreset } from "./connection-presets.js"
 import { startPanelRefresh } from "./panel-refresh.js"
+import NativeControls from "./native-controls"
+import { deepseekPreset } from "./deepseek-presets.js"
 
 export default function Panel(props: PluginSurfaceProps<any>) {
   const { state, actions } = props
@@ -34,6 +36,8 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const [inviteFile, setInviteFile] = useState("")
   const [agentName, setAgentName] = useState("")
   const [portalResult, setPortalResult] = useState<any>(null)
+  const [loginPassword, setLoginPassword] = useState("")
+  const [loginEnabled, setLoginEnabled] = useState<boolean | null>(null)
   useEffect(() => {
     if (editing || busy) return
     return startPanelRefresh({refresh:props.api.refresh,document})
@@ -128,6 +132,20 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <Field label="登录方式"><Select value={connection.auth||"offline"} options={[{value:"offline",label:"离线昵称"},{value:"microsoft",label:"Microsoft 正版账号"}]} onChange={v=>{if(!runtime.game_connected)setConnection("auth",v)}} /></Field>
         </Grid>
         <Text>连接已有的 Minecraft Java 1.21.1 服务器。「本机原版」需要本机已开服；完整包不包含游戏服务端或模型。正版账号由本人完成官方授权。</Text>
+        <Accordion open={!!loginPassword} title="服务器登录密码（仅需要 /login 的服务器填写）"><Stack gap={8}>
+          <Switch checked={loginEnabled??state.server_login?.enabled??false} label="自动登录这个服务器上的原账号"
+            onChange={setLoginEnabled} />
+          <Field label="游戏登录密码"><Input type="password" value={loginPassword}
+            disabled={busy||external||runtime.game_connected||runtime.worker_alive}
+            placeholder={state.server_login?.configured?"已配置；留空保留，填写可更换":"首次启用时填写游戏密码"}
+            onChange={v=>{setLoginPassword(v);if(v)setLoginEnabled(true)}} /></Field>
+          <Text>先填写原玩家昵称。密码只在本机保存，不会回显；Windows 使用当前用户加密。连接后仅响应服务器登录提示，收到成功回执才继续。不会注册或修改游戏密码。</Text>
+          <Button disabled={busy||external||runtime.game_connected||runtime.worker_alive||!connection.username}
+            onClick={async()=>{if(await call("configure_server_login",{connection:Object.fromEntries(Object.entries(connection).filter(([key])=>key!=="login_config_file")),
+              enabled:loginEnabled??state.server_login?.enabled??false,password:loginPassword})) {
+              setLoginPassword("");setLoginEnabled(null);setConnectionDraft(null)
+            }}}>保存连接与登录</Button>
+        </Stack></Accordion>
         <Switch label="用当前猫娘声音解说游戏" checked={!!withNarration} onChange={setNarrationDraft} />
         <Accordion open={false} title="更多连接选项（外观、角色、模型与扩展）"><Stack gap={10}>
         <Grid cols={2}>
@@ -141,6 +159,9 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         </Stack></Accordion>
         <Inline>
           <Button tone="primary" disabled={busy||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
+            if(loginPassword||loginEnabled!==null) {
+              setFailure(true);setNotice("请先点击“保存连接与登录”，再开始游玩。");return
+            }
             if(await call("quick_start",{connection,goal,use_neko_model:usingHostModel,
               appearance:appearanceDraft??settings.viewer?.default_appearance??"bundled:yui-ysm",
               extension_mode:extensionDraft??settings.extension_pack?.mode??"auto",
@@ -312,12 +333,22 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <Switch checked={draft.presentation?.enabled === true} label="让 Neko 解说重要游戏变化" onChange={v=>change("presentation","enabled",v)} />
           {field("presentation","target","解说角色（留空跟随 Neko 当前角色）")}
           {field("presentation","min_interval_seconds","普通解说最小间隔（秒，含决策心跳）","number")}
+          <NativeControls value={draft.native??{}} onChange={v=>setDraft({...draft,native:v})} />
           <Switch checked={draft.perception.enabled} label="接收核心真实图像（无图像或模型时文字回退）" onChange={v=>change("perception","enabled",v)} />
           <Switch checked={draft.perception.mineral_vision === true} label="允许查询已接收区块中被遮挡的矿物（默认关闭）" onChange={v=>change("perception","mineral_vision",v)} />
           <Text>关闭时依靠真实视线与历史笔记。开启仅允许查询 32 格内已接收的矿物，不显示未加载地形，不改变画面、移动或施工权限。</Text>
           <Accordion open={false} title="模型 API 接入"><Stack gap={10}>
             <Field label="动作规划使用的模型"><Select value={draft.planner?.route || "host"} options={[{value:"host",label:"使用 Neko 模型绑定（默认）"},{value:"direct",label:"单独配置模型服务"}]} onChange={v=>change("planner","route",v)} /></Field>
             {draft.planner?.route === "direct" && <Stack gap={10}>
+              <Field label="DeepSeek 响应与成本方案"><Select value="" options={[
+                {value:"",label:"选择方案（不自动调用模型）"},{value:"off",label:"关闭思考：优先响应"},
+                {value:"low",label:"低思考：均衡"},{value:"adaptive",label:"动态：常规不思考，失败/新任务低思考"},
+                {value:"high",label:"高思考"},{value:"max",label:"最大思考"}]}
+                onChange={v=>{if(!v)return;const preset=deepseekPreset(draft,v);setDraft(preset);
+                  setParametersText(JSON.stringify(preset.planner.parameters,null,2));
+                  setRoutineParameters(JSON.stringify(preset.decision_policy.routine_parameters,null,2));
+                  setComplexParameters(JSON.stringify(preset.decision_policy.complex_parameters,null,2))}} /></Field>
+              <Text>方案使用官方 deepseek-flash。动态方案按当前证据切换同一模型的请求参数，不增加模型调用；仍受输出预算与180秒期限约束。Neko 模型绑定路线的思考参数由宿主管理，插件不能代改。</Text>
               <Field label="模型厂商"><Select value={draft.planner.provider} options={[
                 {value:"openai-compatible",label:"自建 / 其他兼容服务"},{value:"qwen",label:"阿里云百炼 / 通义千问"},
                 {value:"deepseek",label:"DeepSeek"},{value:"kimi",label:"Kimi / 月之暗面"},{value:"glm",label:"智谱 GLM"},
