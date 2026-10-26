@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.108 — Development update
+
+- Consume autonomy 0.2.103 and core rc.99: retain death terminal states, actionable goal-plan repair, observed command recovery and declared read-only server queries.
+- Expose native `mc_query` in both planning modes and allow it during navigation without creating body work, caching sent receipts or relaxing command permissions.
+- Verify long Windows backend paths independently of the host executable's MAX_PATH setting; identify the missing relative member when a runtime is incomplete, while preserving all hashes and package-root boundaries.
+- Refresh installation documentation and validate the official plugin package and matching Windows offline runtime independently of the developer workspace. Public release remains 0.6.70.
+
 ## 0.6.107 — Development update
 
 - Consume autonomy 0.2.101 and the integrated core rc.95: authored opening spells recheck real admission, read-only scripts retain fast combat availability, and unavailable current facts stay explicitly unknown.
