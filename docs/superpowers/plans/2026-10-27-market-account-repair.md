@@ -9,7 +9,7 @@
 ## Work and verification
 
 - [x] Reproduce API link and imported-identity/password material failure with isolated fixtures. Fix `/ui/model-api`, report safe specific account failures, and accept the plugin's own scoped login material without bypassing fresh ready validation.
-- [x] Review and merge current core rc.106 at 87749fde, build the fixed LF package, run core regression/type/packed consumer checks and consume framework 0.2.108.
+- [x] Review and merge current core rc.107 at 5f8f5166, build the fixed LF package, run core regression/type/packed consumer checks and consume framework 0.2.109. Core 2349 tests passed (6 optional skips); source and installed wheel each passed 1586 framework tests.
 - [x] Keep required MCP/jsonschema/OpenAI SDK dependencies. Add verified Windows dependency resources and a stdlib bootstrap inside the plugin, leaving official Ubuntu workflow and SDK unchanged.
 - [ ] Build the same final `.neko-plugin` with the official CLI; formally import and exercise real native imports on Windows and Linux. Check dependency versions, deep paths, private login, read-only panels, and update/config preservation.
 - [x] Replay the real free-model reasoning-history rejection against Neko's validator offline, then verify normal tool follow-ups live. Preserve advertised-tool, schema, ordering and unknown guards.

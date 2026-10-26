@@ -47,14 +47,14 @@
 | 项目 | 内容 |
 | --- | --- |
 | 插件 | `minecraft_autonomous` **0.6.111 开发候选，尚未公开发布**；Windows x64 / Neko CPython 3.11 与标准 Linux 包分别验收 |
-| 自主框架 | `agent-mc-autonomy@0.2.108`，固定 Git 来源见 `pyproject.toml` |
-| 游戏核心 | `agent-mc-world@0.5.7-rc.106`，提交 `87749fde9dc21152d1165794f0ba7c0ebe32663a` |
-| 核心归档 SHA256 | `c4679a2e55ce96420d631a80b6b51cbc613cbac8659cf181e65e94332de29ece` |
+| 自主框架 | `agent-mc-autonomy@0.2.109`，固定 Git 来源见 `pyproject.toml` |
+| 游戏核心 | `agent-mc-world@0.5.7-rc.107`，提交 `5f8f5166ff9ac2ee65f96088af204f551e50b286` |
+| 核心归档 SHA256 | `1949e498fa3ef5fa121bbf45a50b93ed9dea2a00c95dae9fc14fe7cedc96eb54` |
 | 共享观战 | `mc-visual-console@8b89927db49c9547a50029f039cbfe534d38e78b` |
 | 宿主公共接口核对 | 当前真实 Neko SDK；适配层、正式包导入及身体运行分别验收 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT；随包保留素材和第三方许可 |
 
-2026-10-27 候选核对核心 `87749fde`。当前框架的 `core_distribution/source.json` 固定 rc.106 与 `8b89927d`；更新源码或通过离线测试不会自动更换用户正在运行的身体。升级需要先正常停止旧版游玩，再准备匹配资源并通过插件中心导入同版插件。
+2026-10-27 候选核对核心 `5f8f5166`。当前框架的 `core_distribution/source.json` 固定 rc.107 与 `8b89927d`；更新源码或通过离线测试不会自动更换用户正在运行的身体。升级需要先正常停止旧版游玩，再准备匹配资源并通过插件中心导入同版插件。
 
 本候选固定框架的原生身份修复：普通任务和脚本可能同号，协调器、原始证据、观战回执和离线恢复评估按类型与编号核对。
 同类型迟到受理仍受保护，缺类型的旧证据不自动确认终态或解除未知。核心保留迟到放置保护拒绝修复。

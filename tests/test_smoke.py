@@ -14,7 +14,7 @@ def test_plugin_manifest_exists() -> None:
     assert project["version"] == "0.6.111"
     assert project["dependencies"][0] == (
         "agent-mc-autonomy @ git+https://github.com/jcs130/minecraft-ai-friend.git@"
-        "9a36ae35ab7c57a71d19a59d18d5fc7a79d76ad8#subdirectory=packages/agent-mc-autonomy"
+        "b6d6fd5b9b637d209eb1ea59976c797f58492868#subdirectory=packages/agent-mc-autonomy"
     )
 
 

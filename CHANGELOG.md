@@ -6,10 +6,11 @@
 - Fix the Plugin API button to `/ui/model-api` and distinguish identity-file, account/connection, login-material and website-readiness errors.
 - Accept the password form's scoped Windows-encrypted login material for imported identities while preserving fresh ready validation and native authentication.
 - Replace required private paths with an identity file chooser and a private invitation form. Keep interrupted account requests for status checks and generate login material outside the installed plugin directory.
-- Consume verified framework 0.2.108/core rc.106, retaining actionable reflection inputs, confirmed weapon preparation, bounded navigation failure handling, operation evidence and survival safeguards.
+- Consume verified framework 0.2.109/core rc.107, retaining actionable reflection inputs, confirmed weapon preparation, bounded navigation failure handling, operation evidence and survival safeguards. Equip stored items through a confirmed empty hotbar slot without displacing the selected protected stack.
 - Accept verified runtime resources through both logical and canonical Windows app-data paths, including packaged hosts, without weakening member or source verification.
 - Project provider reasoning and replay metadata out of requests to Neko's documented model gateway, preserving original audit/history data and exact tool-call receipts. Keep safe gateway rejection codes visible.
 - Confirm game stop inside the plugin panel so sandboxed hosts do not depend on browser modal dialogs; prevent a second start while the first connection is being prepared.
+- Clear the displayed pending list only after native disconnect confirms its own queue has stopped; retain uncertain state when disconnect is unconfirmed and keep original task outcomes intact.
 - Show native current health when its maximum is unknown; keep custom health above 20 and hide the percentage meter until a valid maximum is observed.
 - Open the complete 3D viewer directly from the status page instead of embedding a page whose security policy blocks framing. Keep read-only status, queue and audit views in the plugin.
 
