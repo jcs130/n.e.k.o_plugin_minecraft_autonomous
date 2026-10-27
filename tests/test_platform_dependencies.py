@@ -1,7 +1,9 @@
 import hashlib
 import importlib.util
 import json
+import shutil
 import sys
+import time
 import zipfile
 from pathlib import Path
 
@@ -64,6 +66,93 @@ def test_extra_importable_cache_file_is_not_trusted(tmp_path):
     (target / 'json.py').write_text('injected = True', encoding='utf-8')
     with pytest.raises(ValueError, match='cache_integrity_failed'):
         module.prepare_layer(assets, tmp_path / 'cache')
+
+
+def windows_sharing_error():
+    error = PermissionError('temporary file sharing lock')
+    error.winerror = 5
+    return error
+
+
+def test_temporary_windows_commit_lock_is_retried_without_reextracting(tmp_path, monkeypatch):
+    module = loader()
+    assets = fixture_layer(tmp_path)
+    original = Path.rename
+    attempts, sleeps = [], []
+
+    def rename(source, target):
+        attempts.append(source)
+        if len(attempts) < 3:
+            raise windows_sharing_error()
+        return original(source, target)
+
+    monkeypatch.setattr(Path, 'rename', rename)
+    monkeypatch.setattr(time, 'sleep', sleeps.append)
+    target = module.prepare_layer(assets, tmp_path / 'cache')
+    assert (target / 'library/__init__.py').read_bytes() == b'fixed = True\n'
+    assert len(attempts) == 3 and len(set(attempts)) == 1 and len(sleeps) == 2
+
+
+def test_persistent_windows_commit_denial_stays_bounded(tmp_path, monkeypatch):
+    module = loader()
+    attempts = []
+
+    def denied(source, target):
+        attempts.append(source)
+        raise windows_sharing_error()
+
+    monkeypatch.setattr(Path, 'rename', denied)
+    monkeypatch.setattr(time, 'sleep', lambda _: None)
+    with pytest.raises(PermissionError):
+        module.prepare_layer(fixture_layer(tmp_path), tmp_path / 'cache')
+    assert len(attempts) == 6
+    assert list((tmp_path / 'cache').iterdir()) == []
+
+
+def test_commit_retry_never_replaces_an_invalid_concurrent_target(tmp_path, monkeypatch):
+    module = loader()
+    attempts = []
+
+    def competing(source, target):
+        attempts.append(source)
+        (target / 'library').mkdir(parents=True)
+        (target / 'library/__init__.py').write_text('tampered', encoding='utf-8')
+        raise windows_sharing_error()
+
+    monkeypatch.setattr(Path, 'rename', competing)
+    with pytest.raises(PermissionError):
+        module.prepare_layer(fixture_layer(tmp_path), tmp_path / 'cache')
+    assert len(attempts) == 1
+    assert next((tmp_path / 'cache').glob('w-*/library/__init__.py')).read_text('utf-8') == 'tampered'
+
+
+def test_commit_accepts_a_fully_verified_concurrent_winner(tmp_path, monkeypatch):
+    module = loader()
+
+    def competing(source, target):
+        shutil.copytree(source, target)
+        raise FileExistsError('another probe committed the same resource')
+
+    monkeypatch.setattr(Path, 'rename', competing)
+    target = module.prepare_layer(fixture_layer(tmp_path), tmp_path / 'cache')
+    assert (target / 'library/__init__.py').read_bytes() == b'fixed = True\n'
+    assert not list((tmp_path / 'cache').glob('.python-*'))
+
+
+def test_unclassified_commit_error_is_not_retried(tmp_path, monkeypatch):
+    module = loader()
+    attempts = []
+
+    def unknown(source, target):
+        attempts.append(source)
+        error = OSError('unclassified rename failure')
+        error.winerror = 123
+        raise error
+
+    monkeypatch.setattr(Path, 'rename', unknown)
+    with pytest.raises(OSError, match='unclassified'):
+        module.prepare_layer(fixture_layer(tmp_path), tmp_path / 'cache')
+    assert len(attempts) == 1
 
 
 def test_required_native_dependencies_import_on_actual_supported_platform(plugin_module):

@@ -8,6 +8,7 @@ import shutil
 import stat
 import sys
 import tempfile
+import time
 import zipfile
 from pathlib import Path, PurePosixPath
 
@@ -62,6 +63,22 @@ def _verify(root, files):
         return False
 
 
+def _commit_layer(temporary, target, files):
+    """Retry only bounded Windows sharing/access races; never replace a cache."""
+    delays = (0.05, 0.1, 0.2, 0.4, 0.8)
+    for attempt in range(len(delays) + 1):
+        try:
+            temporary.rename(target)
+            return
+        except OSError as error:
+            # Another probe may have committed exactly the same verified layer.
+            if _verify(target, files):
+                return
+            if target.exists() or getattr(error, 'winerror', None) not in {5, 32, 33} or attempt == len(delays):
+                raise
+            time.sleep(delays[attempt])
+
+
 def prepare_layer(assets, cache):
     """Verify fixed resource bytes, then prepare a short, immutable user cache."""
     manifest = json.loads((assets / 'win32-cp311-x64.json').read_text('utf-8'))
@@ -100,12 +117,7 @@ def prepare_layer(assets, cache):
                     shutil.copyfileobj(source, output)
         if not _verify(temporary, files):
             raise ValueError('plugin_python_layer_integrity_failed')
-        try:
-            temporary.rename(target)
-        except OSError:
-            # Concurrent metadata/start probes may prepare the same bytes.
-            if not _verify(target, files):
-                raise
+        _commit_layer(temporary, target, files)
         return target
     finally:
         if temporary.exists():

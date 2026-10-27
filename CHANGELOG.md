@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.113
+
+- Retry a transient Windows sharing/access denial while committing the fully verified plugin-owned Python layer. Retry only an absent destination, at most six attempts; a concurrent target is accepted only after full member verification. Persistent denial and invalid caches still fail without replacing them.
+- Reuse the unchanged, SHA256-pinned rc.109 runtime resources from 0.6.112 so existing prepared users do not download the same components again. No Neko/SDK, registry or protection changes.
+- Keep the original 0.6.112 release and evidence as a prerelease after the cold-import failure; publish this corrected package through the standard Market workflow.
+
 ## 0.6.112
 
 - Add an explicit Windows "Prepare game components" action after normal Market installation. Download the exact version's public runtime, verify archive and all members, prepare the short cache, and preserve account/model/data settings without starting gameplay.
