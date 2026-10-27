@@ -1,6 +1,6 @@
 # Minecraft Autonomous · 我的世界自主游玩
 
-**0.6.114**：在 Neko App 安装后，打开插件点「准备游戏组件」，等待就绪，再选择服务器、身份和模型并点击开始。无需管理员权限、开启 Windows 长路径支持或填写 Node/资源路径；不会自动启动游戏或调用模型。0.6.114 更新核心至 rc.110，修复满快捷栏装备快捷名，保留共享观战的投射物与盾牌显示修复及 Windows 依赖缓存的有界重试。游戏组件按新固定摘要准备，已校验同版缓存可复用。
+**0.6.114**：在 Neko App 安装后，打开插件点「准备游戏组件」，等待就绪，再选择服务器、身份和模型并点击开始。无需管理员权限、开启 Windows 长路径支持或填写 Node/资源路径；不会自动启动游戏或调用模型。0.6.114 修复供应商工具回执元数据导致 Neko 后续回合被拒绝的问题，更新核心至 rc.110，修复满快捷栏装备快捷名，保留共享观战的投射物与盾牌显示修复及 Windows 依赖缓存的有界重试。游戏组件按新固定摘要准备，已校验同版缓存可复用。
 
 下载与安装：[GitHub v0.6.114](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.114) · [Neko 扩展市场（ID 106）](https://market.project-neko.cn/#/plugin/106)。Neko 主程序、SDK 和官方工作流未修改。
 
@@ -28,13 +28,13 @@
 2. **Neko 插件中心 → 导入**，选择同目录的 `.neko-plugin`。首次使用，在官方「插件 API」保存一个支持文字和工具调用的模型，并在本插件「配置」页绑定 `decision`。已有槽直接复用；支持图像时可同时绑定 `vision`。面板提供这两个页面的直接入口。
 3. **插件「配置与控制」→ 选择服务器 →「开始自主游玩」**。本机默认 `127.0.0.1:25565`；离线昵称留空会自动生成并保存，下一次沿用。也可选择千灯纪公网预设或填写自己的服务器。默认跟随当前猫娘解说、使用随包 YUI YSM、进入游戏后自动打开观战，持续运行直到停止。
 
-首次仍需本人已有的 **Neko、可用规划模型、可进入的服务器**。完整包不包含 Minecraft 服务端或模型权重，也不共享作者的 API 密钥、密码和私有世界。「本机原版」表示连接已经开好的本机服务器；Microsoft 正版账号需本人通过官方页面授权。Neko 的主/辅助 API 密钥不会自动变成插件模型绑定。
+首次仍需本人已有的 **Neko、可用规划模型、可进入的服务器**。完整包不包含 Paper / Minecraft 服务端、世界存档或模型权重，也不共享作者的 API 密钥、密码和私有世界。「本机原版」表示连接已经开好的本机服务器；Microsoft 正版账号需本人通过官方页面授权。Neko 的主/辅助 API 密钥不会自动变成插件模型绑定。
 
 后续使用直接打开插件点击开始；不用重新填写资源路径、音色 ID 或 TTS 密钥。Neko 使用自定义端口时，在高级设置修改本机语音地址。网页音效和音乐需要浏览器允许播放。想安静观战，可关闭首页的猫娘解说开关。导入、保存或重开 Neko 都不会自动进服。
 
 [带截图的使用指南](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/download/v0.6.114/NEKO-MC-0.6.114-User-Guide.zip)也已包含在完整包内。下图来自官方 CI 包在 Windows Neko 中的实机验收；画面和位置仅代表当次采样，不是长期生存通过证明。
 
-![免费 Agent API 驱动的真实 3D 观战](https://raw.githubusercontent.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/v0.6.114/docs/screenshots/0.6.112-live-3d.jpg)
+![DeepSeek 官方绑定驱动的真实 3D 观战](https://raw.githubusercontent.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/v0.6.114/docs/screenshots/0.6.114-deepseek-live-3d.jpg)
 
 资源保存在 `%LOCALAPPDATA%/AgentMCWorld/installations`，准备成功后可删除解压目录。升级先停止旧版游玩，再运行新版安装入口并正常导入。若插件提示旧离线环境不匹配，点击「使用已安装的新版运行环境」，保留账号、模型和数据，然后再次开始。`prepare.cmd` 兼容旧安装方式。明确自定义的运行路径不会混入离线包默认值，外部观察模式不接管已有执行器。
 
