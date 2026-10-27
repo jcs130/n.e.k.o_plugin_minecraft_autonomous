@@ -1,6 +1,7 @@
 """User-initiated Market resource preparation, using the canonical installer."""
 
 import asyncio
+import contextvars
 import copy
 import os
 import platform
@@ -152,7 +153,12 @@ class RuntimePreparation:
                     return Ok(self.runtime_setup_state())
                 self._runtime_setup_cancel = threading.Event()
                 self._setup_progress({"phase": "preparing", "downloaded_bytes": 0, "total_bytes": spec.bytes})
-                self._runtime_setup_task = asyncio.create_task(self._run_runtime_setup(raw, spec))
+                # This explicit job outlives the admitting UI call. Do not
+                # inherit that completed call's RPC deadline into later saves;
+                # each own-config RPC keeps the SDK's ordinary bounded timeout.
+                self._runtime_setup_task = asyncio.create_task(
+                    self._run_runtime_setup(raw, spec), context=contextvars.Context()
+                )
             return Ok(self.runtime_setup_state())
         except (OSError, ValueError, KeyError) as error:
             code = str(error).split(":", 1)[0]
@@ -169,6 +175,7 @@ class RuntimePreparation:
 
     async def _run_runtime_setup(self, original, spec):
         write_started = False
+        patch = None
         try:
             cache = Path(os.environ["LOCALAPPDATA"]) / "AgentMCWorld/downloads"
             bundle = await asyncio.to_thread(
@@ -183,23 +190,37 @@ class RuntimePreparation:
                     raise ValueError("runtime_bundle_download_cancelled")
                 self._configuration_writes += 1
             try:
+                patch = {
+                    "runtime": {"bundle_root": str(bundle.root), "bundle_manifest_sha256": bundle.manifest_sha256},
+                    "backend": {"node": str(bundle.node), "directory": str(bundle.backend)},
+                    "viewer": {
+                        "renderer_directory": str(bundle.renderer),
+                        "catalog_file": str(bundle.catalog),
+                        "bundled_appearance_catalog_file": str(bundle.appearances),
+                    },
+                }
                 write_started = True
-                await self.config.update(
-                    {
-                        "runtime": {"bundle_root": str(bundle.root), "bundle_manifest_sha256": bundle.manifest_sha256},
-                        "backend": {"node": str(bundle.node), "directory": str(bundle.backend)},
-                        "viewer": {
-                            "renderer_directory": str(bundle.renderer),
-                            "catalog_file": str(bundle.catalog),
-                            "bundled_appearance_catalog_file": str(bundle.appearances),
-                        },
-                    }
-                )
+                await self.config.update(patch)
             finally:
                 with self._control_lock:
                     self._configuration_writes -= 1
             self._setup_progress({"phase": "ready"})
         except Exception as error:
+            # A lost reply does not prove failure or authorize a repeated write.
+            # Confirm only the exact resource selection through a fresh read.
+            if write_started and patch is not None:
+                try:
+                    saved = await self.config.dump()
+                    confirmed = all(
+                        saved.get(section, {}).get(key) == value
+                        for section, fields in patch.items()
+                        for key, value in fields.items()
+                    )
+                except Exception:
+                    confirmed = False
+                if confirmed:
+                    self._setup_progress({"phase": "ready"})
+                    return
             code = str(error).split(":", 1)[0].removeprefix("runtime_bundle_")
             message = (
                 "组件已校验，但配置保存结果需要核对。请先刷新页面确认状态；未自动开始游戏。"

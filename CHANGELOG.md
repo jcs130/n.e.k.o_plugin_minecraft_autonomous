@@ -4,6 +4,7 @@
 
 - Add an explicit Windows "Prepare game components" action after normal Market installation. Download the exact version's public runtime, verify archive and all members, prepare the short cache, and preserve account/model/data settings without starting gameplay.
 - Show real download/extraction progress, bounded failures, cancellation and retry; keep a same-version complete offline package available. No administrator privileges, registry change, custom updater or Neko/SDK patch is needed.
+- Give the explicit component job its own request context after the admitting UI call returns. Keep ordinary SDK timeouts; confirm a lost configuration reply by one read instead of replaying the write.
 - Consume framework 0.2.110 and canonical core rc.108, preserving surrounding awareness independently of camera direction. Synchronize the b99464bb viewer fixes for terrain initialization, held items, projectile/defense display and public progress.
 
 ## 0.6.111

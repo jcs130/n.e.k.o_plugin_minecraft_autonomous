@@ -1,6 +1,7 @@
 """Explicit UI resource jobs; never connect, run Node, or call a real model."""
 
 import asyncio
+import contextvars
 import copy
 import threading
 from types import SimpleNamespace
@@ -205,3 +206,52 @@ def test_simultaneous_rpc_clicks_share_one_job_after_config_read(setup, monkeypa
 
     run_async(scenario())
     assert calls == [1]
+
+
+def test_resource_job_does_not_inherit_expired_admitting_request(setup, monkeypatch, run_async):
+    plugin, module, _, writer, bundle = setup
+    admitting_request = contextvars.ContextVar("admitting-request", default=None)
+    monkeypatch.setattr(module, "prepare_release", lambda *a, **k: bundle)
+
+    async def scoped_write(patch):
+        if admitting_request.get() is not None:
+            raise TimeoutError("original UI request expired before component preparation finished")
+        await writer(patch)
+
+    monkeypatch.setattr(plugin.config, "update", scoped_write)
+
+    async def scenario():
+        token = admitting_request.set("short-control-request")
+        try:
+            await plugin.prepare_runtime()
+        finally:
+            admitting_request.reset(token)
+        await plugin._runtime_setup_task
+
+    run_async(scenario())
+    assert plugin.runtime_setup_state()["phase"] == "ready" and writer.await_count == 1
+    assert plugin._configuration_writes == 0
+
+
+@pytest.mark.parametrize("committed", [False, True])
+def test_unknown_config_write_reads_back_once_without_replaying(setup, monkeypatch, run_async, committed):
+    plugin, module, _, writer, bundle = setup
+    monkeypatch.setattr(module, "prepare_release", lambda *a, **k: bundle)
+
+    async def lost_reply(patch):
+        if committed:
+            await writer(patch)
+        raise TimeoutError("configuration response lost")
+
+    update = AsyncMock(side_effect=lost_reply)
+    monkeypatch.setattr(plugin.config, "update", update)
+
+    async def scenario():
+        await plugin.prepare_runtime()
+        await plugin._runtime_setup_task
+
+    run_async(scenario())
+    assert update.await_count == 1
+    assert plugin.runtime_setup_state()["phase"] == ("ready" if committed else "failed")
+    assert plugin.config.dump.await_count == 3
+    assert plugin._configuration_writes == 0
