@@ -122,6 +122,49 @@ def test_host_history_keeps_unavailable_placeholder_valid_for_gateway(plugin_mod
     assert history[1]["content"] is None
 
 
+@pytest.mark.parametrize("extension,function_extension", [({"index": 0}, {}),
+    ({"provider_extension": {"private": "opaque"}}, {"provider_extension": "private"})])
+def test_host_tool_history_projects_stream_extensions_for_real_gateway(plugin_module, run_async, extension, function_extension):
+    from plugin.server.domain.model_config import ModelSlot
+    from plugin.server.model_gateway.request import prepare_chat_request
+
+    planner = module(plugin_module, "neko_planner")
+    call = {"id": "stream-call", "type": "function",
+            "function": {"name": "mc_bag", "arguments": "{}", **function_extension}, **extension}
+    history = [{"role": "user", "content": "inspect inventory"},
+               {"role": "assistant", "content": None, "tool_calls": [call]},
+               {"role": "tool", "tool_call_id": "stream-call", "content": "original receipt"}]
+    original = copy.deepcopy(history)
+    create = AsyncMock(return_value=model_response())
+    tools = [{"type": "function", "function": {"name": "mc_bag", "parameters": {"type": "object", "properties": {}}}}]
+    run_async(planner.NekoPlanner(gateway(create), 1024).decide(history, tools))
+    slot = ModelSlot(name="offline", protocol="openai_chat", base_url="https://example.invalid/v1",
+                     model="offline", capabilities=["text", "tool_calling"])
+    wire = create.call_args.kwargs
+    prepared = prepare_chat_request(slot, wire)
+    assert prepared["messages"][1]["tool_calls"] == [{"id": "stream-call", "type": "function",
+        "function": {"name": "mc_bag", "arguments": "{}"}}]
+    assert prepared["messages"][2] == history[2]
+    assert history == original
+
+
+def test_host_tool_history_keeps_invalid_standard_fields_rejected(plugin_module):
+    from plugin.server.domain.model_config import ModelSlot
+    from plugin.server.model_gateway.errors import ModelGatewayError
+    from plugin.server.model_gateway.request import prepare_chat_request
+
+    planner = module(plugin_module, "neko_planner")
+    slot = ModelSlot(name="offline", protocol="openai_chat", base_url="https://example.invalid/v1",
+                     model="offline", capabilities=["text", "tool_calling"])
+    for bad in [{"id": "invalid", "type": "function", "function": {"name": "mc_bag", "arguments": []}, "index": 0},
+                {"type": "function", "function": {"name": "mc_bag", "arguments": "{}"}, "index": 0}]:
+        messages = planner.host_history([{"role": "user", "content": "facts"},
+            {"role": "assistant", "content": None, "tool_calls": [bad]},
+            {"role": "tool", "tool_call_id": "invalid", "content": "receipt"}])
+        with pytest.raises(ModelGatewayError):
+            prepare_chat_request(slot, {"model": "decision", "messages": messages})
+
+
 def test_host_request_rejection_exposes_safe_code_without_provider_body(plugin_module, run_async):
     planner = module(plugin_module, "neko_planner")
     error = APIStatusError("private detail", response=httpx.Response(400, request=httpx.Request("POST", "http://unused")),

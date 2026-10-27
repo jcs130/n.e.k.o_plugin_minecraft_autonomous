@@ -30,6 +30,18 @@ def host_history(messages):
     for message in messages:
         row = {key: copy.deepcopy(value) for key, value in message.items()
                if key in {"role", "content", "name", "tool_calls", "tool_call_id"}}
+        # Streaming providers may retain an index or opaque extensions in a
+        # completed tool call. These are audit data, not public Chat fields.
+        # Keep standard values untouched so malformed calls still fail closed.
+        if isinstance(row.get("tool_calls"), list):
+            for index, call in enumerate(row["tool_calls"]):
+                if not isinstance(call, dict):
+                    continue
+                projected = {key: value for key, value in call.items() if key in {"id", "type", "function"}}
+                if isinstance(projected.get("function"), dict):
+                    projected["function"] = {key: value for key, value in projected["function"].items()
+                                             if key in {"name", "arguments"}}
+                row["tool_calls"][index] = projected
         # An unavailable response has no assistant content. Keep its empty
         # placeholder valid without changing canonical history or audit data.
         if row.get("role") == "assistant" and row.get("content") is None and not row.get("tool_calls"):

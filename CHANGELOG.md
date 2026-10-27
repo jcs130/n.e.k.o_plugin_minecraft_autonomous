@@ -2,6 +2,7 @@
 
 ## 0.6.114
 
+- Project completed provider tool-call metadata onto the public Chat subset before continuing a Neko model request. Preserve original IDs, arguments and audit history; malformed standard fields still fail validation.
 - Consume framework 0.2.112 and pinned canonical core rc.110, fixing named equipment shortcuts when the hotbar is full.
 - Retain the shared b99464bb visualization fixes for observed projectiles and active shield defense.
 - Ship a new hash-pinned Windows runtime while preserving short-cache installation, bounded cache commit retries and explicit game start/stop. Neko, SDK and managed workflows are unchanged.
