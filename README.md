@@ -2,9 +2,9 @@
 
 **0.6.113**：在 Neko App 安装后，打开插件点「准备游戏组件」，等待就绪，再选择服务器、身份和模型并点击开始。无需管理员权限、开启 Windows 长路径支持或填写 Node/资源路径；不会自动启动游戏或调用模型。0.6.113 为 Windows 依赖缓存提交加入有界重试；执行组件与 0.6.112 相同，按已固定的摘要复用已校验缓存，无需重复下载。
 
-下载与安装：[GitHub v0.6.112](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.113) · [Neko 扩展市场（ID 106）](https://market.project-neko.cn/#/plugin/106)。Neko 主程序、SDK 和官方工作流未修改。
+下载与安装：[GitHub v0.6.113](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.113) · [Neko 扩展市场（ID 106）](https://market.project-neko.cn/#/plugin/106)。Neko 主程序、SDK 和官方工作流未修改。
 
-**推荐 Windows 用户在 App「插件管理 → 获取新插件」安装 Minecraft Autonomous，然后点「准备游戏组件」（约 1.02 GB）。** 同一份标准 Market 包支持 Windows x64 与 Linux x64 / CPython 3.11，Windows 依赖由插件自己的校验资源选择；一键完整游戏组件针对 Windows x64。网络不可用时，可下载 [0.6.112 完整 Windows ZIP](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/download/v0.6.113/NEKO-MC-0.6.113-Windows.zip)，完整解压 → 双击「一键安装.cmd」→ 在 Neko 导入相邻插件。音画、浏览器和截图指南均已包含，不需要 Git/npm/Python builder 或另拼公共组件。旧[官网默认包](https://mc.kangqiang.site/downloads/neko)仍为 0.6.109，请按版本选择。详见 [App 安装与更新](docs/app-install-and-update.md)。
+**推荐 Windows 用户在 App「插件管理 → 获取新插件」安装 Minecraft Autonomous，然后点「准备游戏组件」（约 1.02 GB）。** 同一份标准 Market 包支持 Windows x64 与 Linux x64 / CPython 3.11，Windows 依赖由插件自己的校验资源选择；一键完整游戏组件针对 Windows x64。网络不可用时，可下载 [0.6.113 完整 Windows ZIP](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/download/v0.6.113/NEKO-MC-0.6.113-Windows.zip)，完整解压 → 双击「一键安装.cmd」→ 在 Neko 导入相邻插件。音画、浏览器和截图指南均已包含，不需要 Git/npm/Python builder 或另拼公共组件。旧[官网默认包](https://mc.kangqiang.site/downloads/neko)仍为 0.6.109，请按版本选择。详见 [App 安装与更新](docs/app-install-and-update.md)。
 
 此前开发版本 0.6.96 固定框架 0.2.90 / 核心 rc.70：新增显式可选的 llama.cpp 工具语法适配，长字符串边界仍由原生完整 schema 在派发前校验，CPU 计数使用实际发送的声明。默认模型路由和游戏启动方式不变；千灯纪邀请接入、现有人设和记忆继续沿用。当时仅作开发部署。
 
@@ -22,7 +22,7 @@
 
 ## 完整离线包安装
 
-普通用户从 [GitHub 0.6.112 Release](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.113) 选择 **NEKO-MC-0.6.113-Windows.zip**。它已包含 Node、固定后端及依赖、3D 观战、1.21.1 贴图、音效/音乐、浏览器运行时、YUI 外观和截图指南，无需 Git、Python builder、npm 或手工拼 vendor。针对 Windows x64 / Neko CPython 3.11。新资源已在 `longPathAware=false` 的进程中实际安装并完成全量校验，系统注册表未修改；既有中文/空格、长路径和移动原目录复用边界保留。
+普通用户从 [GitHub 0.6.113 Release](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.113) 选择 **NEKO-MC-0.6.113-Windows.zip**。它已包含 Node、固定后端及依赖、3D 观战、1.21.1 贴图、音效/音乐、浏览器运行时、YUI 外观和截图指南，无需 Git、Python builder、npm 或手工拼 vendor。针对 Windows x64 / Neko CPython 3.11。新资源已在 `longPathAware=false` 的进程中实际安装并完成全量校验，系统注册表未修改；既有中文/空格、长路径和移动原目录复用边界保留。
 
 1. **完整解压 → 双击「一键安装.cmd」**。校验并准备资源后，自动打开中文入门页；不会启动或修改 Neko、模型和游戏服务器。
 2. **Neko 插件中心 → 导入**，选择同目录的 `.neko-plugin`。首次使用，在官方「插件 API」保存一个支持文字和工具调用的模型，并在本插件「配置」页绑定 `decision`。已有槽直接复用；支持图像时可同时绑定 `vision`。面板提供这两个页面的直接入口。

@@ -10,7 +10,7 @@
 
 当前版本 **0.6.113** 的同一个官方包支持 **Windows x64 与 Linux x64 / CPython 3.11**。它保留标准 Linux vendor，并通过插件自己的完整校验资源选择 Windows 原生依赖；不替换或重载宿主已经加载的依赖，不修改 Neko 或 SDK。旧市场 0.6.109 包只有 Linux 原生依赖，不要混用旧包的验收记录。
 
-Windows 首次使用可直接在 App 市场安装，再点插件内的「准备游戏组件」。离线使用下载 [0.6.112 完整包](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/download/v0.6.113/NEKO-MC-0.6.113-Windows.zip)：完整解压、运行「一键安装.cmd」准备短缓存，再在 Neko App 导入相邻 `.neko-plugin`。单独插件文件不内嵌约 1.02 GB 的完整音画与执行组件，由显式准备按钮获取。最新资源已在 `longPathAware=false` 的进程中实装并全量校验，注册表未修改；既有中文/空格、长路径和移动源目录复用边界保留。官网原默认包仍为 0.6.109，更新官网默认版本是独立部署。
+Windows 首次使用可直接在 App 市场安装，再点插件内的「准备游戏组件」。离线使用下载 [0.6.113 完整包](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/download/v0.6.113/NEKO-MC-0.6.113-Windows.zip)：完整解压、运行「一键安装.cmd」准备短缓存，再在 Neko App 导入相邻 `.neko-plugin`。单独插件文件不内嵌约 1.02 GB 的完整音画与执行组件，由显式准备按钮获取。最新资源已在 `longPathAware=false` 的进程中实装并全量校验，注册表未修改；既有中文/空格、长路径和移动源目录复用边界保留。官网原默认包仍为 0.6.109，更新官网默认版本是独立部署。
 
 打开本插件，只需填写服务器与玩家身份、绑定 Neko 的 `decision` 模型，然后显式开始。只有要求 `/login` 的服务器才需要展开「服务器登录密码」并保存原账号密码。不会替用户注册或设置新的服务器密码。
 
