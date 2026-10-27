@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.114
+
+- Consume framework 0.2.112 and pinned canonical core rc.110, fixing named equipment shortcuts when the hotbar is full.
+- Retain the shared b99464bb visualization fixes for observed projectiles and active shield defense.
+- Ship a new hash-pinned Windows runtime while preserving short-cache installation, bounded cache commit retries and explicit game start/stop. Neko, SDK and managed workflows are unchanged.
+
 ## 0.6.113
 
 - Retry a transient Windows sharing/access denial while committing the fully verified plugin-owned Python layer. Retry only an absent destination, at most six attempts; a concurrent target is accepted only after full member verification. Persistent denial and invalid caches still fail without replacing them.
