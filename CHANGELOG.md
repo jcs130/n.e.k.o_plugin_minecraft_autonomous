@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.112 (candidate)
+## 0.6.112
 
 - Add an explicit Windows "Prepare game components" action after normal Market installation. Download the exact version's public runtime, verify archive and all members, prepare the short cache, and preserve account/model/data settings without starting gameplay.
 - Show real download/extraction progress, bounded failures, cancellation and retry; keep a same-version complete offline package available. No administrator privileges, registry change, custom updater or Neko/SDK patch is needed.
