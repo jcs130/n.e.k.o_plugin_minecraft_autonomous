@@ -76,3 +76,14 @@ def test_native_default_selection_replaces_old_overrides(plugin_instance, run_as
     assert raw['native'] == {'journey': {'enabled': False}}
     assert isinstance(run_async(plugin_instance.save_settings({'native': {}})), Ok)
     assert run_async(plugin_instance.config.dump())['native'] == {}
+
+
+def test_bounded_perception_settings_save_without_enabling_mineral_vision(plugin_instance, run_async):
+    native = {'perception': {'entityView': 'camera', 'entityRange': 32, 'nearbyOccludedRange': 0}}
+    assert isinstance(run_async(plugin_instance.save_settings({'native': native})), Ok)
+    raw = run_async(plugin_instance.config.dump())
+    assert raw['native'] == native
+    assert Settings.parse(raw).mineral_vision is False
+    rejected = run_async(plugin_instance.save_settings({'native': {'perception': {'nearbyOccludedRange': 17}}}))
+    assert isinstance(rejected, Err)
+    assert run_async(plugin_instance.config.dump())['native'] == native

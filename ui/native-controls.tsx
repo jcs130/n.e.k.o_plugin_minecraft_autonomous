@@ -8,6 +8,8 @@ const booleans = [
   ["visual","background","后台获取图像"],
 ]
 const numbers = [
+  ["perception","entityRange","实体感知距离（格，1–64）",64],
+  ["perception","nearbyOccludedRange","附近遮挡实体提示距离（格，0–16）",8],
   ["reflex","fleeHealth","脱战生命阈值",10], ["reflex","reactCooldownSec","受击反应间隔（秒）",8],
   ["combat","engageRadius","交战半径（格）",3], ["combat","chaseMax","追击距离（格）",6],
   ["combat","maxSec","单次战斗时长（秒）",30], ["combat","space","近战间距（格）",2.6],
@@ -32,6 +34,9 @@ export default function NativeControls({value = {}, onChange}: {value:any,onChan
   return <Accordion open={false} title="MC 核心行为（通常无需修改）"><Stack gap={10}>
     <Text>留空或“跟随核心”沿用当前核心默认值。只在下次显式启动生效；不改变服务器权限、碰撞、未知回执或库存保护。</Text>
     <Grid cols={2}>
+      <Field label="实体感知视角"><Select value={value.perception?.entityView??"default"}
+        options={[{value:"default",label:"跟随核心（推荐）"},{value:"surroundings",label:"周边感知"},{value:"camera",label:"镜头范围"}]}
+        onChange={v=>set("perception","entityView",v==="default"?undefined:v)} /></Field>
       {booleans.map(([group,key,label])=><Field key={`${group}.${key}`} label={label}>
         <Select value={value[group]?.[key] === undefined?"default":String(value[group][key])}
           options={[{value:"default",label:"跟随核心（推荐）"},{value:"true",label:"开启"},{value:"false",label:"关闭"}]}

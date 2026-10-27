@@ -3,8 +3,8 @@
   "platform": "win32",
   "architecture": "x64",
   "url": "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/download/v0.6.112/NEKO-MC-0.6.112-Resources-Windows.zip",
-  "bytes": 1090486140,
-  "sha256": "5576d6cfc4f548a5c17f01bdd75d445b7128ccec897b7391354b444809eab2b5",
-  "manifest_sha256": "d38e605230108fad59bfa600ddf4cf2c6962ff4ba9a65d24660b54cf10cc5be4",
-  "expanded_bytes": 2590860442
+  "bytes": 1090489782,
+  "sha256": "8b6e9e80821da323880c2c05f3511a78d5d4920a2cbe49350dca932f0f67b436",
+  "manifest_sha256": "9d92dc6b6a6a09c4275d0447fcda069309a4401dfb4515a3c3af5190ad4e1f9c",
+  "expanded_bytes": 2590871543
 }
