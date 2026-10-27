@@ -24,13 +24,25 @@ test('local metadata stays separate from external renderer acceptance', () => {
   assert.doesNotMatch(panel, /\{state.installation\?\.(backend|viewer)\b/);
 });
 
-test('prepared runtime guidance keeps one preparation step and custom modes', () => {
+test('prepared runtime guidance keeps one visible preparation step and custom modes', () => {
   for (const prepared_runtime of ['missing','incompatible']) {
-    assert.match(installationGuidance({prepared_runtime},false,'').preparedRuntime, /prepare.cmd/);
+    assert.match(installationGuidance({prepared_runtime},false,'').preparedRuntime, /准备游戏组件/);
   }
   assert.match(installationGuidance({prepared_runtime:'prepared'},false,'').preparedRuntime, /显式启动.*完整性/);
   assert.match(installationGuidance({prepared_runtime:'custom'},false,'').preparedRuntime, /自定义.*不会混入/);
   assert.match(installationGuidance({prepared_runtime:'external'},true,'').preparedRuntime, /独立执行器/);
+});
+
+test('preparation progress is bounded and actionable without paths or command lines',()=>{
+  assert.equal(typeof guidance.preparationView,'function');
+  const view=guidance.preparationView({setup:{available:true,active:true,phase:'downloading',downloaded_bytes:512,total_bytes:1024}});
+  assert.equal(view.progress,50);assert.match(view.label,/下载/);assert.equal(view.active,true);
+  assert.equal(guidance.preparationView({setup:{phase:'extracting',files:20,total_files:10}}).progress,100);
+  assert.equal(guidance.preparationView({setup:{phase:'extracting',files:-1,total_files:10}}).progress,null);
+  assert.equal(guidance.preparationView({setup:{phase:'verifying'}}).progress,null);
+  for(const phase of ['constructor','__proto__','untrusted'])assert.match(guidance.preparationView({setup:{phase}}).label,/准备游戏组件/);
+  assert.match(guidance.preparationView({setup:{phase:'ready'}}).label,/已就绪/);
+  assert.match(guidance.preparationView({setup:{phase:'failed'}}).button,/重试/);
 });
 
 test('an explicit old prepared-runtime selection preserves account, model and data choices', () => {

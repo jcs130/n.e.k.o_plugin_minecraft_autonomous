@@ -28,10 +28,11 @@ from .prepared_runtime import require_prepared_runtime, resolve_host_runtime
 from .qiandengji_account import AccountError, start_failure
 from .qiandengji_account import preflight as qiandengji_preflight
 from .qiandengji_panel import QiandengjiPanel
+from .runtime_preparation import RuntimePreparation
 
 
 @neko_plugin
-class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, NekoAutonomyTools, NekoHeartbeat, NekoPresentation, NekoNarration, NekoPluginBase):
+class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, RuntimePreparation, NekoAutonomyTools, NekoHeartbeat, NekoPresentation, NekoNarration, NekoPluginBase):
     def __init__(self, ctx):
         super().__init__(ctx)
         self._control_lock = threading.RLock()
@@ -52,6 +53,7 @@ class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, NekoAutonomyTools, N
 
     @lifecycle(id="shutdown")
     async def on_shutdown(self, **_):
+        await self._close_runtime_setup()
         settings = Settings.parse(await self.config.dump())
         if settings.runtime_mode == "external":
             return await self.status()
@@ -105,6 +107,8 @@ class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, NekoAutonomyTools, N
     )
     async def start(self, goal: str = "survive", **_):
         with self._control_lock:
+            if self._setup_active():
+                return Err({"code": "runtime_setup_active", "message": "游戏组件正在准备，完成后再点击开始。"})
             if self._worker and self._worker.snapshot()["worker_alive"]:
                 return Ok(self._worker.snapshot())
             self._generation += 1

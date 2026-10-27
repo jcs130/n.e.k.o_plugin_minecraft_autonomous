@@ -4,7 +4,7 @@ import {
   Alert, Accordion, JsonView, FileDownload, useState, useEffect,
 } from "@neko/plugin-ui"
 import type { PluginSurfaceProps } from "@neko/plugin-ui"
-import { installationGuidance, preparedRuntimeSelection } from "./installation-guidance.js"
+import { installationGuidance, preparedRuntimeSelection, preparationView } from "./installation-guidance.js"
 import { applyConnectionPreset } from "./connection-presets.js"
 import { startPanelRefresh } from "./panel-refresh.js"
 import NativeControls from "./native-controls"
@@ -58,6 +58,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const usingHostModel = hostModel ?? settings.planner?.route !== "direct"
   const withNarration = narrationDraft ?? (settings.speech_output?.enabled || !settings.autonomy?.enabled)
   const installation = installationGuidance(state.installation, external, state.viewer_url)
+  const preparation = preparationView(state.installation)
   const preparedSelection = preparedRuntimeSelection(settings, state.installation)
   const action = (id: string) => actions.find(a => a.entry_id === id || a.id === id)
   const call = async (id: string, args: any) => {
@@ -185,8 +186,18 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       <Card title="连接与启动"><Stack gap={12}>
         <Text>选好服务器，点击开始即可。默认自带 YUI 模型、3D 观战、贴图和声音，跟随当前猫娘解说；无需填写 Node、资源路径或音色密钥。</Text>
         <Text>{installation.preparedRuntime}</Text>
+        {(!external&&['missing','incompatible'].includes(state.installation?.prepared_runtime)||preparation.active||['ready','failed','cancelled'].includes(preparation.phase))&&<Stack gap={8}>
+          <Text>{preparation.label}{preparation.progress!==null?` · ${preparation.progress}%`:''}</Text>
+          {preparation.progress!==null&&<progress aria-label="游戏组件准备进度" max={100} value={preparation.progress} style={{width:'100%'}} />}
+          {preparation.message&&<Alert tone={preparation.phase==='failed'?'danger':'info'} message={preparation.message} />}
+          {preparation.active?<Button disabled={busy} onClick={()=>call('cancel_runtime_preparation',{})}>取消组件准备</Button>
+            :preparation.phase!=='ready'&&preparation.available&&<Button disabled={busy||runtime.worker_alive||runtime.game_connected}
+              onClick={()=>call('prepare_runtime',{})}>{preparation.button}{preparation.size?`（约 ${preparation.size}）`:''}</Button>}
+          <Text>只准备当前版本的组件，不启动游戏、不调用模型；下载完成后再点击“开始自主游玩”。</Text>
+          <FileDownload href="https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.112" label="网络不可用？下载同版本完整离线包" openExternal />
+        </Stack>}
         {preparedSelection && <Stack gap={6}>
-          <Button disabled={busy||runtime.game_connected||runtime.worker_alive||runtime.autonomy_running}
+          <Button disabled={busy||preparation.active||runtime.game_connected||runtime.worker_alive||runtime.autonomy_running}
             onClick={()=>call("save_settings",{settings:preparedSelection})}>使用已安装的新版运行环境</Button>
           <Text>先停止旧版游玩并运行新版安装入口，再点此按钮。只重选本机运行资源，保留账号、模型、记忆和其它设置；不会自动开始游戏。</Text>
         </Stack>}
@@ -231,7 +242,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>默认使用 Neko 官方本机地址 http://127.0.0.1:48911。自定义端口可在高级设置修改；留空角色跟随当前猫娘。</Text>
         </Stack></Accordion>
         <Inline>
-          <Button tone="primary" disabled={!stateReady||busy||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
+          <Button tone="primary" disabled={!stateReady||busy||preparation.active||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
             if(loginPassword||loginEnabled!==null) {
               setFailure(true);setNotice("请先点击“保存连接与登录”，再开始游玩。");return
             }
@@ -239,7 +250,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
               appearance:appearanceDraft??settings.viewer?.default_appearance??"bundled:yui-ysm",
               extension_mode:extensionDraft??settings.extension_pack?.mode??"auto",
               character:characterDraft??settings.heartbeat?.target??"",narration:!!withNarration}))setConnectionDraft(null)
-          }}>{!stateReady?"正在读取连接…":runtime.game_connected?"正在自主游玩":runtime.phase==="starting"?"正在连接…":"开始自主游玩"}</Button>
+          }}>{!stateReady?"正在读取连接…":preparation.active?"正在准备游戏组件…":runtime.game_connected?"正在自主游玩":runtime.phase==="starting"?"正在连接…":"开始自主游玩"}</Button>
           <Button disabled={busy||runtime.game_connected||!connectionDraft} onClick={async()=>{
             if(await call("save_settings",{settings:{server:connection}}))setConnectionDraft(null)
           }}>仅保存连接</Button>
@@ -284,7 +295,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             const ok = await call("panel_intent", {goal, mode, request_id:id})
             if (ok) { setGoal(""); setRequestId("") }
           }}>投递目标</Button>
-          {!external && <Button disabled={busy || !goal.trim()} onClick={async () => { await call("panel_start", {goal}) }}>按此目标开始</Button>}
+          {!external && <Button disabled={busy || preparation.active || !goal.trim()} onClick={async () => { await call("panel_start", {goal}) }}>按此目标开始</Button>}
         </Inline>
         {requestId && <Text>请求 ID：{requestId}。确认不明时保持相同内容重试。</Text>}
         <Text>受理、原生动作完成、规划器报告和实际目标达成是不同状态。主脑决定阶段目标，独立框架继续规划和执行；正常工作无需重新派发。</Text>

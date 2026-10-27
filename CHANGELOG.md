@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.6.111 (candidate)
+## 0.6.112 (candidate)
+
+- Add an explicit Windows "Prepare game components" action after normal Market installation. Download the exact version's public runtime, verify archive and all members, prepare the short cache, and preserve account/model/data settings without starting gameplay.
+- Show real download/extraction progress, bounded failures, cancellation and retry; keep a same-version complete offline package available. No administrator privileges, registry change, custom updater or Neko/SDK patch is needed.
+- Consume framework 0.2.110 and canonical core rc.108, preserving surrounding awareness independently of camera direction. Synchronize the b99464bb viewer fixes for terrain initialization, held items, projectile/defense display and public progress.
+
+## 0.6.111
 
 - Keep the standard official Market workflow and package. Include a verified Windows CPython 3.11 x64 dependency resource in that same package; select it inside the plugin without changing Neko or its shared interpreter.
 - Fix the Plugin API button to `/ui/model-api` and distinguish identity-file, account/connection, login-material and website-readiness errors.

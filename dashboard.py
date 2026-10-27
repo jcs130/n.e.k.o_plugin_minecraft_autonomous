@@ -216,7 +216,8 @@ class Dashboard:
                                  "extension_pack": {"mode": extension_mode(raw)}}, "heartbeat": heartbeat_state, "runtime": state, "audit": audit_sample(directory),
                     "server_pack": {k:v for k,v in bundled_extension_status(raw).items() if k not in {"module", "sha256"}},
                     "model_slots": ["decision", "vision", "fast"],
-                    "installation": {**installation_readiness(settings, self.cache_path()), "prepared_runtime": prepared},
+                    "installation": {**installation_readiness(settings, self.cache_path()), "prepared_runtime": prepared,
+                                     "setup": self.runtime_setup_state()},
                     "operator": operator_link(settings, settings.data_root(self.data_path())) if operator_link else OPERATOR_UNAVAILABLE,
                     **viewer_observation(settings, snapshot)}
         except (OSError, ValueError, KeyError):

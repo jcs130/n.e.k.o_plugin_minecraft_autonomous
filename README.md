@@ -1,6 +1,8 @@
 # Minecraft Autonomous · 我的世界自主游玩
 
-当前发布 **0.6.111**：框架 0.2.109 / MC 核心 rc.107 / 共享观战 8b89927d。[GitHub Release](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.111) 与 [Neko 扩展市场（ID 106）](https://market.project-neko.cn/#/plugin/106) 已发布。修复 Windows 平台依赖、长路径和打包宿主路径校验、账号启动、免费 API 历史字段、停止后待结算显示及观战入口。Neko 主程序、SDK 和官方工作流未修改。
+开发候选 **0.6.112**：框架 0.2.110 / MC 核心 rc.108 / 共享观战 b99464bb。市场安装后可在插件页点「准备游戏组件」，自动下载、完整校验并安装到短缓存，无需管理员权限或开启 Windows 长路径支持；游戏仍由用户明确点击开始。候选尚未公开发布。
+
+当前公开 **0.6.111**：[GitHub Release](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.111) 与 [Neko 扩展市场（ID 106）](https://market.project-neko.cn/#/plugin/106)。Neko 主程序、SDK 和官方工作流未修改。
 
 **Windows 首次使用下载 [0.6.111 完整 ZIP](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/download/v0.6.111/NEKO-MC-0.6.111-Windows.zip)**，完整解压 → 双击「一键安装.cmd」→ 在 Neko 插件管理器导入同目录插件。全部音画、浏览器及截图指南已包含，无需 Git/npm/Python builder、注册表修改或另拼公共组件。0.6.111 的同一个标准 Market 包支持 Windows x64 与 Linux x64 / CPython 3.11；Windows 依赖由插件自己的校验资源选择。市场安装的是插件本体，完整游戏运行资源仍需另行准备。旧[官网默认包](https://mc.kangqiang.site/downloads/neko)仍为 0.6.109，请按版本选择。详见 [App 安装与更新](docs/app-install-and-update.md)。
 

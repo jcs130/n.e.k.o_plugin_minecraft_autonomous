@@ -35,4 +35,4 @@ def resolve_host_runtime(raw):
 
 def require_prepared_runtime(state):
     if state in {"missing", "incompatible"}:
-        raise ValueError("离线运行环境缺失或不匹配。请解压完整离线包，双击 prepare.cmd 后重试；保存设置不会启动游戏。")
+        raise ValueError("运行环境尚未就绪。请在插件页面点击“准备游戏组件”；离线完整包也可运行 prepare.cmd。保存设置不会启动游戏。")
