@@ -13,6 +13,7 @@
   backend. Keep core, plugin/frontend, viewer and server deployment changes in their own
   projects; private runtime state and world saves never belong in this repository.
 - Keep the official managed Verify, Release and Ruff templates intact.
+- Before proposing host/SDK changes for Market platform dependencies, test a plugin-owned, hash-verified platform resource with the unchanged official workflow. Verify the same genuine CI artifact on Windows (cold and host-preloaded imports) and Linux; a different Windows build is not equivalent evidence. Keep manual-user acceptance in the normal app UI and record actual screenshots.
 - Do not connect to games, start services, call models or send messages during tests.
   Use temporary storage and the real SDK from `NEKO_ROOT` or the CI host checkout.
 - Keep automatic startup and autonomy disabled by default. Preserve explicit stop.

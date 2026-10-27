@@ -1,8 +1,8 @@
 # Minecraft Autonomous · 我的世界自主游玩
 
-当前发布 **0.6.109**：框架 0.2.103 / MC 核心 rc.99 / 共享观战 8b89927d。已更新[官网下载](https://mc.kangqiang.site/downloads/neko)、[GitHub Release](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.109) 和 Neko 扩展市场（插件 ID 106），修复 Windows 长路径误报和旧离线缓存绑定的升级入口。账号、模型、记忆和数据保留，导入后由本人显式开始。
+当前发布 **0.6.111**：框架 0.2.109 / MC 核心 rc.107 / 共享观战 8b89927d。[GitHub Release](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.111) 与 [Neko 扩展市场（ID 106）](https://market.project-neko.cn/#/plugin/106) 已发布。修复 Windows 平台依赖、长路径和打包宿主路径校验、账号启动、免费 API 历史字段、停止后待结算显示及观战入口。Neko 主程序、SDK 和官方工作流未修改。
 
-**Windows 首次安装直接下载完整 ZIP**，完整解压 → 双击「一键安装.cmd」→ 在 Neko 插件中心导入相邻 Windows 插件。全部音画和浏览器资源已包含，无需安装 Git/npm/Python builder、改注册表或另下公共组件。市场官方工作流的直接插件包为 Linux x64 / CPython 3.11；Windows x64 / CPython 3.11 使用完整包或 Release 中明确标注的 Windows 补充 ZIP，避免混用平台依赖。升级后若提示旧离线环境不匹配，点击「使用已安装的新版运行环境」。详见[本版说明](docs/release-0.6.109.md)。
+**Windows 首次使用下载 [0.6.111 完整 ZIP](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/download/v0.6.111/NEKO-MC-0.6.111-Windows.zip)**，完整解压 → 双击「一键安装.cmd」→ 在 Neko 插件管理器导入同目录插件。全部音画、浏览器及截图指南已包含，无需 Git/npm/Python builder、注册表修改或另拼公共组件。0.6.111 的同一个标准 Market 包支持 Windows x64 与 Linux x64 / CPython 3.11；Windows 依赖由插件自己的校验资源选择。市场安装的是插件本体，完整游戏运行资源仍需另行准备。旧[官网默认包](https://mc.kangqiang.site/downloads/neko)仍为 0.6.109，请按版本选择。详见 [App 安装与更新](docs/app-install-and-update.md)。
 
 此前开发版本 0.6.96 固定框架 0.2.90 / 核心 rc.70：新增显式可选的 llama.cpp 工具语法适配，长字符串边界仍由原生完整 schema 在派发前校验，CPU 计数使用实际发送的声明。默认模型路由和游戏启动方式不变；千灯纪邀请接入、现有人设和记忆继续沿用。当时仅作开发部署。
 
@@ -16,11 +16,11 @@
 
 当前源码补齐持续项目和方法学习的衔接：完整决策模式直接展示原生目标、脚本、战术与游戏记忆工具，实时目标和方法证据进入主脑复盘。原生应急反射独立运行；可选隔离练习需显式启用，脚本登记不等于已学会。保留模型匹配的 CPU 计数和独立复盘预算。官网下载完整包包含下述安装入口；GitHub 旧版的限制见其版本说明。
 
-源码中的 **0.6.111 正在验收，尚未公开发布**：保留服务器登录密码、折叠行为设置和 DeepSeek 直接路线思考预设，增加身份文件选择与邀请表单。标准 Market 包携带插件自己的 Windows 依赖资源，沿用官方构建和更新流程，不修改 Neko 或 SDK；仍须用同一份官方产物完成跨平台验收。公开安装继续使用上方 0.6.109 链接。详见 [App安装与更新](docs/app-install-and-update.md)。
+**0.6.111** 提供只写不读的服务器登录密码、折叠行为设置、DeepSeek 直接路线思考预设、身份文件选择与邀请表单。同一份官方 CI 包已在 Windows 冷导入、宿主预加载依赖和实际 Neko 运行中验收。新账号已通过内置免费 Agent API 真实游玩，不需要先聊天；长期自给生存和扬声器实际播放仍分别待验。
 
 ## 完整离线包安装
 
-普通用户从[官网下载页](https://mc.kangqiang.site/downloads.html)选择 **NEKO 完整安装包 0.6.109**，文件名 **NEKO-MC-0.6.109-Windows.zip**。它已包含 Node、固定后端及依赖、3D 观战、1.21.1 贴图、音效/音乐、浏览器运行时和 YUI 普通皮肤/YSM 模型，无需安装 Git、Python builder、npm 或手工拼 vendor。本包针对 Windows x64 / Neko CPython 3.11，安装范围见 [0.6.109 说明](docs/install-candidate-0.6.109.md)。GitHub Release 和 Market 已同步到 0.6.109。
+普通用户从 [GitHub 0.6.111 Release](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.111) 选择 **NEKO-MC-0.6.111-Windows.zip**。它已包含 Node、固定后端及依赖、3D 观战、1.21.1 贴图、音效/音乐、浏览器运行时、YUI 外观和截图指南，无需 Git、Python builder、npm 或手工拼 vendor。针对 Windows x64 / Neko CPython 3.11；系统自带解压器、中文/空格、最长 367 字符路径、空缓存安装及移动原目录后复用均已核实。
 
 1. **完整解压 → 双击「一键安装.cmd」**。校验并准备资源后，自动打开中文入门页；不会启动或修改 Neko、模型和游戏服务器。
 2. **Neko 插件中心 → 导入**，选择同目录的 `.neko-plugin`。首次使用，在官方「插件 API」保存一个支持文字和工具调用的模型，并在本插件「配置」页绑定 `decision`。已有槽直接复用；支持图像时可同时绑定 `vision`。面板提供这两个页面的直接入口。
@@ -29,6 +29,10 @@
 首次仍需本人已有的 **Neko、可用规划模型、可进入的服务器**。完整包不包含 Minecraft 服务端或模型权重，也不共享作者的 API 密钥、密码和私有世界。「本机原版」表示连接已经开好的本机服务器；Microsoft 正版账号需本人通过官方页面授权。Neko 的主/辅助 API 密钥不会自动变成插件模型绑定。
 
 后续使用直接打开插件点击开始；不用重新填写资源路径、音色 ID 或 TTS 密钥。Neko 使用自定义端口时，在高级设置修改本机语音地址。网页音效和音乐需要浏览器允许播放。想安静观战，可关闭首页的猫娘解说开关。导入、保存或重开 Neko 都不会自动进服。
+
+[带截图的使用指南](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/download/v0.6.111/NEKO-MC-0.6.111-User-Guide.zip)也已包含在完整包内。下图来自官方 CI 包在 Windows Neko 中的实机验收；画面和位置仅代表当次采样，不是长期生存通过证明。
+
+![免费 Agent API 驱动的真实 3D 观战](docs/screenshots/0.6.111-live-3d.jpg)
 
 资源保存在 `%LOCALAPPDATA%/AgentMCWorld/installations`，准备成功后可删除解压目录。升级先停止旧版游玩，再运行新版安装入口并正常导入。若插件提示旧离线环境不匹配，点击「使用已安装的新版运行环境」，保留账号、模型和数据，然后再次开始。`prepare.cmd` 兼容旧安装方式。明确自定义的运行路径不会混入离线包默认值，外部观察模式不接管已有执行器。
 
@@ -42,11 +46,11 @@
 
 动作受理、目标达成、音频生成和桌面播放分别记录，不能互相替代。长期无人干预生存、Microsoft 真账号全流程以及千灯纪全部特色模型/资源仍在持续打磨，详见版本说明。源码开发安装见 [源码指南](docs/install-source.md)，模型与声音见 [接入说明](docs/model-and-voice.md)。
 
-## 当前源码固定组合（0.6.111 开发候选）
+## 当前发布固定组合（0.6.111）
 
 | 项目 | 内容 |
 | --- | --- |
-| 插件 | `minecraft_autonomous` **0.6.111 开发候选，尚未公开发布**；Windows x64 / Neko CPython 3.11 与标准 Linux 包分别验收 |
+| 插件 | `minecraft_autonomous` **0.6.111**；同一个官方包在 Windows x64 与 Linux x64 / CPython 3.11 分别验收 |
 | 自主框架 | `agent-mc-autonomy@0.2.109`，固定 Git 来源见 `pyproject.toml` |
 | 游戏核心 | `agent-mc-world@0.5.7-rc.107`，提交 `5f8f5166ff9ac2ee65f96088af204f551e50b286` |
 | 核心归档 SHA256 | `1949e498fa3ef5fa121bbf45a50b93ed9dea2a00c95dae9fc14fe7cedc96eb54` |
@@ -54,9 +58,9 @@
 | 宿主公共接口核对 | 当前真实 Neko SDK；适配层、正式包导入及身体运行分别验收 |
 | 许可证 | 本插件 Apache-2.0；独立核心 MIT；随包保留素材和第三方许可 |
 
-2026-10-27 候选核对核心 `5f8f5166`。当前框架的 `core_distribution/source.json` 固定 rc.107 与 `8b89927d`；更新源码或通过离线测试不会自动更换用户正在运行的身体。升级需要先正常停止旧版游玩，再准备匹配资源并通过插件中心导入同版插件。
+2026-10-27 发布核对核心 `5f8f5166`。当前框架的 `core_distribution/source.json` 固定 rc.107 与 `8b89927d`；更新源码或通过离线测试不会自动更换用户正在运行的身体。升级需要先正常停止旧版游玩，再准备匹配资源并通过插件中心导入同版插件。
 
-本候选固定框架的原生身份修复：普通任务和脚本可能同号，协调器、原始证据、观战回执和离线恢复评估按类型与编号核对。
+本版保留固定框架的原生身份修复：普通任务和脚本可能同号，协调器、原始证据、观战回执和离线恢复评估按类型与编号核对。
 同类型迟到受理仍受保护，缺类型的旧证据不自动确认终态或解除未知。核心保留迟到放置保护拒绝修复。
 这些回归不证明脚本已执行复用、保护区可通行或长期目标完成。正式发布和实服表现分别记录，不以安装通过代替长期生存验收。
 

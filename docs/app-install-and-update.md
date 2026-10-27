@@ -2,9 +2,9 @@
 
 ## Windows 首次安装
 
-当前已发布的市场 0.6.109 默认包是 **Linux x64 / CPython 3.11**，不是 Windows 包。市场页面中另有 Windows 完整包入口。请勿把“已导入文件”当成其内 Linux 扩展能在 Windows 上运行。
+当前市场 **0.6.111** 的同一个官方包支持 **Windows x64 与 Linux x64 / CPython 3.11**。它保留标准 Linux vendor，并通过插件自己的完整校验资源选择 Windows 原生依赖；不替换或重载宿主已经加载的依赖，不修改 Neko 或 SDK。旧市场 0.6.109 包只有 Linux 原生依赖，不要混用旧包的验收记录。
 
-Windows 用户目前使用官网 [Windows 完整包](https://mc.kangqiang.site/downloads/neko)：完整解压、运行「一键安装.cmd」准备短缓存，再在 Neko App 的插件中心导入其中的 Windows `.neko-plugin`。不需要管理员权限或修改系统长路径注册表。原解压目录的中文/空格/长路径和缓存解析分别验收；源码目录或单独插件文件不等于完整运行环境。
+Windows 首次使用下载 [0.6.111 完整包](https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/download/v0.6.111/NEKO-MC-0.6.111-Windows.zip)：完整解压、运行「一键安装.cmd」准备短缓存，再在 Neko App 的插件管理器导入相邻 `.neko-plugin`。不需要管理员权限或修改系统长路径注册表。系统自带解压器、中文/空格、最长 367 字符路径、空缓存和移动源目录后的缓存复用已分别验收；单独插件文件不包含约 1.12 GB 的完整游戏运行资源。官网原默认包仍为 0.6.109，更新官网默认版本是独立部署。
 
 打开本插件，只需填写服务器与玩家身份、绑定 Neko 的 `decision` 模型，然后显式开始。只有要求 `/login` 的服务器才需要展开「服务器登录密码」并保存原账号密码。不会替用户注册或设置新的服务器密码。
 
@@ -12,7 +12,7 @@ Windows 用户目前使用官网 [Windows 完整包](https://mc.kangqiang.site/d
 
 Neko App 先与 Market 配对，然后把安装请求交给本机插件管理器。管理器核对市场登记的下载地址、版本、包 SHA256 和 payload hash，预检冲突，再执行安装事务。市场只有一份登记包时，不能通过网页按钮把另一份 Windows ZIP 当成这份包安装。
 
-官方 `plugin-market-release.yml` 使用 `ubuntu-latest`，发布工作流保持标准模板。0.6.111 候选保留这份包的 Linux vendor，另在插件自己的 `assets/python-runtime` 内携带逐成员验证的 Windows CPython 3.11 x64 依赖，导入时按实际平台选择。这样沿用官方同一个包、来源锁和更新事务，无需修改 Neko/SDK 或工作流。须先用同一份官方产物完成 Windows 冷导入、宿主已加载依赖和 Linux 验收；候选源码存在不等于 Market 已发布。
+官方 `plugin-market-release.yml` 使用 `ubuntu-latest`，发布工作流保持标准模板。0.6.111 保留这份包的 Linux vendor，另在 `assets/python-runtime` 内携带逐成员验证的 Windows CPython 3.11 x64 依赖，导入时按实际平台选择。已用同一份官方 CI 产物完成 Windows 冷导入、宿主已加载依赖和真实 Neko 运行验收，Linux 官方 Verify/Release 也通过。沿用原同包、来源锁与更新事务。
 
 ## 更新到底会自动做什么
 
