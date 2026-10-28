@@ -11,8 +11,9 @@ changed by this dependency update. Retaining a fact is not evidence that a
 profession was chosen, a trade settled or a skill had an effect; those require
 fresh native receipts after the server is available.
 
-The source revision is currently committed locally, pending remote push
-approval. The local validation build consumes its independently built wheel
-through the official synchronizer's uv override. Its artifact hash and actual
-vendored source checks are recorded in the private deployment receipt; this is
-not a public release or a claim that the unpublished revision can be fetched.
+The source revision is published on the core repository's main branch. The
+initial local validation build consumed its independently built wheel through
+the official synchronizer's uv override, with artifact hash and vendored source
+checks recorded in the private deployment receipt. The pinned Git revision is
+now available for ordinary dependency synchronization. This remains a source
+update, not an npm, release-tag or Market publication.
