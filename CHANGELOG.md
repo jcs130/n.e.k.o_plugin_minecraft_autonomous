@@ -2,7 +2,7 @@
 
 ## 0.6.115
 
-- Consume framework 0.2.113 and canonical core rc.116, with an explicit hash-checked server engine port for current VortexRPG facts.
+- Consume framework 0.2.114 and canonical core rc.116, with an explicit hash-checked server engine port for current VortexRPG facts. Verify the distributed engine manifest against the exact archive before startup.
 - Preserve optional engine fields in hosted settings and clear both engine and presentation when the server extension is disabled. Model, voice, account, game start and downloadable runtime selection remain explicit instance configuration.
 
 ## 0.6.114
