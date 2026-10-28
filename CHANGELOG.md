@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.117
+
+- Consume canonical autonomy 0.2.116, preserving typed repeated-attempt samples even for completed tasks and in compact reviews. No host-local game policy or new decision loop.
+- Keep existing core rc.116, server package, accounts, goals, model and voice configuration; installation does not claim successful autonomous gameplay.
+
 ## 0.6.116
 
 - Consume canonical autonomy 0.2.115: invalid original-page arguments return a failed tool result without stopping gameplay.
