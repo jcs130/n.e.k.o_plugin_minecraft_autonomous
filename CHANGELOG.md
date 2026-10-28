@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.116
+
+- Consume canonical autonomy 0.2.115: invalid original-page arguments return a failed tool result without stopping gameplay.
+- Keep historical local-query reconciliation administrator-only, evidence-bound and separate from gameplay startup; preserve native uncertainty and existing account ledgers.
+
 ## 0.6.115
 
 - Consume framework 0.2.114 and canonical core rc.116, with an explicit hash-checked server engine port for current VortexRPG facts. Verify the distributed engine manifest against the exact archive before startup.
