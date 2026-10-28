@@ -50,6 +50,24 @@ def host_history(messages):
     return rows
 
 
+def token_metadata(usage):
+    """Keep only measured counts; absent details and malformed counts stay unknown."""
+    usage = usage if isinstance(usage, dict) else {}
+
+    def count(value):
+        return value if type(value) is int and value >= 0 else None
+
+    prompt = usage.get("prompt_tokens_details")
+    completion = usage.get("completion_tokens_details")
+    return {
+        "input_tokens": count(usage.get("prompt_tokens")),
+        "output_tokens": count(usage.get("completion_tokens")),
+        "total_tokens": count(usage.get("total_tokens")),
+        "cached_input_tokens": count(prompt.get("cached_tokens")) if isinstance(prompt, dict) else None,
+        "reasoning_tokens": count(completion.get("reasoning_tokens")) if isinstance(completion, dict) else None,
+    }
+
+
 class NekoPlanner:
     def __init__(self, gateway, max_output_tokens):
         self.gateway, self.max_output_tokens = gateway, max_output_tokens
@@ -94,6 +112,7 @@ class NekoPlanner:
                 usage = response.usage.model_dump(exclude_none=True) if getattr(response, "usage", None) else {}
                 return {**result, "model_status": {"route": route, "fallback": fallback, "image_used": route == "vision",
                         "latency_ms": round((time.monotonic() - started) * 1000),
+                        "tokens": token_metadata(usage),
                         "usage": {k: v for k, v in usage.items() if k in {"prompt_tokens", "completion_tokens", "total_tokens"} and type(v) is int}}}
             except (APIConnectionError, APIStatusError, TransportError) as error:
                 code = error_code(error)

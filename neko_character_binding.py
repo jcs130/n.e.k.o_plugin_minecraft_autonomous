@@ -35,11 +35,11 @@ class NekoCharacterBinding:
         return await self._refresh_character_context(force=True)
 
     @plugin_entry(id="load_character_identity_memory", kind="service", name="按需载入角色身份记忆",
-                  description="显式选择本角色已有的少量身份记忆供游戏决策参考。只读记忆服务，不调用模型；不复制近期聊天或其他角色记忆。")
-    async def load_character_identity_memory(self, **_):
-        return await self._refresh_character_context(force=True, include_memories=True)
+                  description="按需选择本角色身份记忆；可用query查自称、口头禅等，最多6条/4000字节。只读CPU词项筛选，不调用模型，不复制近期聊天或其他角色记忆。")
+    async def load_character_identity_memory(self, query: str = "", **_):
+        return await self._refresh_character_context(force=True, include_memories=True, memory_query=query)
 
-    async def _refresh_character_context(self, *, force=False, include_memories=False):
+    async def _refresh_character_context(self, *, force=False, include_memories=False, memory_query=""):
         raw = await self.config.dump()
         settings, config, target = binding_configuration(raw)
         if not settings.enabled or not config.enabled or not config.character_api_url or is_stopped(self):
@@ -55,7 +55,9 @@ class NekoCharacterBinding:
         if not force and previous and previous[0] == key and time.monotonic() - previous[1] < 120:
             return Ok({"available": True, "reason": "refresh_not_due"})
         profile = await character_profile(self, config, target, fresh=True, allow_current=True)
-        memories = await character_memories(config, profile.get("agent_name")) if profile and include_memories else None
+        memories = None
+        if profile and include_memories:
+            memories = await character_memories(config, profile.get("agent_name"), **({"query": memory_query} if memory_query else {}))
         latest = await self.config.dump()
         with self._control_lock:
             if (self._generation != generation or self._configuration_writes or is_stopped(self)

@@ -2,7 +2,9 @@
 
 import hashlib
 import json
+import re
 import time
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urlparse
@@ -107,13 +109,15 @@ def publish_character_binding(profile, directory, identity, expected, *, now=tim
     return HostContextPort(directory, now=now).publish_static(profile, scope=expected[2])
 
 
-async def character_memories(config, actor, *, timeout=3):
+async def character_memories(config, actor, *, query="", timeout=3):
     """Select bounded persistent identity facts from this character's own store.
 
     This read-only endpoint performs no inference. Suppressed and internal
     records stay out. Preserve original IDs and source rather than inventing
     an empty successful recall or copying recent conversation transcripts.
     """
+    if not isinstance(query, str) or len(query.encode()) > 240 or "\x00" in query:
+        raise ValueError("invalid_identity_memory_query")
     if not config.memory_api_url or not actor:
         return None
     from urllib.parse import quote
@@ -147,7 +151,33 @@ async def character_memories(config, actor, *, timeout=3):
                         selected.append(row)
                     subjects.add(row["source"])
                     rows.remove(row)
-        return selected
+        if query.strip():
+            # Explicit CPU-only lexical selection, not a semantic/LLM recall.
+            # Search all this character's identity facts before applying the cap.
+            terms = set(re.findall(r"[a-z0-9_]+|[\u3400-\u9fff]+", unicodedata.normalize("NFKC", query).casefold()))
+            terms.update(part[index:index + 2] for part in list(terms) if len(part) > 2
+                         and re.fullmatch(r"[\u3400-\u9fff]+", part) for index in range(len(part) - 1))
+            ranked = []
+            for index, row in enumerate([*selected, *rows]):
+                text = unicodedata.normalize("NFKC", row["text"]).casefold()
+                score = sum(len(term) for term in terms if term in text)
+                if score:
+                    ranked.append((-score, not row["source"].endswith(":neko"), index, row))
+            selected = []
+            for _, _, _, row in sorted(ranked):
+                if len(selected) >= 6:
+                    break
+                if not any(old["id"] == row["id"] for old in selected):
+                    selected.append(row)
+        # Never truncate an original fact into a different claim. Keep source
+        # handles and an overall byte bound even when several facts are long.
+        bounded, size = [], 0
+        for row in selected:
+            length = len(row["text"].encode())
+            if size + length <= 4000:
+                bounded.append(row)
+                size += length
+        return bounded
     except (httpx.HTTPError, ValueError, TypeError, AttributeError):
         return None
 

@@ -34,6 +34,39 @@ def gateway(create):
     return SimpleNamespace(get_client=AsyncMock(return_value=SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))), aclose=AsyncMock())
 
 
+def test_host_preserves_cache_and_reasoning_counts_without_copying_provider_bodies(plugin_module, run_async):
+    response = model_response()
+    response.usage = SimpleNamespace(model_dump=lambda **_: {
+        "prompt_tokens": 100, "completion_tokens": 12, "total_tokens": 112,
+        "prompt_tokens_details": {"cached_tokens": 80, "private_prompt": "PRIVATE"},
+        "completion_tokens_details": {"reasoning_tokens": 0, "private_reasoning": "PRIVATE"},
+        "authorization": "PRIVATE",
+    })
+    create = AsyncMock(return_value=response)
+    planner = module(plugin_module, "neko_planner").NekoPlanner(gateway(create), 1024)
+    result = run_async(planner.decide([], []))
+    assert create.await_count == 1
+    assert result["model_status"]["tokens"] == {
+        "input_tokens": 100, "output_tokens": 12, "total_tokens": 112,
+        "cached_input_tokens": 80, "reasoning_tokens": 0,
+    }
+    assert "PRIVATE" not in json.dumps(result["model_status"])
+
+
+def test_host_missing_and_invalid_usage_remain_unknown_instead_of_zero(plugin_module, run_async):
+    planner = module(plugin_module, "neko_planner")
+    empty = dict.fromkeys(["input_tokens", "output_tokens", "total_tokens", "cached_input_tokens", "reasoning_tokens"])
+    for usage in [None, {}, {"prompt_tokens": True, "completion_tokens": -1, "total_tokens": 12.5,
+                            "prompt_tokens_details": {"cached_tokens": "80"}, "completion_tokens_details": []}]:
+        assert planner.token_metadata(usage) == empty
+    response = model_response()
+    response.usage = None
+    create = AsyncMock(return_value=response)
+    result = run_async(planner.NekoPlanner(gateway(create), 1024).decide([], []))
+    assert result["model_status"]["tokens"] == empty
+    assert create.await_count == 1
+
+
 def test_host_profile_uses_one_existing_model_call_and_reports_unsupported_depth_parameters(plugin_module, run_async):
     create=AsyncMock(return_value=model_response())
     planner=module(plugin_module,'neko_planner').NekoPlanner(gateway(create),1024)

@@ -43,6 +43,43 @@ def test_long_character_names_keep_sources_within_core_limits(plugin_instance):
     assert len((source + "relationship").encode()) <= 160
 
 
+def test_explicit_identity_query_can_find_a_later_relevant_fact_without_loading_the_store(plugin_instance, monkeypatch, run_async):
+    module = adapter(plugin_instance)
+    rows = [{"id": f"n{index}", "text": "first-person 自称本喵" if index == 5 else f"unrelated fact {index}"} for index in range(12)]
+    raw = {"master": {"facts": [{"id": "owner", "text": "owner fact"}]},
+           "neko": {"facts": rows}, "relationship": {"facts": []}}
+    response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: raw)
+    client = SimpleNamespace(get=AsyncMock(return_value=response))
+    manager = AsyncMock()
+    manager.__aenter__.return_value = client
+    monkeypatch.setattr(module.httpx, "AsyncClient", Mock(return_value=manager))
+    config = module.HostContextSettings(memory_api_url="http://127.0.0.1:48932")
+    selected = run_async(module.character_memories(config, "YUI", query="自称 本喵"))
+    assert [row["id"] for row in selected] == ["n5"]
+    assert selected[0]["text"] == rows[5]["text"]
+    assert selected[0]["source"] == "neko-persona:YUI:neko"
+    assert len(selected) <= 6 and sum(len(row["text"].encode()) for row in selected) <= 4000
+    assert run_async(module.character_memories(config, "YUI", query="no-match")) == []
+
+
+def test_identity_query_budget_keeps_original_facts_and_invalid_queries_do_not_read(plugin_instance, monkeypatch, run_async):
+    module = adapter(plugin_instance)
+    raw = {"master": {"facts": []}, "relationship": {"facts": []},
+           "neko": {"facts": [{"id": str(i), "text": "identity " + "x" * 1500} for i in range(8)]}}
+    response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: raw)
+    client = SimpleNamespace(get=AsyncMock(return_value=response))
+    manager = AsyncMock()
+    manager.__aenter__.return_value = client
+    monkeypatch.setattr(module.httpx, "AsyncClient", Mock(return_value=manager))
+    config = module.HostContextSettings(memory_api_url="http://127.0.0.1:48932")
+    selected = run_async(module.character_memories(config, "YUI", query="identity"))
+    assert len(selected) == 2
+    assert all(row["text"] == raw["neko"]["facts"][int(row["id"])]["text"] for row in selected)
+    with pytest.raises(ValueError, match="invalid_identity_memory_query"):
+        run_async(module.character_memories(config, "YUI", query="x" * 241))
+    assert client.get.await_count == 1
+
+
 def test_timer_never_reads_personal_memories_but_explicit_service_can(plugin_instance, monkeypatch, run_async):
     module, raw, _, directory, _ = setup(plugin_instance, monkeypatch)
     raw["host_context"]["memory_api_url"] = "http://127.0.0.1:48932"

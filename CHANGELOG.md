@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.121
+
+- Consume canonical autonomy 0.2.118 and core rc.118's guard against repeated already-satisfied navigation. The first arrival receipt, original goals, native queue and memory stay intact.
+- Add an explicit short query to on-demand identity-memory loading. Rank original facts locally, including later facts, retain original IDs/sources and cap selection at six whole facts and 4,000 UTF-8 bytes. No match stays empty; scheduled context synchronization never loads these memories.
+- Keep 0.6.120's accurate cache and reasoning token metadata. No extra model calls, automatic connection or model/voice defaults are added.
+
+## 0.6.120
+
+- Retain measured input, output, cached-input and reasoning token counts from the public Neko model client. Missing or malformed usage remains unknown; provider bodies and credentials are not copied into metadata.
+- Preserve the existing autonomy 0.2.117 protocol ownership fix, model route, output budget, identity and memory boundaries. This update adds no inference or automatic game connection.
+
 ## 0.6.117
 
 - Consume canonical autonomy 0.2.116, preserving typed repeated-attempt samples even for completed tasks and in compact reviews. No host-local game policy or new decision loop.
