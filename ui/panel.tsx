@@ -389,6 +389,8 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           {field("heartbeat","review_interval_seconds","无新变化时复核间隔（秒）","number")}
           <Switch checked={draft.host_context?.enabled !== false} label="共享主脑人格、当前关注和相关记忆" onChange={v=>change("host_context","enabled",v)} />
           {field("host_context","character_api_url","角色档案接口（可选，仅显式本机 /api/characters 地址）")}
+          {field("host_context","memory_api_url","角色人格记忆接口（可选，本机记忆服务地址，不含路径）")}
+          <Text>人格独立同步，不依赖主脑心跳。身份记忆仅由 load_character_identity_memory 显式按需载入，不自动常驻；游戏经历仍由游戏笔记和主脑按需召回。两者都不额外调用模型。</Text>
           <Text>主脑心跳负责目标、用户反馈与重要复盘。下方规划台词复用同一次动作规划，不依赖主脑复盘先完成，不增加解说模型调用。两者均不会自动启动游戏。</Text>
           <Switch checked={draft.speech_output?.enabled === true} label="通过当前猫娘的现有声音播报游戏台词" onChange={v=>change("speech_output","enabled",v)} />
           {field("speech_output","base_url","Neko 本机地址（例如 http://127.0.0.1:48911，不含路径或密钥）")}

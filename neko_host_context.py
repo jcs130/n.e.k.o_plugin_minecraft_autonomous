@@ -1,18 +1,24 @@
 """Explicit host profile read and main-brain context transport; no memory clone."""
 
+import hashlib
+import json
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from urllib.parse import urlparse
 
 import httpx
 from agent_mc_autonomy.configuration import _boolean, _text
+from agent_mc_autonomy.death_memory import scope_key
 from agent_mc_autonomy.host_context import HostContextPort, metadata
+from agent_mc_autonomy.ownership import session_is_owned
 
 
 @dataclass(frozen=True)
 class HostContextSettings:
     enabled: bool = True
     character_api_url: str = ""
+    memory_api_url: str = ""
 
     @classmethod
     def parse(cls, raw):
@@ -25,7 +31,13 @@ class HostContextSettings:
             if (parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
                     or parsed.path != "/api/characters" or parsed.username or parsed.password or parsed.query or parsed.fragment):
                 raise ValueError("host_context_character_api_must_be_explicit_local_public_endpoint")
-        return cls(_boolean(section, "enabled", True), url)
+        memory = _text(section, "memory_api_url").rstrip("/")
+        if memory:
+            parsed = urlparse(memory)
+            if (parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
+                    or parsed.path or parsed.username or parsed.password or parsed.query or parsed.fragment):
+                raise ValueError("host_context_memory_api_must_be_explicit_local_origin")
+        return cls(_boolean(section, "enabled", True), url, memory)
 
 
 async def character_profile(plugin, config, target, *, fresh=False, timeout=3, allow_current=False):
@@ -50,7 +62,7 @@ async def character_profile(plugin, config, target, *, fresh=False, timeout=3, a
             # optional. Use only public persona fields, never model/voice data
             # or the entire _reserved object.
             traits = []
-            for label in ("性格", "核心特质", "行为特点", "口癖", "自称", "昵称", "爱好", "雷点", "厌恶", "隐藏设定", "一句话台词", "种族", "年龄", "性别", "性格原型"):
+            for label in ("昵称", "日常称呼", "自称", "口癖", "口头禅", "说话风格", "性格", "核心特质", "行为特点", "爱好", "雷点", "厌恶", "隐藏设定", "一句话台词", "种族", "年龄", "性别", "性格原型"):
                 value = profile.get(label)
                 if isinstance(value, list):
                     value = "；".join(v for v in value[:8] if isinstance(v, str))
@@ -68,6 +80,103 @@ async def character_profile(plugin, config, target, *, fresh=False, timeout=3, a
         return result
     except (httpx.HTTPError, ValueError, TypeError, AttributeError):
         return {}
+
+
+def live_character_binding(directory, identity, *, now=time.time):
+    """Read an existing owned body; never create a lease, connect or call a model."""
+    try:
+        snapshot = json.loads((directory / "status.json").read_text(encoding="utf-8"))
+        age = now() - datetime.fromisoformat(snapshot["updated_at"]).timestamp()
+        scope = scope_key(snapshot.get("game_identity"))
+        if (not 0 <= age <= 30 or snapshot.get("phase") != "running"
+                or snapshot.get("game_connected") is not True or snapshot.get("settings_identity") != identity
+                or not scope or not snapshot.get("owner_pid") or not snapshot.get("runtime_session")
+                or not session_is_owned(directory)):
+            return None
+        return (snapshot["owner_pid"], snapshot["runtime_session"], scope)
+    except (OSError, ValueError, KeyError, TypeError, OverflowError):
+        return None
+
+
+def publish_character_binding(profile, directory, identity, expected, *, now=time.time):
+    """Refresh only public persona. Do not extend selected-memory/intent leases."""
+    if expected is None or live_character_binding(directory, identity, now=now) != expected:
+        return {"available": False, "reason": "no_fresh_owned_binding"}
+    if not profile:
+        return {"available": False, "reason": "character_unavailable"}
+    return HostContextPort(directory, now=now).publish_static(profile, scope=expected[2])
+
+
+async def character_memories(config, actor, *, timeout=3):
+    """Select bounded persistent identity facts from this character's own store.
+
+    This read-only endpoint performs no inference. Suppressed and internal
+    records stay out. Preserve original IDs and source rather than inventing
+    an empty successful recall or copying recent conversation transcripts.
+    """
+    if not config.memory_api_url or not actor:
+        return None
+    from urllib.parse import quote
+    try:
+        async with httpx.AsyncClient(timeout=timeout, trust_env=False, follow_redirects=False) as client:
+            response = await client.get(config.memory_api_url + "/get_persona/" + quote(actor, safe=""))
+            response.raise_for_status()
+            raw = response.json()
+        if not isinstance(raw, dict):
+            return None
+        rows = []
+        for subject in ("relationship", "master", "neko"):
+            partition = raw.get(subject, {})
+            if not isinstance(partition, dict) or not isinstance(partition.get("facts", []), list):
+                return None
+            for row in partition.get("facts", []):
+                if (not isinstance(row, dict) or row.get("suppress") or not isinstance(row.get("id"), str)
+                        or not 0 < len(row["id"].encode()) <= 160 or not isinstance(row.get("text"), str)
+                        or not row["text"].strip() or "\x00" in row["text"] or "\x00" in row["id"]
+                        or len(row["text"].encode()) > 1800):
+                    continue
+                rows.append({"id": row["id"], "source": identity_memory_source(actor) + subject, "text": row["text"]})
+        # Identity facts are selected independently of current game success.
+        # Interleave subjects so one long partition cannot erase the others.
+        selected = []
+        while rows and len(selected) < 6:
+            subjects = set()
+            for row in rows[:]:
+                if row["source"] not in subjects and len(selected) < 6:
+                    if not any(old["id"] == row["id"] for old in selected):
+                        selected.append(row)
+                    subjects.add(row["source"])
+                    rows.remove(row)
+        return selected
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+        return None
+
+
+def identity_memory_source(actor):
+    actor = actor if len(actor.encode()) <= 80 else hashlib.sha256(actor.encode()).hexdigest()
+    return "neko-persona:" + actor + ":"
+
+
+def publish_character_memories(memories, profile, directory, identity, expected, *, now=time.time):
+    """Host-selected identity facts, without renewing another producer's intent."""
+    if memories is None or not profile or not memories:
+        return {"published": False, "reason": "no_selected_identity_memories"}
+    if expected is None or live_character_binding(directory, identity, now=now) != expected:
+        return {"published": False, "reason": "no_fresh_owned_binding"}
+    from agent_mc_autonomy.mailbox import Mailbox
+    port = HostContextPort(directory, now=now)
+    revision = Mailbox(directory).intent_revision()
+    existing = port.read(revision)
+    if existing and (existing["stable"]["agent_name"] != profile["agent_name"]
+                     or existing["dynamic"].get("current_intent")
+                     or any(not row.get("source", "").startswith(identity_memory_source(profile["agent_name"]))
+                            for row in existing["dynamic"].get("memories", []))
+                     or existing["stable"].get("persona_source") == "host_projection"):
+        return {"published": False, "reason": "preserve_explicit_host_projection"}
+    snapshot = json.loads((directory / "status.json").read_text(encoding="utf-8"))
+    session = str(snapshot["owner_pid"]) + ":" + str((snapshot.get("viewer") or {}).get("session", ""))
+    result = port.publish({**profile, "memories": memories}, session=session, revision=revision)
+    return {"published": True, **result}
 
 
 def context_request(port, now, *, enabled=True):

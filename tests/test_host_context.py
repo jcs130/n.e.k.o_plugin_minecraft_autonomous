@@ -44,7 +44,8 @@ def test_profile_whitelists_one_character_and_uses_no_translation_or_memory_api(
 def test_default_structured_neko_traits_are_shared_without_voice_or_reserved_data(plugin_instance, monkeypatch, run_async):
     module = adapter(plugin_instance)
     response = SimpleNamespace(raise_for_status=Mock(), json=lambda: {"猫娘": {"TestRole": {
-        "核心特质": "温和，好奇", "行为特点": "先照顾眼前的事", "性格": ["开朗", "自信"], "自称": "我",
+        "核心特质": "温和，好奇", "行为特点": "先照顾眼前的事", "性格": ["开朗", "自信"], "自称": "本喵",
+        "日常称呼": "优依", "口头禅": "喵", "说话风格": "自然，不机械重复口癖",
         "voice_id": "private_voice", "lighting": "private_setting", "_reserved": {"api_key": "private_key"}}}})
     manager = AsyncMock()
     manager.__aenter__.return_value = SimpleNamespace(get=AsyncMock(return_value=response))
@@ -53,6 +54,8 @@ def test_default_structured_neko_traits_are_shared_without_voice_or_reserved_dat
     result = run_async(module.character_profile(plugin_instance, config, "TestRole"))
     assert "温和，好奇" in result["persona"] and "先照顾眼前的事" in result["persona"]
     assert "开朗；自信" in result["persona"]
+    assert "自称:本喵" in result["persona"] and "日常称呼:优依" in result["persona"]
+    assert "不机械重复口癖" in result["persona"]
     assert "private_" not in json.dumps(result)
 
 

@@ -1,6 +1,6 @@
 [project]
 name = "minecraft_autonomous"
-version = "0.6.117"
+version = "0.6.118"
 description = "Thin N.E.K.O adapter for the host-neutral Minecraft autonomy framework"
 requires-python = ">=3.11"
 readme = "README.md"

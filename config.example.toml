@@ -59,6 +59,7 @@ retrieval = "hybrid" # hybrid, lexical or local-vector; CPU only, no model or da
 [host_context]
 enabled = true
 character_api_url = "" # Optional explicit local public /api/characters endpoint; no port scanning.
+memory_api_url = "" # Optional explicit local memory origin; identity facts load only on demand.
 
 [presentation]
 enabled = false # Optional meaningful game-event narration through Neko's official voice path.

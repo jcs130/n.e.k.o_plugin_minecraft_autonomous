@@ -54,7 +54,7 @@ EDITABLE = {
     "speech_output": {"enabled", "base_url", "planner_narration", "min_interval_seconds"},
     "extension_pack": {"mode"},
     "server_extension": {"presentation_module", "presentation_sha256", "engine_module", "engine_sha256"},
-    "host_context": {"enabled", "character_api_url"},
+    "host_context": {"enabled", "character_api_url", "memory_api_url"},
     "fast": {"mode", "endpoint", "model", "api_key_env", "min_confidence"},
     "memory": {"mode", "endpoint", "model", "api_key_env", "timeout_ms", "provider", "library_id", "project_id", "scope_id", "search_mode", "learning_enabled", "read_preference", "agent_id"},
     "knowledge": {"minedojo_index_file", "retrieval"},
