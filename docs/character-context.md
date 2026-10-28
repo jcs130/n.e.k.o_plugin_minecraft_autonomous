@@ -13,3 +13,5 @@
 人格接入不能视作记忆召回：`status.host_context.memory_selection=not_provided` 表示宿主尚未选择个人记忆，不能解释成没有历史。Neko 的个人近期/人格/长期记忆按角色保存；MC 的笔记、人物关系和经验由核心 `mc_memory` 按服务器、账号与 Agent 隔离。游戏原始账本也不等价于已经提炼的长期笔记。宿主可通过既有 review context 提交有来源的选中记忆，不能整库复制、伪造召回或把别人的经历移入本角色。
 
 验收需分别核对：静态人格可用、下一次真实决策 `status.context.host_context.persona=true`、原账号/运行会话保持，以及具体记忆的可检索来源。仅有角色文件、HTTP 成功或旧日志不能证明当前模型已经使用。
+
+运行层 0.2.117 统一了规划器的协议权限、渐进帮助与错误修正：`mc_protocol` 只暴露 task/facts/archive/archive_runs，回合与 barrier 仍由宿主协调。普通技能帮助继续按真实 schema 限量查询；这不是人格提示词或旧经历的权限。旧版现役可用原生 insert 反馈纠正当前决策；永久修复需加载相应运行层，不把源码提交视为现役已经升级。
