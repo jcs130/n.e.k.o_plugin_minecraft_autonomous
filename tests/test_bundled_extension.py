@@ -18,6 +18,12 @@ def test_optional_pack_integrity_and_standard_off_switch(plugin_module, tmp_path
     selected = module.default_bundled_extension_settings(raw)
     assert selected["server_extension"]["presentation_sha256"] == metadata["module_sha256"]
     assert selected["autonomy"]["enabled"] is False
+    explicit_engine = {"engine_module": str(tmp_path / "engine.mjs"), "engine_sha256": "a" * 64}
+    composed = module.default_bundled_extension_settings({**raw, "server_extension": explicit_engine})
+    assert composed["server_extension"]["engine_module"] == explicit_engine["engine_module"]
+    assert composed["server_extension"]["engine_sha256"] == explicit_engine["engine_sha256"]
+    disabled = module.default_bundled_extension_settings({**composed, "extension_pack": {"mode": "none"}})
+    assert disabled["server_extension"]["engine_module"] == ""
     assert module.default_bundled_extension_settings({**selected, "extension_pack": {"mode": "none"}})["server_extension"]["presentation_module"] == ""
     (tmp_path / "presentation.mjs").write_bytes(b"changed")
     assert module.bundled_extension_status(raw)["available"] is False

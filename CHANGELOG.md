@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.115
+
+- Consume framework 0.2.113 and canonical core rc.116, with an explicit hash-checked server engine port for current VortexRPG facts.
+- Preserve optional engine fields in hosted settings and clear both engine and presentation when the server extension is disabled. Model, voice, account, game start and downloadable runtime selection remain explicit instance configuration.
+
 ## 0.6.114
 
 - Project completed provider tool-call metadata onto the public Chat subset before continuing a Neko model request. Preserve original IDs, arguments and audit history; malformed standard fields still fail validation.

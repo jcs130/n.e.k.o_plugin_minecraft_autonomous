@@ -46,7 +46,7 @@ def bundled_extension_status(raw):
 def default_bundled_extension_settings(raw):
     mode = extension_mode(raw)
     if mode == "none":
-        return {**raw, "server_extension": {"presentation_module": "", "presentation_sha256": ""}}
+        return {**raw, "server_extension": {"presentation_module": "", "presentation_sha256": "", "engine_module": "", "engine_sha256": ""}}
     explicit = raw.get("server_extension", {})
     if not isinstance(explicit, dict):
         raise ValueError("server_extension must be a table")
@@ -55,4 +55,4 @@ def default_bundled_extension_settings(raw):
     status = bundled_extension_status(raw)
     if not status["available"]:
         return raw
-    return {**raw, "server_extension": {"presentation_module": status["module"], "presentation_sha256": status["sha256"]}}
+    return {**raw, "server_extension": {**explicit, "presentation_module": status["module"], "presentation_sha256": status["sha256"]}}
