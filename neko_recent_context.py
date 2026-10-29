@@ -12,10 +12,36 @@ from agent_mc_autonomy.death_memory import scope_key
 from agent_mc_autonomy.host_context import HostContextPort
 from agent_mc_autonomy.mailbox import observation
 from agent_mc_autonomy.ownership import session_is_owned
+from agent_mc_autonomy.review import ReviewPort
 from plugin.sdk.plugin import Err, Ok, TransportError
 
 from .neko_commentary import load_commentary
 from .neko_host_context import HostContextSettings, character_profile
+
+
+def recent_context_provider(plugin, raw, settings, directory, generation):
+    """Refresh through public host APIs at the body's existing decision boundary.
+
+    This is an optional read provider, independent of strategic-review enablement.
+    The canonical runner owns its deadline, cancellation and context validation.
+    """
+    async def provide(request):
+        try:
+            binding = host_recent.binding(request, request=True)
+        except (ValueError, TypeError, KeyError):
+            return host_recent.unavailable('binding_unavailable')
+        if binding['identity'] != settings.identity:
+            return host_recent.unavailable('binding_unavailable')
+        port = ReviewPort(directory)
+        target = binding['actor']
+        current = current_request(plugin, settings, target, port, generation)
+        if current != request:
+            return host_recent.unavailable('binding_unavailable')
+        await refresh_recent(plugin, raw, settings, target, port, generation)
+        if current_request(plugin, settings, target, port, generation) != request:
+            return host_recent.unavailable('binding_changed')
+        return HostContextPort(directory, now=port.now).read_recent(request)
+    return provide
 
 
 async def bounded_read(operation, valid):

@@ -105,7 +105,8 @@ def test_dashboard_roundtrip_and_start_share_exact_runtime(prepared, plugin_inst
             return {"worker_alive": True}
     monkeypatch.setattr(plugin_module, "Worker", Worker)
     captured = []
-    async def session(settings, entry, data_root, planner, *_):
+    async def session(settings, entry, data_root, planner, *_, recent_context_provider):
+        assert callable(recent_context_provider)
         captured.append(settings)
         if legacy_sdk:
             assert planner.config.model == "fixture"

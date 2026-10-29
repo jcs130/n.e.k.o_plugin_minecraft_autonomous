@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.128
+
+- Supply the canonical runner's optional recent-context provider at the existing embedded decision boundary. Refresh same-character public conversations even when strategic reviews are disabled, and avoid depending on an earlier expiring timer snapshot.
+- Reuse the public SDK and existing scoped projection, preserving canonical deadlines, cancellation, explicit stop, persona and selected-memory boundaries. No new model call, review, game loop or automatic connection is added.
+- Continue consuming autonomy 0.2.124. Offline contract checks and actual online conversation improvements are recorded separately.
+
 ## 0.6.121
 
 - Consume canonical autonomy 0.2.118 and core rc.118's guard against repeated already-satisfied navigation. The first arrival receipt, original goals, native queue and memory stay intact.

@@ -137,8 +137,10 @@ class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, RuntimePreparation, 
                 selected.validate_budget(settings.max_output_tokens)
 
             async def play(goal, publish, stopped):
+                from .neko_recent_context import recent_context_provider
                 await run_session(settings, entry, data_root, create_planner(planner_raw, getattr(self.ctx, "models", None), settings),
-                                  goal, publish, stopped)
+                                  goal, publish, stopped,
+                                  recent_context_provider=recent_context_provider(self, planner_raw, settings, data, generation))
 
             with self._control_lock:
                 if generation != self._generation:

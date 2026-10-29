@@ -64,6 +64,36 @@ def attach_bus(plugin, rows):
     return query
 
 
+def test_decision_provider_refreshes_context_with_strategic_reviews_disabled(plugin_instance, monkeypatch, run_async):
+    port, snapshot, raw, settings, clock, save, host, push = prepare(plugin_instance, monkeypatch)
+    raw['heartbeat']['enabled'] = False
+    module = mod(plugin_instance)
+    monkeypatch.setattr(module, 'ReviewPort', lambda _: port)
+    query = attach_bus(plugin_instance, [record(text='一起去准备补给', at=10001)])
+    # Retain the real session floor, then advance beyond it as a host message arrives.
+    provider = module.recent_context_provider(plugin_instance, raw, settings, port.directory, plugin_instance._generation)
+    with session_lease(port.directory):
+        run_async(provider(snapshot['host_recent_request']))
+        clock[0] = 10002
+        save()
+        value = run_async(provider(snapshot['host_recent_request']))
+    assert query.call_count == 2
+    assert [row['text'] for row in value['recent_messages']] == ['一起去准备补给']
+    assert raw['heartbeat']['enabled'] is False
+    push.assert_not_called()
+    assert not port.state().get('review')
+
+
+def test_decision_provider_rejects_another_identity_before_query(plugin_instance, monkeypatch, run_async):
+    port, snapshot, raw, settings, _, _, _, _ = prepare(plugin_instance, monkeypatch)
+    module = mod(plugin_instance)
+    query = attach_bus(plugin_instance, [])
+    provider = module.recent_context_provider(plugin_instance, raw, settings, port.directory, plugin_instance._generation)
+    request = {**snapshot['host_recent_request'], 'identity': 'other-account'}
+    assert run_async(provider(request))['available'] is False
+    query.assert_not_called()
+
+
 def test_full_context_publication_keeps_available_recent_language(plugin_instance, monkeypatch, run_async):
     port, snapshot, raw, settings, clock, save, host, _ = prepare(plugin_instance, monkeypatch)
     settings = dataclasses.replace(settings, context_mode='full', context_tokens=1048576)
