@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.130
+
+- 消费固定源码的共享框架 0.2.126 与官方 canonical engine-only 核心 rc.128，保持归档、运行源码与公开声明的严格校验。
+- 攻击回执保留目标死亡证据和未知的本人击杀归属，并保留已实际发出的箭；沿用现有自主规划与对话入口。
+- 不改变人格、个人记忆、目标、模型或自动启动设置；源码和包验收与现役加载分别记录。
+
 ## 0.6.129
 
 - Consume canonical autonomy 0.2.125 with its exact engine-only core rc.127 archive, source/build hashes and companion lock. Preserve strict installation checks and server/core module identity.
