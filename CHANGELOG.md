@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.129
+
+- Consume canonical autonomy 0.2.125 with its exact engine-only core rc.127 archive, source/build hashes and companion lock. Preserve strict installation checks and server/core module identity.
+- Keep the existing recent-context provider, planner policy, model bindings, character, memory and speech settings. Dependency preparation does not start or reload gameplay.
+
 ## 0.6.128
 
 - Supply the canonical runner's optional recent-context provider at the existing embedded decision boundary. Refresh same-character public conversations even when strategic reviews are disabled, and avoid depending on an earlier expiring timer snapshot.
