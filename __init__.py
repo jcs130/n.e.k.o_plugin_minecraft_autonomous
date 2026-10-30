@@ -20,6 +20,7 @@ from .backend.install import verify_runtime
 from .bundled_appearance import default_bundled_appearance_settings as default_bundled_appearance_settings
 from .dashboard import Dashboard
 from .direct_planner import create_planner
+from .neko_account_panel import NekoAccountPanel
 from .neko_character_binding import NekoCharacterBinding
 from .neko_heartbeat import NekoHeartbeat
 from .neko_narration import NekoNarration
@@ -33,7 +34,7 @@ from .runtime_preparation import RuntimePreparation
 
 
 @neko_plugin
-class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, RuntimePreparation, NekoAutonomyTools, NekoCharacterBinding, NekoHeartbeat, NekoPresentation, NekoNarration, NekoPluginBase):
+class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, NekoAccountPanel, RuntimePreparation, NekoAutonomyTools, NekoCharacterBinding, NekoHeartbeat, NekoPresentation, NekoNarration, NekoPluginBase):
     def __init__(self, ctx):
         super().__init__(ctx)
         self._control_lock = threading.RLock()
@@ -54,6 +55,7 @@ class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, RuntimePreparation, 
 
     @lifecycle(id="shutdown")
     async def on_shutdown(self, **_):
+        await self._close_neko_link()
         await self._close_runtime_setup()
         settings = Settings.parse(await self.config.dump())
         if settings.runtime_mode == "external":

@@ -61,6 +61,10 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const preparation = preparationView(state.installation)
   const preparedSelection = preparedRuntimeSelection(settings, state.installation)
   const needsRuntimeSetup = startPreparationRequired(state.installation)
+  const nekoAccount = state.neko_account || {}
+  useEffect(() => {
+    if (state.neko_account?.configured) setConnectionDraft(null)
+  }, [state.neko_account?.configured, state.neko_account?.username])
   const action = (id: string) => actions.find(a => a.entry_id === id || a.id === id)
   const call = async (id: string, args: any) => {
     setBusy(true); setNotice(""); setFailure(false); setFieldError(null)
@@ -114,9 +118,23 @@ export default function Panel(props: PluginSurfaceProps<any>) {
     } catch { setFailure(true); setNotice("模型参数须为有效的 JSON 对象，请检查格式。") }
   }
   const qiandengServer = connection.host === "micro.kangqiang.site" && Number(connection.port) === 25702
+  const needsGameAccount = qiandengServer && connection.auth !== "microsoft"
+    && (!state.server_login?.configured || connection.username !== settings.server?.username)
   const accountSelected = state.website_account?.selected || !!settings.qiandengji?.identity_file || !!portalResult?.username
   const accountSetup = <Stack gap={10}>
-    <Text>已有游戏账号可直接填下方昵称与 /login 密码，无需重新创建。新 Agent 请选择身份文件，或使用官网邀请；连接信息和私有保存位置由插件处理。</Text>
+    <Text>新用户可用猫娘计划账号登录千灯纪，授权后由插件自动准备游戏角色与登录，无需另设网站密码、复制邀请码或输入 /login 命令。游戏仍由你点击开始。</Text>
+    <Text>{nekoAccount.username ? `本机原接入申请：${nekoAccount.username}` : "角色昵称可留空，插件会生成并保存一次；重试继续使用同一身份。"}</Text>
+    {!accountSelected && (!state.server_login?.configured||nekoAccount.selected) && <Stack gap={8}>
+      {!nekoAccount.selected && <Field label="新角色昵称（可选）"><Input value={agentName} placeholder="留空自动生成，或填写 ag_ 开头的名字" onChange={setAgentName} /></Field>}
+      <Button tone="primary" disabled={busy||external||runtime.game_connected||runtime.worker_alive||nekoAccount.active}
+        onClick={()=>call("connect_neko_account",{username:agentName,renew:nekoAccount.renewable===true})}>{nekoAccount.active?"等待官网授权或原请求结果…":nekoAccount.configured?"账号与自动登录已准备":nekoAccount.renewable?"重新授权（保留原身份）":nekoAccount.selected?"继续原账号接入":"关联猫娘计划账号"}</Button>
+      {nekoAccount.active && <Button disabled={busy} onClick={()=>call("pause_neko_account_link",{})}>暂停接入查询</Button>}
+      {nekoAccount.verification_url && !nekoAccount.configured && <FileDownload href={nekoAccount.verification_url} label="打开官网，使用猫娘计划账号授权" openExternal />}
+      {nekoAccount.message && <Alert tone={nekoAccount.phase==="provider_not_configured"?"warning":"info"} message={nekoAccount.message} />}
+    </Stack>}
+    <FileDownload href="https://mc.kangqiang.site/join" label="在千灯纪登录或关联猫娘计划账号" openExternal />
+    <Accordion open={!!accountSelected||!!state.server_login?.configured} title="已有游戏账号、原身份或邀请（兼容方式）"><Stack gap={10}>
+    <Text>已有游戏账号可沿用原昵称和 /login 密码，无需重新创建。网站关联应先登录原千灯纪账号，以保留原角色归属。</Text>
     {state.website_account?.username && <Text>已保存的 Agent：{state.website_account.username}{state.website_account.imported ? " · 已接入" : " · 待核对接入"}</Text>}
     <Field label="选择已有 Agent 身份文件"><input type="file" accept=".json,application/json"
       aria-label="选择已有 Agent 身份文件" disabled={busy||external||runtime.game_connected||runtime.worker_alive}
@@ -158,6 +176,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       <Field label="旧版邀请文件路径"><Input value={inviteFile} onChange={setInviteFile} /></Field>
       <Button disabled={busy||external||runtime.game_connected||!agentName||!inviteFile||!identityFile} onClick={()=>call("qiandengji_account",{action:"register",username:agentName,invite_url_file:inviteFile,identity_file:identityFile})}>使用原私有文件创建邀请身份</Button>
       {portalResult && <JsonView data={portalResult} />}
+    </Stack></Accordion>
     </Stack></Accordion>
   </Stack>
 
@@ -245,7 +264,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>默认使用 Neko 官方本机地址 http://127.0.0.1:48911。自定义端口可在高级设置修改；留空角色跟随当前猫娘。</Text>
         </Stack></Accordion>
         <Inline>
-          <Button tone="primary" disabled={!stateReady||busy||needsRuntimeSetup||preparation.active||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
+          <Button tone="primary" disabled={!stateReady||busy||needsRuntimeSetup||needsGameAccount||preparation.active||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
             if(loginPassword||loginEnabled!==null) {
               setFailure(true);setNotice("请先点击“保存连接与登录”，再开始游玩。");return
             }
@@ -253,7 +272,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
               appearance:appearanceDraft??settings.viewer?.default_appearance??"bundled:yui-ysm",
               extension_mode:extensionDraft??settings.extension_pack?.mode??"auto",
               character:characterDraft??settings.heartbeat?.target??"",narration:!!withNarration}))setConnectionDraft(null)
-          }}>{!stateReady?"正在读取连接…":preparation.active?"正在准备游戏组件…":runtime.game_connected?"正在自主游玩":runtime.phase==="starting"?"正在连接…":needsRuntimeSetup?"请先准备游戏组件":"开始自主游玩"}</Button>
+          }}>{!stateReady?"正在读取连接…":preparation.active?"正在准备游戏组件…":runtime.game_connected?"正在自主游玩":runtime.phase==="starting"?"正在连接…":needsRuntimeSetup?"请先准备游戏组件":needsGameAccount?"请先接入游戏账号":"开始自主游玩"}</Button>
           <Button disabled={busy||runtime.game_connected||!connectionDraft} onClick={async()=>{
             if(await call("save_settings",{settings:{server:connection}}))setConnectionDraft(null)
           }}>仅保存连接</Button>

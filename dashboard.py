@@ -207,7 +207,8 @@ class Dashboard:
                 heartbeat_state["structured_delivery"] = load_commentary(port.directory / "structured-review.json")
             heartbeat_state["delivery_state"] = ("final_decision" if (review.get("result") or {}).get("acknowledged") else "inspected_awaiting_final" if review.get("inspected_at") else "notification_" + str(review.get("notification_status", "not_delivered")))
             heartbeat_state["next"] = "主脑尚未完成最终判断；重新检查当前心跳后提交简短判断。" if heartbeat_state["delivery_failure"] else None
-            return {"website_account": public_selection(raw), "server_login": public_login(settings.data_root(self.data_path()), settings),
+            return {"website_account": public_selection(raw), "neko_account": self.neko_account_state(),
+                    "server_login": public_login(settings.data_root(self.data_path()), settings),
                     "settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
                                  "qiandengji": {"identity_file": configured_identity(raw)},
                                  "heartbeat": asdict(heartbeat), "host_context": asdict(HostContextSettings.parse(raw)), "planner": public_planner(raw.get("planner", {})),
