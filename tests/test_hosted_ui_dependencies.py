@@ -44,4 +44,12 @@ def test_panel_dependency_graph_is_supported_by_host(monkeypatch):
             "path": "ui/deepseek-presets.js",
             "source": (root / "ui/deepseek-presets.js").read_text(encoding="utf-8"),
         },
+        {
+            "path": "ui/account-state.js",
+            "source": (root / "ui/account-state.js").read_text(encoding="utf-8"),
+        },
+        {
+            "path": "ui/onboarding.tsx",
+            "source": (root / "ui/onboarding.tsx").read_text(encoding="utf-8"),
+        },
     ]

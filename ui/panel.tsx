@@ -9,6 +9,7 @@ import { applyConnectionPreset } from "./connection-presets.js"
 import { startPanelRefresh } from "./panel-refresh.js"
 import NativeControls from "./native-controls"
 import { deepseekPreset } from "./deepseek-presets.js"
+import Onboarding from "./onboarding"
 
 export default function Panel(props: PluginSurfaceProps<any>) {
   const { state, actions } = props
@@ -42,6 +43,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const [portalResult, setPortalResult] = useState<any>(null)
   const [loginPassword, setLoginPassword] = useState("")
   const [loginEnabled, setLoginEnabled] = useState<boolean | null>(null)
+  const [legacyAccountRevision, setLegacyAccountRevision] = useState(0)
   useEffect(() => {
     if (editing || busy) return
     return startPanelRefresh({refresh:props.api.refresh,document})
@@ -84,7 +86,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           setConnectionDraft(null); setIdentityBody(""); setInviteLink("")
         }
       }
-      setNotice(id === "qiandengji_account" && result?.imported
+      setNotice(["connect_neko_account","pause_neko_account_link"].includes(id) ? "" : id === "qiandengji_account" && result?.imported
         ? `已接入 ${result.username}，服务器和自动登录已配置。选好模型后点击“开始自主游玩”即可。`
         : id === "use_prepared_runtime" ? "已选择一键游戏组件。请先准备组件，完成后再开始；账号和模型保留，游戏未启动。"
         : "请求已受理，请核对更新后的状态和回执。")
@@ -121,19 +123,31 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const needsGameAccount = qiandengServer && connection.auth !== "microsoft"
     && (!state.server_login?.configured || connection.username !== settings.server?.username)
   const accountSelected = state.website_account?.selected || !!settings.qiandengji?.identity_file || !!portalResult?.username
-  const accountSetup = <Stack gap={10}>
-    <Text>新用户可用猫娘计划账号登录千灯纪，授权后由插件自动准备游戏角色与登录，无需另设网站密码、复制邀请码或输入 /login 命令。游戏仍由你点击开始。</Text>
-    <Text>{nekoAccount.username ? `本机原接入申请：${nekoAccount.username}` : "角色昵称可留空，插件会生成并保存一次；重试继续使用同一身份。"}</Text>
-    {!accountSelected && (!state.server_login?.configured||nekoAccount.selected) && <Stack gap={8}>
-      {!nekoAccount.selected && <Field label="新角色昵称（可选）"><Input value={agentName} placeholder="留空自动生成，或填写 ag_ 开头的名字" onChange={setAgentName} /></Field>}
-      <Button tone="primary" disabled={busy||external||runtime.game_connected||runtime.worker_alive||nekoAccount.active}
-        onClick={()=>call("connect_neko_account",{username:agentName,renew:nekoAccount.renewable===true})}>{nekoAccount.active?"等待官网授权或原请求结果…":nekoAccount.configured?"账号与自动登录已准备":nekoAccount.renewable?"重新授权（保留原身份）":nekoAccount.selected?"继续原账号接入":"关联猫娘计划账号"}</Button>
-      {nekoAccount.active && <Button disabled={busy} onClick={()=>call("pause_neko_account_link",{})}>暂停接入查询</Button>}
-      {nekoAccount.verification_url && !nekoAccount.configured && <FileDownload href={nekoAccount.verification_url} label="打开官网，使用猫娘计划账号授权" openExternal />}
-      {nekoAccount.message && <Alert tone={nekoAccount.phase==="provider_not_configured"?"warning":"info"} message={nekoAccount.message} />}
-    </Stack>}
-    <FileDownload href="https://mc.kangqiang.site/join" label="在千灯纪登录或关联猫娘计划账号" openExternal />
-    <Accordion open={!!accountSelected||!!state.server_login?.configured} title="已有游戏账号、原身份或邀请（兼容方式）"><Stack gap={10}>
+  const serverFields = <Stack gap={12}><Grid cols={2}>
+          <Field label="服务器地址"><Input disabled={busy||runtime.game_connected} value={connection.host||""} placeholder="域名或 IP；本机填 127.0.0.1" onChange={v=>setConnection("host",v)} /></Field>
+          <Field label="端口"><Input disabled={busy||runtime.game_connected} type="number" value={connection.port??25565} onChange={v=>setConnection("port",Number(v))} /></Field>
+          <Field label={connection.auth==="microsoft"?"Microsoft 账户标识":"玩家昵称（可留空）"}><Input disabled={busy||runtime.game_connected} value={connection.username||""} placeholder={connection.auth==="microsoft"?"填写本人账户标识":"留空自动生成，之后沿用同一昵称"} onChange={v=>setConnection("username",v)} /></Field>
+          <Field label="登录方式"><Select value={connection.auth||"offline"} options={[{value:"offline",label:"离线昵称"},{value:"microsoft",label:"Microsoft 正版账号"}]} onChange={v=>{if(!runtime.game_connected)setConnection("auth",v)}} /></Field>
+        </Grid>
+        <Text>连接已有的 Minecraft Java 1.21.1 服务器。「本机原版」需要本机已开服；完整包不包含游戏服务端或模型。正版账号由本人完成官方授权。</Text>
+        <Accordion open={!!loginPassword} title="服务器登录密码（仅需要 /login 的服务器填写）"><Stack gap={8}>
+          <Switch checked={loginEnabled??state.server_login?.enabled??false} label="自动登录这个服务器上的原账号"
+            onChange={setLoginEnabled} />
+          <Field label="游戏登录密码"><Input type="password" value={loginPassword}
+            disabled={busy||external||runtime.game_connected||runtime.worker_alive}
+            placeholder={state.server_login?.configured?"已配置；留空保留，填写可更换":"首次启用时填写游戏密码"}
+            onChange={v=>{setLoginPassword(v);if(v)setLoginEnabled(true)}} /></Field>
+          <Text>先填写原玩家昵称。密码只在本机保存，不会回显；Windows 使用当前用户加密。连接后仅响应服务器登录提示，收到成功回执才继续。不会注册或修改游戏密码。</Text>
+          <Button disabled={busy||external||runtime.game_connected||runtime.worker_alive||!connection.username}
+            onClick={async()=>{if(await call("configure_server_login",{connection:Object.fromEntries(Object.entries(connection).filter(([key])=>key!=="login_config_file")),
+              enabled:loginEnabled??state.server_login?.enabled??false,password:loginPassword})) {
+              setLoginPassword("");setLoginEnabled(null);setConnectionDraft(null)
+            }}}>保存连接与登录</Button>
+        </Stack></Accordion></Stack>
+  const legacyAccountSetup = <Stack gap={14}>
+    <p className="mc-sub">已有游戏账号可以直接填写原昵称和密码；也可以导入官网保存的身份文件。</p>
+    {qiandengServer&&serverFields}
+    <Accordion open={!!accountSelected} title="导入身份文件或使用邀请"><Stack gap={10}>
     <Text>已有游戏账号可沿用原昵称和 /login 密码，无需重新创建。网站关联应先登录原千灯纪账号，以保留原角色归属。</Text>
     {state.website_account?.username && <Text>已保存的 Agent：{state.website_account.username}{state.website_account.imported ? " · 已接入" : " · 待核对接入"}</Text>}
     <Field label="选择已有 Agent 身份文件"><input type="file" accept=".json,application/json"
@@ -177,10 +191,17 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       <Button disabled={busy||external||runtime.game_connected||!agentName||!inviteFile||!identityFile} onClick={()=>call("qiandengji_account",{action:"register",username:agentName,invite_url_file:inviteFile,identity_file:identityFile})}>使用原私有文件创建邀请身份</Button>
       {portalResult && <JsonView data={portalResult} />}
     </Stack></Accordion>
+
     </Stack></Accordion>
   </Stack>
+  const accountSetup = <Onboarding kind="account" account={nekoAccount} configured={qiandengServer&&connection.auth==='offline'&&!needsGameAccount} original={!!accountSelected||connection.auth==='microsoft'}
+    username={connection.username} busy={busy} disabled={external||runtime.game_connected||runtime.worker_alive}
+    agentName={agentName} onName={setAgentName} legacyRevision={legacyAccountRevision} onLegacy={()=>setLegacyAccountRevision(v=>v+1)} legacy={legacyAccountSetup}
+    onConnect={()=>call("connect_neko_account",{username:agentName,renew:nekoAccount.renewable===true})}
+    onPause={()=>call("pause_neko_account_link",{})} />
 
-  return <Page title="Minecraft 自主游玩" subtitle="Java 1.21.1 · 原生任务队列 · Neko 高层目标与演出">
+  return <Page className="mc-app">
+    <Onboarding kind="styles" />
     {stopConfirm&&<div role="dialog" aria-modal="true" aria-labelledby="stop-title"
       style={{position:"fixed",inset:0,zIndex:1000,background:"#0009",display:"grid",placeItems:"center",padding:16}}>
       <div style={{maxWidth:520,background:"#172235",color:"#f1f5f9",border:"1px solid #475569",borderRadius:12,padding:20}}>
@@ -197,74 +218,55 @@ export default function Panel(props: PluginSurfaceProps<any>) {
     <Stack gap={18}>
       {state.error && <Alert tone="danger" message="配置或观测暂不可用。请先检查插件配置。" />}
       {runtime.phase === "failed" && <Alert tone="danger" message="框架最近记录为运行失败；下方保留最后观测，刷新页面不会自动恢复游玩。" />}
-      <Inline justify="space-between">
-        <Inline><StatusBadge label={runtime.phase || "未启动"} tone={runtime.game_connected ? "success" : "default"} />
-          <Text>{external ? "独立运行 · Neko 观察与投递" : "Neko 嵌入式运行"}</Text></Inline>
-        <RefreshButton label="刷新观测" />
-      </Inline>
+      <div className="mc-hero">
+        <div className="mc-hero-copy"><span className="mc-world-mark" aria-hidden="true">▦</span><div><span className="mc-eyebrow">MINECRAFT · JAVA 1.21.1</span><h1>猫娘的 Minecraft 世界</h1><p className="mc-sub">准备好账号与环境，让她开始自己的冒险。</p></div></div>
+        <Inline><StatusBadge label={runtime.game_connected?"正在游玩":['stopped','idle','starting','reconnecting','failed'].includes(runtime.phase)?({stopped:"已停止",idle:"尚未开始",starting:"正在连接",reconnecting:"正在重连",failed:"需要检查"}[runtime.phase]):"状态待确认"} tone={runtime.game_connected?"success":"default"}/><RefreshButton label="刷新状态" /></Inline>
+      </div>
+      <Onboarding kind="progress" accountReady={qiandengServer&&connection.auth==='offline'&&!needsGameAccount} needsAccount={needsGameAccount} componentsReady={state.installation?.prepared_runtime==='prepared'} />
       {runtime.planner_diagnostic?.category&&<Alert tone="warning" message={`规划请求被服务端拒绝（HTTP ${runtime.planner_diagnostic.status}，${runtime.planner_diagnostic.category}）。请核对模型和工具兼容性；原生队列继续独立运行。`} />}
       {notice && <Alert tone={failure ? "danger" : "info"} message={notice} />}
-      <Card title="连接与启动"><Stack gap={12}>
-        <Text>选好服务器，点击开始即可。默认自带 YUI 模型、3D 观战、贴图和声音，跟随当前猫娘解说；无需填写 Node、资源路径或音色密钥。</Text>
-        <Text>{installation.preparedRuntime}</Text>
-        {(!external&&['missing','incompatible'].includes(state.installation?.prepared_runtime)||preparation.active||['ready','failed','cancelled'].includes(preparation.phase))&&<Stack gap={8}>
+      <Card title="游玩准备" className="mc-connection-card"><Stack gap={0}>
+        <div className="mc-world-picker" aria-label="选择服务器">
+          <Button className={qiandengServer?"mc-selected":""} disabled={busy||runtime.game_connected} onClick={()=>setConnectionDraft(applyConnectionPreset({server:connection},"qiandeng").server)}>千灯纪</Button>
+          <Button className={!qiandengServer?"mc-selected":""} disabled={busy||runtime.game_connected} onClick={()=>setConnectionDraft({...connection,host:"127.0.0.1",port:25565,version:"1.21.1",connection_type:"local"})}>自己的服务器</Button>
+        </div>
+        <section className="mc-stage">
+          <div className="mc-section-head"><span className="mc-section-index">01</span><h2>{qiandengServer?"连接游戏账号":"选择你的服务器"}</h2></div>
+          <div className="mc-section-body">{qiandengServer?accountSetup:serverFields}</div>
+        </section>
+        <section className="mc-stage">
+          <div className="mc-section-head"><span className="mc-section-index">02</span><h2>准备游戏环境</h2></div>
+          <div className="mc-section-body">
+            <p className="mc-sub">{state.installation?.prepared_runtime==='prepared'?"游戏环境已准备，之后会复用本机缓存。":external?"使用你已经启动的独立运行环境。":"首次准备约 1.02 GB，包含运行环境、3D 观战与声音。"}</p>
+            {(!external&&['missing','incompatible'].includes(state.installation?.prepared_runtime)||preparation.active||['ready','failed','cancelled'].includes(preparation.phase))&&<Stack gap={8}>
           <Text>{preparation.label}{preparation.progress!==null?` · ${preparation.progress}%`:''}</Text>
           {preparation.progress!==null&&<progress aria-label="游戏组件准备进度" max={100} value={preparation.progress} style={{width:'100%'}} />}
           {preparation.message&&<Alert tone={preparation.phase==='failed'?'danger':'info'} message={preparation.message} />}
           {preparation.active?<Button disabled={busy} onClick={()=>call('cancel_runtime_preparation',{})}>取消组件准备</Button>
             :preparation.phase!=='ready'&&preparation.available&&<Button disabled={busy||runtime.worker_alive||runtime.game_connected}
               onClick={()=>call('prepare_runtime',{})}>{preparation.button}{preparation.size?`（约 ${preparation.size}）`:''}</Button>}
-          <Text>只准备当前版本的组件，不启动游戏、不调用模型；下载完成后再点击“开始自主游玩”。</Text>
-          <FileDownload href="https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/latest" label="完整离线包与安装说明" openExternal />
+
+          <FileDownload href="https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/latest" label="离线安装方式 ↗" openExternal />
         </Stack>}
-        {preparedSelection && preparation.available && <Stack gap={6}>
+            {preparedSelection && preparation.available && <Stack gap={6}>
           <Button disabled={busy||preparation.active||runtime.game_connected||runtime.worker_alive||runtime.autonomy_running}
             onClick={()=>call("use_prepared_runtime",{})}>{state.installation?.prepared_runtime==='custom'?"改用一键游戏组件":"使用已安装的新版运行环境"}</Button>
-          <Text>此操作会取消自定义组件路径，重新选择经过校验的一键组件；账号、模型、记忆和其它设置保留。请先停止游玩并等动作结算，再选择、准备；不会自动开始游戏。</Text>
+          <Text>仅更换运行环境，原账号、模型和记录保留。</Text>
         </Stack>}
-        {!external&&needsRuntimeSetup&&<Alert tone="info" message="游戏组件尚未就绪，请先完成上方组件准备；就绪后即可开始自主游玩。" />}
-        <Inline><Text>{runtime.model_status?.model ? `当前实际动作规划模型：${runtime.model_status.model}。` : settings.planner?.route === "direct" ? `动作规划使用已配置的独立模型：${settings.planner.model || "待填写"}。` : "动作规划复用本插件已绑定的 Neko 模型。首次使用只需在官方页面绑定 decision，以后直接开始。"}</Text>
-          <FileDownload href={`${props.host?.origin || ""}/ui/model-api`} label="Neko 模型 API" openExternal />
-          <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=config`} label="本插件模型绑定" openExternal /></Inline>
-        <Inline>
-          <Button disabled={busy||runtime.game_connected} onClick={()=>setConnectionDraft({...connection,host:"127.0.0.1",port:25565,version:"1.21.1",connection_type:"local"})}>本机原版</Button>
-          <Button disabled={busy||runtime.game_connected} onClick={()=>setConnectionDraft(applyConnectionPreset({server:connection},"qiandeng").server)}>千灯纪公网</Button>
-        </Inline>
-        {qiandengServer && <Card title="千灯纪账号接入">{accountSetup}</Card>}
-        <Grid cols={2}>
-          <Field label="服务器地址"><Input disabled={busy||runtime.game_connected} value={connection.host||""} placeholder="域名或 IP；本机填 127.0.0.1" onChange={v=>setConnection("host",v)} /></Field>
-          <Field label="端口"><Input disabled={busy||runtime.game_connected} type="number" value={connection.port??25565} onChange={v=>setConnection("port",Number(v))} /></Field>
-          <Field label={connection.auth==="microsoft"?"Microsoft 账户标识":"玩家昵称（可留空）"}><Input disabled={busy||runtime.game_connected} value={connection.username||""} placeholder={connection.auth==="microsoft"?"填写本人账户标识":"留空自动生成，之后沿用同一昵称"} onChange={v=>setConnection("username",v)} /></Field>
-          <Field label="登录方式"><Select value={connection.auth||"offline"} options={[{value:"offline",label:"离线昵称"},{value:"microsoft",label:"Microsoft 正版账号"}]} onChange={v=>{if(!runtime.game_connected)setConnection("auth",v)}} /></Field>
-        </Grid>
-        <Text>连接已有的 Minecraft Java 1.21.1 服务器。「本机原版」需要本机已开服；完整包不包含游戏服务端或模型。正版账号由本人完成官方授权。</Text>
-        <Accordion open={!!loginPassword} title="服务器登录密码（仅需要 /login 的服务器填写）"><Stack gap={8}>
-          <Switch checked={loginEnabled??state.server_login?.enabled??false} label="自动登录这个服务器上的原账号"
-            onChange={setLoginEnabled} />
-          <Field label="游戏登录密码"><Input type="password" value={loginPassword}
-            disabled={busy||external||runtime.game_connected||runtime.worker_alive}
-            placeholder={state.server_login?.configured?"已配置；留空保留，填写可更换":"首次启用时填写游戏密码"}
-            onChange={v=>{setLoginPassword(v);if(v)setLoginEnabled(true)}} /></Field>
-          <Text>先填写原玩家昵称。密码只在本机保存，不会回显；Windows 使用当前用户加密。连接后仅响应服务器登录提示，收到成功回执才继续。不会注册或修改游戏密码。</Text>
-          <Button disabled={busy||external||runtime.game_connected||runtime.worker_alive||!connection.username}
-            onClick={async()=>{if(await call("configure_server_login",{connection:Object.fromEntries(Object.entries(connection).filter(([key])=>key!=="login_config_file")),
-              enabled:loginEnabled??state.server_login?.enabled??false,password:loginPassword})) {
-              setLoginPassword("");setLoginEnabled(null);setConnectionDraft(null)
-            }}}>保存连接与登录</Button>
-        </Stack></Accordion>
-        <Switch label="用当前猫娘声音解说游戏" checked={!!withNarration} onChange={setNarrationDraft} />
-        <Accordion open={false} title="更多连接选项（外观、角色、模型与扩展）"><Stack gap={10}>
-        <Grid cols={2}>
-          <Field label="Web 角色外观"><Select value={appearanceDraft??settings.viewer?.default_appearance??"bundled:yui-ysm"} options={[{value:"bundled:yui-ysm",label:"自带 YUI YSM"},{value:"bundled:yui-slim",label:"自带 YUI 皮肤"},{value:"server",label:"跟随服务器"}]} onChange={setAppearanceDraft} /></Field>
-          <Field label="扩展资料"><Select value={extensionDraft??settings.extension_pack?.mode??"auto"} options={[{value:"auto",label:"自动识别已安装扩展"},{value:"none",label:"仅使用标准 Minecraft"},{value:"custom",label:"保留自定义扩展配置"}]} onChange={setExtensionDraft} /></Field>
-          <Field label="参与游戏的 Neko 角色"><Input value={characterDraft??settings.heartbeat?.target??""} placeholder="留空跟随当前 Neko 角色" onChange={setCharacterDraft} /></Field>
-        </Grid>
-        <Switch label="下次启动使用 Neko 绑定的决策模型" checked={usingHostModel} onChange={setHostModel} />
-        {!usingHostModel&&<Text>保留已配置的独立规划模型；可在高级设置中修改。</Text>}
-        <Text>默认使用 Neko 官方本机地址 http://127.0.0.1:48911。自定义端口可在高级设置修改；留空角色跟随当前猫娘。</Text>
-        </Stack></Accordion>
-        <Inline>
-          <Button tone="primary" disabled={!stateReady||busy||needsRuntimeSetup||needsGameAccount||preparation.active||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
+          </div>
+        </section>
+        <section className="mc-stage">
+          <div className="mc-section-head"><span className="mc-section-index">03</span><h2>选择一个模型</h2></div>
+          <div className="mc-section-body">
+            <p className="mc-model-line">{runtime.model_status?.model ? `最近使用：${runtime.model_status.model}` : settings.planner?.route === "direct" ? `独立模型：${settings.planner.model || "尚未填写"}` : "使用 Neko 中支持工具调用的模型。已有配置可以直接沿用。"}</p>
+            <div className="mc-actions"><FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=config`} label="选择决策模型" openExternal className="mc-secondary" />
+              <FileDownload href={`${props.host?.origin || ""}/ui/model-api`} label="管理模型 API ↗" openExternal className="mc-secondary" /></div>
+          </div>
+        </section>
+        <div className="mc-launch">
+          <Switch label="用当前猫娘的声音解说" checked={!!withNarration} onChange={setNarrationDraft} />
+          <Inline>
+          <Button className="mc-primary" tone="primary" disabled={!stateReady||busy||needsRuntimeSetup||needsGameAccount||preparation.active||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
             if(loginPassword||loginEnabled!==null) {
               setFailure(true);setNotice("请先点击“保存连接与登录”，再开始游玩。");return
             }
@@ -281,11 +283,18 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           {state.viewer_url&&<FileDownload href={state.viewer_url} label="打开 3D 观战" openExternal tone="primary" />}
           {state.operator?.available&&<FileDownload href={state.operator.url} label="账户授权" openExternal />}
         </Inline>
-        <Text>启动会启用本次自主游玩和 Neko 主脑参与；不会开启开机自启。正在运行时请先停止并等待动作结束，再切换连接。</Text>
-        <Inline><StatusBadge label={runtime.viewer?.available?"观战已连接":"观战待连接"} tone={runtime.viewer?.available?"success":"default"} />
-          <StatusBadge label={runtime.viewer?.server_extension?.active?"服务器扩展已识别":"标准 Mineflayer"} tone={runtime.viewer?.server_extension?.active?"success":"default"} />
-          <StatusBadge label={state.heartbeat?.enabled&&!state.heartbeat?.explicit_stop?"主脑参与已开启":"主脑参与未开启"} /></Inline>
-        {state.server_pack?.mode==="auto"&&!state.server_pack?.available&&<Text>可选扩展资料尚未安装或校验未通过，标准 Minecraft 可照常使用。</Text>}
+        </div>
+        <p className="mc-compact">只有点击开始才会进服。保存设置或重开插件不会自动启动游戏。</p>
+        <Accordion open={false} title="外观与更多设置"><Stack gap={10}>
+        <Grid cols={2}>
+          <Field label="Web 角色外观"><Select value={appearanceDraft??settings.viewer?.default_appearance??"bundled:yui-ysm"} options={[{value:"bundled:yui-ysm",label:"自带 YUI YSM"},{value:"bundled:yui-slim",label:"自带 YUI 皮肤"},{value:"server",label:"跟随服务器"}]} onChange={setAppearanceDraft} /></Field>
+          <Field label="扩展资料"><Select value={extensionDraft??settings.extension_pack?.mode??"auto"} options={[{value:"auto",label:"自动识别已安装扩展"},{value:"none",label:"仅使用标准 Minecraft"},{value:"custom",label:"保留自定义扩展配置"}]} onChange={setExtensionDraft} /></Field>
+          <Field label="参与游戏的 Neko 角色"><Input value={characterDraft??settings.heartbeat?.target??""} placeholder="留空跟随当前 Neko 角色" onChange={setCharacterDraft} /></Field>
+        </Grid>
+        <Switch label="下次启动使用 Neko 绑定的决策模型" checked={usingHostModel} onChange={setHostModel} />
+        {!usingHostModel&&<Text>保留已配置的独立规划模型；可在高级设置中修改。</Text>}
+        <Text>默认使用 Neko 官方本机地址 http://127.0.0.1:48911。自定义端口可在高级设置修改；留空角色跟随当前猫娘。</Text>
+        </Stack></Accordion>
         {runtime.planner_error&&<Alert tone="warning" message={`规划暂未恢复：${runtime.planner_error}。下方运行详情保留错误和重试状态。`} />}
       </Stack></Card>
       <Accordion open={false} title="观战设置与画面诊断"><Stack gap={10}>
@@ -304,24 +313,24 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         {runtime.viewer && <Accordion open={false} title="资源版本与画面接入状态"><JsonView data={{pack:runtime.viewer.pack,version:runtime.viewer.minecraftVersion,reason:runtime.viewer.reason,window:runtime.viewer_window,content:runtime.viewer.content}} /></Accordion>}
         {state.viewer_url && !state.viewer_body_binding_verified && <Alert tone="warning" message="已保存页面地址；画面与当前 1.21.1 角色的绑定尚未核验。" />}
       </Stack></Accordion>
-      <Card title="当前工作与用户反馈"><Stack gap={12}>
-        <ActionButton action={action("review_game")} />
-        <ActionButton action={action("present_status")} />
+      <Accordion open={!!runtime.worker_alive||!!runtime.game_connected||!!goal} title={runtime.worker_alive||runtime.game_connected?"当前工作与用户反馈":"给她一个目标（可选）"}><Stack gap={12}>
+        {(runtime.worker_alive||runtime.game_connected)&&<Inline><ActionButton action={action("review_game")} />
+        <ActionButton action={action("present_status")} /></Inline>}
         <Text>当前目标：{runtime.current_goal?.goal || runtime.standing_goal || "尚无目标"}</Text>
         <DataTable data={runtime.pending || []} columns={[{key:"id",label:"原生任务"},{key:"phase",label:"执行状态"}]} emptyText="没有待结算动作" />
         <Textarea value={goal} placeholder="例如：先收集食物，然后在安全地点建立庇护所。" onChange={v => { setGoal(v); setRequestId("") }} />
-        <Select value={mode} options={[{value:"append",label:"排队接续"},{value:"insert",label:"安全检查点插入，之后恢复"},{value:"replace",label:"停止旧动作并改变目标"}]} onChange={v => { setMode(v); setRequestId("") }} />
+        {(runtime.worker_alive||runtime.game_connected)?<Stack gap={10}><Select value={mode} options={[{value:"append",label:"排队接续"},{value:"insert",label:"安全检查点插入，之后恢复"},{value:"replace",label:"停止旧动作并改变目标"}]} onChange={v => { setMode(v); setRequestId("") }} />
         <Inline>
           <Button tone="primary" disabled={busy || !goal.trim()} onClick={async () => {
             const id = requestId || crypto.randomUUID(); setRequestId(id)
             const ok = await call("panel_intent", {goal, mode, request_id:id})
             if (ok) { setGoal(""); setRequestId("") }
           }}>投递目标</Button>
-          {!external && <Button disabled={busy || preparation.active || !goal.trim()} onClick={async () => { await call("panel_start", {goal}) }}>按此目标开始</Button>}
         </Inline>
+        </Stack>:<Text>可以留空，让她自行选择目标。点击上方“开始自主游玩”时，会带上这里填写的目标。</Text>}
         {requestId && <Text>请求 ID：{requestId}。确认不明时保持相同内容重试。</Text>}
         <Text>受理、原生动作完成、规划器报告和实际目标达成是不同状态。主脑决定阶段目标，独立框架继续规划和执行；正常工作无需重新派发。</Text>
-      </Stack></Card>
+      </Stack></Accordion>
       <Accordion open={false} title="解说与主脑状态"><Stack gap={10}>
         <StatusBadge label={state.heartbeat?.explicit_stop ? "已停止" : state.heartbeat?.enabled ? "已启用" : "未启用"} tone={state.heartbeat?.enabled && !state.heartbeat?.explicit_stop ? "success" : "default"} />
         {external && state.heartbeat?.explicit_stop && <Stack gap={8}>
