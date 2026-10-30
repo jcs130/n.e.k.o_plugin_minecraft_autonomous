@@ -123,8 +123,12 @@ def test_dashboard_roundtrip_and_start_share_exact_runtime(prepared, plugin_inst
     assert calls and all(call["full"] is False for call in calls)
 
 
-def test_incompatible_bound_runtime_does_not_start(prepared, plugin_instance, plugin_module, monkeypatch, run_async):
+@pytest.mark.parametrize("one_click_supported,action", [(True, "use_prepared_runtime"), (False, "open_advanced_settings")])
+def test_incompatible_bound_runtime_does_not_start(prepared, plugin_instance, plugin_module, monkeypatch, run_async,
+                                                   one_click_supported, action):
     host, _, _ = prepared
+    preparation = __import__(plugin_module.__package__ + ".runtime_preparation", fromlist=["unused"])
+    monkeypatch.setattr(preparation, "supported", lambda: one_click_supported)
     raw, _ = host.resolve_host_runtime({"autonomy": {"enabled": True}, "server": {"host": "localhost", "username": "Fixture"}})
     monkeypatch.setattr(plugin_instance.config, "dump", AsyncMock(return_value=raw))
     def mismatch(*_, **__):
@@ -134,7 +138,9 @@ def test_incompatible_bound_runtime_does_not_start(prepared, plugin_instance, pl
     monkeypatch.setattr(plugin_module, "verify_runtime", lambda _: pytest.fail("incompatible runtime must not start"))
     result = run_async(plugin_instance.start())
     assert isinstance(result, Err) and result.error["code"] == "runtime_setup_required"
-    assert result.error["reason"] == "incompatible" and "组件" in result.error["message"]
+    assert result.error["reason"] == "incompatible" and result.error["next_action"] == action
+    assert result.error["game_connected"] is False and result.error["autonomy_running"] is False
+    assert "未启动游戏" in result.error["message"]
     assert plugin_instance._worker is None
 
 
