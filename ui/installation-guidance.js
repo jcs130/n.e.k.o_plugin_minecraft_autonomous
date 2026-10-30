@@ -36,13 +36,20 @@ export function preparationView(installation) {
     message:typeof setup.message==='string'?setup.message:''};
 }
 export function preparedRuntimeSelection(settings, installation) {
-  if (installation?.prepared_runtime !== 'incompatible' || !settings?.runtime?.bundle_root
-      || settings.runtime.mode === 'external' || settings?.viewer?.url) return null;
+  const oldBundle=installation?.prepared_runtime==='incompatible'&&!!settings?.runtime?.bundle_root;
+  const missingCustom=installation?.prepared_runtime==='custom'&&['metadata_unavailable','version_mismatch'].includes(installation?.backend);
+  if ((!oldBundle&&!missingCustom)||settings?.runtime?.mode==='external'||settings?.viewer?.url
+      ||settings?.backend?.provider==='java-client') return null;
   return {
     backend:{node:'',directory:''},
     viewer:{renderer_directory:'',catalog_file:'',bundled_appearance_catalog_file:''},
     runtime:{bundle_root:'',bundle_manifest_sha256:''},
   };
+}
+export function startPreparationRequired(installation) {
+  if (installation?.prepared_runtime==='external') return false;
+  return ['missing','incompatible'].includes(installation?.prepared_runtime)
+    ||installation?.backend!=='version_matches_not_integrity_verified';
 }
 export function installationGuidance(installation, external, viewerUrl) {
   return {

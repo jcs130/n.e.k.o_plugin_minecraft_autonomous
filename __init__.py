@@ -25,7 +25,7 @@ from .neko_heartbeat import NekoHeartbeat
 from .neko_narration import NekoNarration
 from .neko_presentation import NekoPresentation
 from .neko_tools import NekoAutonomyTools
-from .prepared_runtime import require_prepared_runtime, resolve_host_runtime
+from .prepared_runtime import resolve_host_runtime
 from .qiandengji_account import AccountError, start_failure
 from .qiandengji_account import preflight as qiandengji_preflight
 from .qiandengji_panel import QiandengjiPanel
@@ -124,8 +124,9 @@ class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, RuntimePreparation, 
             if not settings.enabled:
                 return Err({"code": "autonomy_disabled", "message": "先在配置中启用 autonomy；插件不会自动进入游戏。"})
             settings.require_server()
+            if prepared in {"missing", "incompatible"}:
+                return Err(self.runtime_start_error(planner_raw, prepared))
             await qiandengji_preflight(planner_raw, settings, data_root=settings.data_root(self.data_path()))
-            require_prepared_runtime(prepared)
             entry = verify_runtime(settings.runtime_directory(self.cache_path()))
             data_root = settings.data_root(self.data_path())
             data = data_root / "sessions" / settings.identity / "host"
@@ -153,6 +154,8 @@ class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, RuntimePreparation, 
         except AccountError as error:
             return Err(start_failure(error))
         except (OSError, ValueError, KeyError) as error:
+            if str(error).startswith("backend_missing:"):
+                return Err(self.runtime_start_error(planner_raw, "backend_missing"))
             return Err({"code": "configuration_error", "message": str(error)})
         except TransportError:
             return Err({"code": "configuration_unavailable", "message": "宿主配置接口暂不可用，未启动游戏。"})

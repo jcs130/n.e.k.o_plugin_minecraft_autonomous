@@ -423,7 +423,12 @@ class Dashboard:
             result = await self.save_settings(patch)
             if isinstance(result, Err):
                 return result
-            return await self.start(goal=goal.strip() or "在 Minecraft 世界里自主生活，结合自己的兴趣和当前事实选择目标，兼顾生存并根据用户反馈调整。")
+            started = await self.start(goal=goal.strip() or "在 Minecraft 世界里自主生活，结合自己的兴趣和当前事实选择目标，兼顾生存并根据用户反馈调整。")
+            if isinstance(started, Err) and isinstance(started.error, dict) and started.error.get("code") in {"runtime_setup_required", "runtime_setup_active"}:
+                # Installation is a normal first-use state. Keep its structured
+                # recovery action instead of the host's generic entry exception.
+                return Ok({"success": False, "started": False, "error": started.error})
+            return started
         except (OSError, ValueError, KeyError, RuntimeError):
             return Err({"code": "quick_start_not_ready", "message": "当前会话有未确认回执或配置尚未就绪；请先处理面板中的状态，未启动新角色。"})
 

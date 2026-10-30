@@ -63,3 +63,29 @@ test('an explicit old prepared-runtime selection preserves account, model and da
   assert.equal(guidance.preparedRuntimeSelection(raw,{prepared_runtime:'prepared'}),null);
   assert.equal(guidance.preparedRuntimeSelection(raw,{prepared_runtime:'custom'}),null);
 });
+
+test('missing and mismatched backends block play before the start action', () => {
+  assert.equal(typeof guidance.startPreparationRequired, 'function');
+  for (const prepared_runtime of ['missing','incompatible'])
+    assert.equal(guidance.startPreparationRequired({prepared_runtime,backend:'version_matches_not_integrity_verified'}),true);
+  for (const backend of ['metadata_unavailable','version_mismatch',undefined])
+    assert.equal(guidance.startPreparationRequired({prepared_runtime:'custom',backend}),true);
+  for (const prepared_runtime of ['prepared','custom'])
+    assert.equal(guidance.startPreparationRequired({prepared_runtime,backend:'version_matches_not_integrity_verified'}),false);
+  assert.equal(guidance.startPreparationRequired({prepared_runtime:'external'}),false);
+});
+
+test('a broken custom backend has an explicit local component recovery choice', () => {
+  const settings={backend:{node:'node',directory:'missing'},runtime:{mode:'embedded',data_directory:'private-data'},
+    viewer:{renderer_directory:'custom'},server:{username:'my-role'},planner:{model:'my-model'}};
+  const before=structuredClone(settings);
+  for (const backend of ['metadata_unavailable','version_mismatch']) {
+    const patch=guidance.preparedRuntimeSelection(settings,{prepared_runtime:'custom',backend});
+    assert.deepEqual(Object.keys(patch).sort(),['backend','runtime','viewer']);
+    assert.equal(patch.backend.directory,'');
+  }
+  assert.deepEqual(settings,before);
+  assert.equal(guidance.preparedRuntimeSelection(settings,{prepared_runtime:'custom',backend:'version_matches_not_integrity_verified'}),null);
+  assert.equal(guidance.preparedRuntimeSelection({...settings,backend:{provider:'java-client'}},{prepared_runtime:'custom',backend:'metadata_unavailable'}),null);
+  assert.equal(guidance.preparedRuntimeSelection({...settings,viewer:{url:'https://remote.test'}},{prepared_runtime:'custom',backend:'metadata_unavailable'}),null);
+});

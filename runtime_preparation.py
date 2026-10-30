@@ -14,7 +14,7 @@ from agent_mc_autonomy.configuration import Settings
 from agent_mc_autonomy.ownership import session_is_owned
 from agent_mc_autonomy.runtime_bundle.download import ReleaseBundle, prepare_release
 from agent_mc_autonomy.runtime_bundle.manifest import read_json
-from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
+from plugin.sdk.plugin import Err, Ok, TransportError, plugin_entry, ui
 
 from .prepared_runtime import resolve_host_runtime
 
@@ -40,13 +40,7 @@ def selection(raw):
 
 def managed(raw):
     """Only defaults or a known short-cache installation may be selected by this action."""
-    if any(not isinstance(raw.get(key, {}), dict) for key in SELECTION):
-        return False
-    if (
-        raw.get("runtime", {}).get("mode") == "external"
-        or raw.get("viewer", {}).get("url")
-        or raw.get("backend", {}).get("provider") == "java-client"
-    ):
+    if not selectable(raw):
         return False
     root = raw.get("runtime", {}).get("bundle_root")
     if not root:
@@ -75,11 +69,34 @@ def managed(raw):
     )
 
 
+def selectable(raw):
+    """A user may replace local paths, never another runtime's connection."""
+    return (
+        all(isinstance(raw.get(key, {}), dict) for key in SELECTION)
+        and raw.get("runtime", {}).get("mode") != "external"
+        and not raw.get("viewer", {}).get("url")
+        and raw.get("backend", {}).get("provider") != "java-client"
+    )
+
+
 def supported():
     return sys.platform == "win32" and platform.machine().lower() in {"amd64", "x86_64"}
 
 
 class RuntimePreparation:
+    def runtime_start_error(self, raw, reason):
+        if not supported() or not selectable(raw):
+            action = "open_advanced_settings"
+            message = "游戏后端尚未安装或配置目录已失效。请在高级设置中选择与本插件匹配的运行环境；未启动游戏，也未修改原路径。"
+        elif managed(raw):
+            action = "prepare_runtime"
+            message = "游戏组件尚未就绪。请在插件面板点击“准备游戏组件”，完成后再开始自主游玩；账号、模型和历史保留。"
+        else:
+            action = "use_prepared_runtime"
+            message = "自定义后端未安装或目录已失效。可点击“改用一键游戏组件”后准备组件；需要保留自定义环境时，请在高级设置中修正路径。未启动游戏。"
+        return {"code": "runtime_setup_required", "reason": reason, "message": message, "next_action": action,
+                "game_connected": False, "autonomy_running": False}
+
     def _setup_active(self):
         task = getattr(self, "_runtime_setup_task", None)
         return task is not None and not task.done()
@@ -105,8 +122,8 @@ class RuntimePreparation:
         with self._control_lock:
             self._runtime_setup_state = row
 
-    def _setup_idle(self, raw):
-        if not managed(raw):
+    def _setup_idle(self, raw, *, selecting=False):
+        if not (selectable(raw) if selecting else managed(raw)):
             raise ValueError("custom_runtime")
         if self._worker and self._worker.snapshot().get("worker_alive"):
             raise ValueError("runtime_active")
@@ -119,6 +136,33 @@ class RuntimePreparation:
             snapshot = read_json(state, 256 * 1024)
             if snapshot.get("uncertain") or snapshot.get("pending") or snapshot.get("inflight_request"):
                 raise ValueError("runtime_unsettled")
+
+    @ui.action(label="改用一键游戏组件")
+    @plugin_entry(id="use_prepared_runtime", name="明确选择一键游戏组件", kind="service",
+                  description="仅在用户明确选择时取消自定义组件路径；保留账号、模型、数据及停止状态。不下载、不进服，仍须单独准备并开始。")
+    async def use_prepared_runtime(self, **_):
+        if not supported():
+            return Err({"code": "runtime_setup_platform", "message": "此一键组件适用于 Windows x64；当前平台请保留并配置自己的运行环境。"})
+        try:
+            raw = await self.config.dump()
+            with self._control_lock:
+                if self._setup_active():
+                    return Err({"code": "runtime_setup_active", "message": "游戏组件正在准备，请先等待完成或取消。"})
+                self._setup_idle(raw, selecting=True)
+            result = await self.save_settings({
+                "backend": {"node": "", "directory": ""},
+                "viewer": {"renderer_directory": "", "catalog_file": "", "bundled_appearance_catalog_file": ""},
+                "runtime": {"bundle_root": "", "bundle_manifest_sha256": ""},
+            })
+            if isinstance(result, Ok):
+                self._setup_progress({"phase": "idle"})
+            return result
+        except TransportError:
+            return Err({"code": "runtime_selection_unconfirmed",
+                        "message": "组件选择的保存结果尚未确认。请刷新页面核对，勿重复保存；未自动下载或启动游戏。"})
+        except (OSError, ValueError, KeyError):
+            return Err({"code": "runtime_selection_not_saved",
+                        "message": "未更换组件路径。请先停止游玩并确认原动作已结算；外部连接和自定义远程观战不会被接管。"})
 
     @ui.action(label="准备游戏组件", tone="primary")
     @plugin_entry(

@@ -4,7 +4,7 @@ import {
   Alert, Accordion, JsonView, FileDownload, useState, useEffect,
 } from "@neko/plugin-ui"
 import type { PluginSurfaceProps } from "@neko/plugin-ui"
-import { installationGuidance, preparedRuntimeSelection, preparationView } from "./installation-guidance.js"
+import { installationGuidance, preparedRuntimeSelection, preparationView, startPreparationRequired } from "./installation-guidance.js"
 import { applyConnectionPreset } from "./connection-presets.js"
 import { startPanelRefresh } from "./panel-refresh.js"
 import NativeControls from "./native-controls"
@@ -60,6 +60,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const installation = installationGuidance(state.installation, external, state.viewer_url)
   const preparation = preparationView(state.installation)
   const preparedSelection = preparedRuntimeSelection(settings, state.installation)
+  const needsRuntimeSetup = startPreparationRequired(state.installation)
   const action = (id: string) => actions.find(a => a.entry_id === id || a.id === id)
   const call = async (id: string, args: any) => {
     setBusy(true); setNotice(""); setFailure(false); setFieldError(null)
@@ -81,6 +82,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       }
       setNotice(id === "qiandengji_account" && result?.imported
         ? `已接入 ${result.username}，服务器和自动登录已配置。选好模型后点击“开始自主游玩”即可。`
+        : id === "use_prepared_runtime" ? "已选择一键游戏组件。请先准备组件，完成后再开始；账号和模型保留，游戏未启动。"
         : "请求已受理，请核对更新后的状态和回执。")
       await props.api.refresh()
       return true
@@ -194,13 +196,14 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             :preparation.phase!=='ready'&&preparation.available&&<Button disabled={busy||runtime.worker_alive||runtime.game_connected}
               onClick={()=>call('prepare_runtime',{})}>{preparation.button}{preparation.size?`（约 ${preparation.size}）`:''}</Button>}
           <Text>只准备当前版本的组件，不启动游戏、不调用模型；下载完成后再点击“开始自主游玩”。</Text>
-          <FileDownload href="https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/tag/v0.6.112" label="网络不可用？下载同版本完整离线包" openExternal />
+          <FileDownload href="https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/latest" label="完整离线包与安装说明" openExternal />
         </Stack>}
-        {preparedSelection && <Stack gap={6}>
+        {preparedSelection && preparation.available && <Stack gap={6}>
           <Button disabled={busy||preparation.active||runtime.game_connected||runtime.worker_alive||runtime.autonomy_running}
-            onClick={()=>call("save_settings",{settings:preparedSelection})}>使用已安装的新版运行环境</Button>
-          <Text>先停止旧版游玩并运行新版安装入口，再点此按钮。只重选本机运行资源，保留账号、模型、记忆和其它设置；不会自动开始游戏。</Text>
+            onClick={()=>call("use_prepared_runtime",{})}>{state.installation?.prepared_runtime==='custom'?"改用一键游戏组件":"使用已安装的新版运行环境"}</Button>
+          <Text>此操作会取消自定义组件路径，重新选择经过校验的一键组件；账号、模型、记忆和其它设置保留。请先停止游玩并等动作结算，再选择、准备；不会自动开始游戏。</Text>
         </Stack>}
+        {!external&&needsRuntimeSetup&&<Alert tone="info" message="游戏组件尚未就绪，请先完成上方组件准备；就绪后即可开始自主游玩。" />}
         <Inline><Text>{runtime.model_status?.model ? `当前实际动作规划模型：${runtime.model_status.model}。` : settings.planner?.route === "direct" ? `动作规划使用已配置的独立模型：${settings.planner.model || "待填写"}。` : "动作规划复用本插件已绑定的 Neko 模型。首次使用只需在官方页面绑定 decision，以后直接开始。"}</Text>
           <FileDownload href={`${props.host?.origin || ""}/ui/model-api`} label="Neko 模型 API" openExternal />
           <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=config`} label="本插件模型绑定" openExternal /></Inline>
@@ -242,7 +245,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>默认使用 Neko 官方本机地址 http://127.0.0.1:48911。自定义端口可在高级设置修改；留空角色跟随当前猫娘。</Text>
         </Stack></Accordion>
         <Inline>
-          <Button tone="primary" disabled={!stateReady||busy||preparation.active||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
+          <Button tone="primary" disabled={!stateReady||busy||needsRuntimeSetup||preparation.active||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
             if(loginPassword||loginEnabled!==null) {
               setFailure(true);setNotice("请先点击“保存连接与登录”，再开始游玩。");return
             }
@@ -250,7 +253,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
               appearance:appearanceDraft??settings.viewer?.default_appearance??"bundled:yui-ysm",
               extension_mode:extensionDraft??settings.extension_pack?.mode??"auto",
               character:characterDraft??settings.heartbeat?.target??"",narration:!!withNarration}))setConnectionDraft(null)
-          }}>{!stateReady?"正在读取连接…":preparation.active?"正在准备游戏组件…":runtime.game_connected?"正在自主游玩":runtime.phase==="starting"?"正在连接…":"开始自主游玩"}</Button>
+          }}>{!stateReady?"正在读取连接…":preparation.active?"正在准备游戏组件…":runtime.game_connected?"正在自主游玩":runtime.phase==="starting"?"正在连接…":needsRuntimeSetup?"请先准备游戏组件":"开始自主游玩"}</Button>
           <Button disabled={busy||runtime.game_connected||!connectionDraft} onClick={async()=>{
             if(await call("save_settings",{settings:{server:connection}}))setConnectionDraft(null)
           }}>仅保存连接</Button>

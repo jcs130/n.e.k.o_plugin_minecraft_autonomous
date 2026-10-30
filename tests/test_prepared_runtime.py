@@ -133,7 +133,8 @@ def test_incompatible_bound_runtime_does_not_start(prepared, plugin_instance, pl
     monkeypatch.setattr(host, "verify_bundle", mismatch)
     monkeypatch.setattr(plugin_module, "verify_runtime", lambda _: pytest.fail("incompatible runtime must not start"))
     result = run_async(plugin_instance.start())
-    assert isinstance(result, Err) and "prepare.cmd" in result.error["message"]
+    assert isinstance(result, Err) and result.error["code"] == "runtime_setup_required"
+    assert result.error["reason"] == "incompatible" and "组件" in result.error["message"]
     assert plugin_instance._worker is None
 
 
