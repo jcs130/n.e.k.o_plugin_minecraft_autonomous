@@ -1,3 +1,8 @@
+## 0.6.145
+
+- Consume shared autonomy 0.2.141 so structured discovery provenance no longer crashes receipt archiving. Keep the pinned native body, existing durable intents and request-owned speech completion.
+- No chat is rerouted or replayed, and no model, account or goal default changes. Loading and real gameplay are verified separately.
+
 ## 0.6.144
 
 - Consume autonomy 0.2.140 and the verified core150 engine-only distribution. Preserve the existing native executor, intent mailbox, state and host-controlled narration.
