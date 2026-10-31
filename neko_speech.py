@@ -159,7 +159,7 @@ async def _deliver(plugin, base, target, port, generation, line, receipt, path):
             response = await client.post(base + "/api/game/minecraft_autonomous/speak", headers={"Origin": base}, json={
                 "lanlan_name": target, "session_id": "minecraft-" + hashlib.sha256(receipt["session"].encode()).hexdigest()[:24],
                 "line": line, "request_id": receipt["decision_id"], "sdk_speech_correlation_id": receipt["opportunity_id"],
-                "interrupt_audio": False, "emit_turn_end": False, "wait_for_audio_completion": True,
+                "interrupt_audio": False, "emit_turn_end": True, "wait_for_audio_completion": True,
                 "mirror_text": True, "playback_gain": 1.0}, timeout=httpx.Timeout(55, connect=3))
             result = response.json()
             accepted = response.status_code == 200 and result.get("ok") is True

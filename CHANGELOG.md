@@ -1,3 +1,8 @@
+## 0.6.144
+
+- Consume autonomy 0.2.140 and the verified core150 engine-only distribution. Preserve the existing native executor, intent mailbox, state and host-controlled narration.
+- Emit the matching game-speech turn-end alongside its audio completion, so a request-aware player can release the voice floor without waiting for its watchdog. Delivery is still distinct from actual playback.
+
 ## 0.6.143
 
 - Consume shared autonomy 0.2.139 and its hash-verified core149 engine-only distribution; keep native queue ownership, unknown-effect barriers and current account/goal settings.

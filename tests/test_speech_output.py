@@ -99,7 +99,7 @@ def test_public_output_order_receipts_and_no_replay(plugin_instance, run_async, 
         assert body["line"] == "先搭个小屋吧。"
         assert body["lanlan_name"] == "TestRole"
         assert body["session_id"].startswith("minecraft-")
-        assert not body["interrupt_audio"] and not body["emit_turn_end"] and body["wait_for_audio_completion"]
+        assert not body["interrupt_audio"] and body["emit_turn_end"] and body["wait_for_audio_completion"]
         assert "audio_completion_timeout" not in body  # The public host owns its completion bound.
         if outcome == "unknown":
             raise httpx.ReadTimeout("synthetic unknown")
