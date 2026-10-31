@@ -1,3 +1,8 @@
+## 0.6.143
+
+- Consume shared autonomy 0.2.139 and its hash-verified core149 engine-only distribution; keep native queue ownership, unknown-effect barriers and current account/goal settings.
+- Include the upstream indefinite-follow review fix without replacing a running body task.
+
 # Changelog
 
 ## 0.6.142（开发候选，未发布）
