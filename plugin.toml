@@ -1,6 +1,6 @@
 [plugin]
 id = "minecraft_autonomous"
-name = "我的世界联机"
+name = "千灯纪 · Agent友好的我的世界RPG服"
 version = "0.6.148"
 type = "plugin"
 entry = "plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin"

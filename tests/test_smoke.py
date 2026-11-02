@@ -10,7 +10,7 @@ def test_plugin_manifest_exists() -> None:
     project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     assert metadata["id"] == root.name == project["name"] == "minecraft_autonomous"
     assert metadata["entry"] == "plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin"
-    assert metadata['name'] == '我的世界联机'
+    assert metadata['name'] == '千灯纪 · Agent友好的我的世界RPG服'
     assert metadata["version"] == project["version"]
     assert project["version"] == "0.6.148"
     assert project["dependencies"][0] == (
