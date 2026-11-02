@@ -1,10 +1,10 @@
 [plugin]
 id = "minecraft_autonomous"
-name = "猫娘的方块世界"
+name = "我的世界联机"
 version = "0.6.148"
 type = "plugin"
 entry = "plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin"
-description = "让猫娘住进 Minecraft，开启属于她的方块冒险：探索、采集、建造，边玩边用熟悉的声音分享见闻。打开 3D 观战陪她看日出，也可以加入同一个服务器一起玩。千灯纪支持免邀请码准备普通体验账号；已有角色照常使用。模型沿用 Neko 配置，准备环境后点一下开始。"
+description = "把猫娘带进《我的世界》，成为一起探索、采集和建造的联机伙伴。听她分享冒险见闻，打开 3D 观战陪她看日出，也可以亲自进服一起玩。支持自己的服务器与千灯纪免邀请码体验，沿用 Neko 模型和声音，准备好后点一下开始。"
 short_description = "Minecraft 1.21.1 自主游玩与猫娘解说"
 keywords = ["Minecraft", "我的世界", "自主生存"]
 

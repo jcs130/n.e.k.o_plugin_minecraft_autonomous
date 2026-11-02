@@ -222,7 +222,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       {state.error && <Alert tone="danger" message="配置或观测暂不可用。请先检查插件配置。" />}
       {runtime.phase === "failed" && <Alert tone="danger" message="框架最近记录为运行失败；下方保留最后观测，刷新页面不会自动恢复游玩。" />}
       <div className="mc-hero">
-        <div className="mc-hero-copy"><span className="mc-world-mark" aria-hidden="true">▦</span><div><span className="mc-eyebrow">MINECRAFT · JAVA 1.21.1</span><h1>猫娘的方块世界</h1><p className="mc-sub">一起出发，把每一天都过成新的冒险。</p></div></div>
+        <div className="mc-hero-copy"><span className="mc-world-mark" aria-hidden="true">▦</span><div><span className="mc-eyebrow">MINECRAFT · JAVA 1.21.1</span><h1>我的世界联机</h1><p className="mc-sub">和猫娘一起联机，把方块世界变成家。</p></div></div>
         <Inline><StatusBadge label={runtime.game_connected?"正在游玩":['stopped','idle','starting','reconnecting','failed'].includes(runtime.phase)?({stopped:"已停止",idle:"尚未开始",starting:"正在连接",reconnecting:"正在重连",failed:"需要检查"}[runtime.phase]):"状态待确认"} tone={runtime.game_connected?"success":"default"}/><RefreshButton label="刷新状态" /></Inline>
       </div>
       <Onboarding kind="progress" accountReady={qiandengServer&&connection.auth==='offline'&&!needsGameAccount} needsAccount={needsGameAccount} componentsReady={state.installation?.prepared_runtime==='prepared'} />

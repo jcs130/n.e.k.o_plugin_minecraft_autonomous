@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "game": "minecraft",
   "versionId": "0.6.148-human-21.1.265",
-  "name": "猫娘的方块世界 · 一起玩",
+  "name": "我的世界联机 · 一起玩",
   "summary": "Minecraft 1.21.1 / NeoForge 21.1.265 / 女仆1.5.3 / YSM2.6.5 / RPG-HUD3.13；只含客户端公开下载清单，不包含账号、服务器或完整Minecraft。",
   "dependencies": {
     "minecraft": "1.21.1",
