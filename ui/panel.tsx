@@ -80,7 +80,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         throw new Error(detail.message || "请求未成功，请检查回执。")
       }
       if (id === "check_model" || id === "check_direct_model") setModelCheck(result)
-      if (id === "qiandengji_account") {
+      if (["qiandengji_account","join_public_account"].includes(id)) {
         setPortalResult(result)
         if (result?.imported) {
           setConnectionDraft(null); setIdentityBody(""); setInviteLink("")
@@ -194,8 +194,11 @@ export default function Panel(props: PluginSurfaceProps<any>) {
 
     </Stack></Accordion>
   </Stack>
-  const accountSetup = <Onboarding kind="account" account={nekoAccount} configured={qiandengServer&&connection.auth==='offline'&&!needsGameAccount} original={!!accountSelected||connection.auth==='microsoft'}
+  const publicSelected = state.website_account?.mode === 'public'
+  const accountSetup = <Onboarding kind="account" account={nekoAccount} configured={qiandengServer&&connection.auth==='offline'&&!needsGameAccount} original={!!accountSelected&&!publicSelected||connection.auth==='microsoft'}
     username={connection.username} busy={busy} disabled={external||runtime.game_connected||runtime.worker_alive}
+    publicSelected={publicSelected} publicUsername={state.website_account?.username} needsComponents={needsRuntimeSetup}
+    onPublic={()=>call("join_public_account",{username:agentName})}
     agentName={agentName} onName={setAgentName} legacyRevision={legacyAccountRevision} onLegacy={()=>setLegacyAccountRevision(v=>v+1)} legacy={legacyAccountSetup}
     onConnect={()=>call("connect_neko_account",{username:agentName,renew:nekoAccount.renewable===true})}
     onPause={()=>call("pause_neko_account_link",{})} />
@@ -219,7 +222,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       {state.error && <Alert tone="danger" message="配置或观测暂不可用。请先检查插件配置。" />}
       {runtime.phase === "failed" && <Alert tone="danger" message="框架最近记录为运行失败；下方保留最后观测，刷新页面不会自动恢复游玩。" />}
       <div className="mc-hero">
-        <div className="mc-hero-copy"><span className="mc-world-mark" aria-hidden="true">▦</span><div><span className="mc-eyebrow">MINECRAFT · JAVA 1.21.1</span><h1>猫娘的 Minecraft 世界</h1><p className="mc-sub">准备好账号与环境，让她开始自己的冒险。</p></div></div>
+        <div className="mc-hero-copy"><span className="mc-world-mark" aria-hidden="true">▦</span><div><span className="mc-eyebrow">MINECRAFT · JAVA 1.21.1</span><h1>猫娘的方块世界</h1><p className="mc-sub">一起出发，把每一天都过成新的冒险。</p></div></div>
         <Inline><StatusBadge label={runtime.game_connected?"正在游玩":['stopped','idle','starting','reconnecting','failed'].includes(runtime.phase)?({stopped:"已停止",idle:"尚未开始",starting:"正在连接",reconnecting:"正在重连",failed:"需要检查"}[runtime.phase]):"状态待确认"} tone={runtime.game_connected?"success":"default"}/><RefreshButton label="刷新状态" /></Inline>
       </div>
       <Onboarding kind="progress" accountReady={qiandengServer&&connection.auth==='offline'&&!needsGameAccount} needsAccount={needsGameAccount} componentsReady={state.installation?.prepared_runtime==='prepared'} />
@@ -297,6 +300,10 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         </Stack></Accordion>
         {runtime.planner_error&&<Alert tone="warning" message={`规划暂未恢复：${runtime.planner_error}。下方运行详情保留错误和重试状态。`} />}
       </Stack></Card>
+      <Accordion open={false} title="一起玩与独立 Eye 客户端"><Stack gap={10}>
+        <Text>主插件自带网页 3D 观战。真人 NeoForge 与本人 Eye 基础观战客户端可以单独下载，不需要给插件安装服务端。Eye 沿用原配对身份和数据转发，不能用普通角色替代。</Text>
+        <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=panel&surface=viewer`} label="下载真人 / Eye 客户端" openExternal />
+      </Stack></Accordion>
       <Accordion open={false} title="观战设置与画面诊断"><Stack gap={10}>
         <Text>在上方「观战与状态」页查看生命、饥饿、原生任务队列、决策耗时与中间结果，也可独立打开。</Text>
         <FileDownload href={`${props.host?.origin || ""}/plugin/minecraft_autonomous/ui/`} label="打开观战与状态" tone="primary" openExternal />

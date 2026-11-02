@@ -2,7 +2,7 @@
 
 from agent_mc_autonomy.configuration import Settings
 from agent_mc_autonomy.mailbox import Mailbox
-from agent_mc_autonomy.ownership import session_is_owned
+from agent_mc_autonomy.ownership import session_is_owned, session_lease
 from agent_mc_autonomy.recovery import require_no_pending_acknowledgement
 from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
 
@@ -15,7 +15,13 @@ from .qiandengji_account import (
     read_identity,
     start_failure,
 )
-from .qiandengji_onboarding import prepare_invitation, selected_identity, store_identity
+from .qiandengji_onboarding import (
+    account_root,
+    prepare_invitation,
+    prepare_public_identity,
+    selected_identity,
+    store_identity,
+)
 
 
 def require_idle(plugin, settings):
@@ -28,6 +34,34 @@ def require_idle(plugin, settings):
 
 
 class QiandengjiPanel:
+    @ui.action(label='免邀请码加入千灯纪')
+    @plugin_entry(id='join_public_account', name='免邀请码加入千灯纪', kind='service', timeout=85,
+                  description='本人显式创建或继续原普通Agent体验账号，保存自动登录，不关联猫娘计划账号，不启动游戏。',
+                  input_schema={'type': 'object', 'properties': {'username': {'type': 'string', 'maxLength': 16}}})
+    async def join_public_account(self, username: str = '', **_):
+        try:
+            from .neko_account_link import load_link
+            raw = await self.config.dump()
+            settings = Settings.parse(resolve_host_runtime(raw)[0])
+            require_idle(self, settings)
+            if settings.runtime_mode == 'external' or configured_identity(raw) or settings.login_config_file:
+                raise AccountError('existing_game_role_use_original_connection')
+            if settings.username and (settings.data_root(self.data_path()) / 'sessions' / settings.identity / 'host/status.json').exists():
+                raise AccountError('existing_game_role_use_original_connection')
+            with session_lease(account_root() / 'public-registration-lock'):
+                identity_file = prepare_public_identity(username, seed=load_link())
+                result = await account_action('join_public', str(identity_file), node=settings.node)
+                if result['ready']:
+                    return await self.qiandengji_account('import', identity_file=str(identity_file))
+                return Ok({**result, 'account_saved': True})
+        except (OSError, ValueError, RuntimeError) as error:
+            code = str(error) if isinstance(error, AccountError) else 'public_signup_unconfirmed'
+            messages = {'reserved_observer_name': 'Eye 是配对观战身份，不能注册为普通 Agent。请先使用本体，再以本人已授权的 Eye 身份观战。',
+                        'existing_game_role_use_original_connection': '请继续使用原角色和已保存登录，不要再次创建账号。',
+                        'account_runtime_active': '请先停止游玩并等待原动作结算，再准备账号。',
+                        'invalid_agent_name': '昵称须以 ag_ 开头，仅含英文字母、数字和下划线，总长不超过 16 位。'}
+            return Err({'code': code, 'message': messages.get(code, '账号准备未确认。请保留原昵称和本机身份，继续同一申请；已有账号请使用原登录，不重复建号。')})
+
     @ui.action(label="千灯纪网站账户接入")
     @plugin_entry(id="qiandengji_account", name="千灯纪网站账户接入", kind="service", timeout=85,
                   description="本人通过界面选身份文件或填写邀请，显式查状态、激活或接入；私有材料不回显，不启动游戏。",

@@ -9,7 +9,7 @@ import {runAgentAccess,parseInviteLink} from '../assets/server-extensions/qiande
 const origin='https://mc.kangqiang.site';
 const helper=new URL('../assets/server-extensions/qiandengji/access/agent-register.mjs',import.meta.url);
 test('official helper is byte pinned and invitation is a fragment, never a query token',async()=>{
-  assert.equal(createHash('sha256').update(await fs.readFile(helper)).digest('hex'),'cfa9733c093a27093100b3c08b21de0727af24f486561a07bf5a7868d49ca5cd');
+  assert.equal(createHash('sha256').update(await fs.readFile(helper)).digest('hex'),'d2f7b35e5b637fe5e1f07a2e6aca02ed8b9c0e72bde8fe982178aaa042f1eafb');
   const token='qdi_'+'i'.repeat(43);
   assert.deepEqual(parseInviteLink(origin+'/join#invite='+token),{origin,token});
   assert.throws(()=>parseInviteLink(origin+'/join?invite='+token));

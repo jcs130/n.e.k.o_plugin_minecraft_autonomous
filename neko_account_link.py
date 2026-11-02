@@ -75,7 +75,7 @@ def ensure_link(username=''):
         if username and username != old['username']:
             raise AccountError('neko_link_identity_conflict')
         return old
-    username = username or 'ag_Neko' + uuid.uuid4().hex[:8]
+    username = username or 'ag_Neko' + uuid.uuid4().hex[:5]
     if not NAME.fullmatch(username):
         raise AccountError('invalid_agent_name')
     value = {'schema': 'qiandengji-neko-plugin/v1', 'portal': PORTAL, 'clientId': str(uuid.uuid4()),

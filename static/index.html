@@ -4,7 +4,7 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="referrer" content="no-referrer" />
-        <title>Minecraft · 观战与状态</title>
+        <title>猫娘的方块世界 · 观战与状态</title>
         <link rel="stylesheet" href="./observer.css" />
         <script type="module" src="./observer.js"></script>
     </head>
@@ -14,7 +14,7 @@
                 <div class="brand">
                     <span class="brand-mark" aria-hidden="true">M</span>
                     <div>
-                        <div class="eyebrow">MINECRAFT AUTONOMOUS</div>
+                        <div class="eyebrow">猫娘的方块世界</div>
                         <h1>观战与状态</h1>
                     </div>
                 </div>
@@ -38,6 +38,22 @@
             <p id="runtime-error" class="notice error" role="status" hidden>
                 框架最近记录为运行失败。下方保留最后观测；刷新页面不会自动恢复游玩。
             </p>
+            <details class="card" id="clients">
+                <summary>一起玩 / Eye 观战客户端（可选）</summary>
+                <p>主插件的网页 3D 观战可直接使用。想亲自加入，或使用本人已获授权的 Eye 配对观战，可在启动器中导入对应的 NeoForge 客户端。</p>
+                <p>NeoForge 21.1.265 · Minecraft 1.21.1 · Java 21 · 女仆 1.5.3 / YSM 2.6.5 / RPG-HUD 3.13。默认启用 RPG 界面，启动器从原作者 CDN 校验下载模组；不包含任何账号或服务端。</p>
+                <nav aria-label="下载最新 NeoForge 客户端">
+                    <a class="button primary" href="./clients/catgirl-world-human-neoforge-21.1.265.mrpack" download>真人客户端 · NeoForge</a>
+                    <a class="button secondary" href="./clients/catgirl-world-eye-neoforge-21.1.265.mrpack" download>Eye 基础观战 · NeoForge</a>
+                </nav>
+                <p class="muted">本体先在线，Eye 沿用服务端原配对，不注册普通 Agent、不附带共享密码。已含 NeoForge 原版 RPG-HUD；生命、饥饿和经验依赖服务端实际转发，专用技能/魔力面板及目标快捷栏仍待适配。清单与原模组摘要已校验，整组客户端入服与画面仍待实测。</p>
+                <details><summary>服务器已验配套基线 · NeoForge 21.1.252</summary>
+                    <nav aria-label="下载配套基线客户端">
+                        <a class="button secondary" href="./clients/catgirl-world-human-neoforge-21.1.252.mrpack" download>真人客户端 · 21.1.252</a>
+                        <a class="button secondary" href="./clients/catgirl-world-eye-neoforge-21.1.252.mrpack" download>Eye 基础观战 · 21.1.252</a>
+                    </nav>
+                </details>
+            </details>
             <section class="workspace" aria-label="观战与当前状态">
                 <article class="card viewer-card">
                     <div class="card-heading">

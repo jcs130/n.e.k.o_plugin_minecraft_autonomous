@@ -28,19 +28,17 @@ async function privateWrite(file, value, replace = false) {
   await fs.writeFile(temporary, bytes, { flag: 'wx', mode: 0o600 });
   try { await fs.rename(temporary, absolute); } catch (error) { await fs.unlink(temporary); throw error; }
 }
-export async function runAgentAccess(args, output = console.log) {
+export async function runAgentAccess(args, output = console.log, timing = {}, policy = {}) {
   const [action, ...rest] = args;
+  if (action === 'join') return joinAgent(rest, output, timing);
+  if (action === 'join-plugin') return joinAgent(rest, output, timing, true);
   if (!action || ['help', '--help', '-h'].includes(action)) {
-    output('千灯纪 Agent 注册工具（Node 22+）\nregister --username ag_名字 --invite-url-file 私有链接文件 --identity-file 私有身份文件\n或 register --portal https://mc.kangqiang.site --username ag_名字 --invite-file 私有邀请码文件 --identity-file 私有身份文件\nlogin|status|activate|state|logout --identity-file 私有身份文件\n先注册，再登录和查状态；仅建号成功后进入游戏。邀请码、API 密钥及游戏密码不出现在命令参数或输出中。'); return 0;
+    output('千灯纪 Agent 接入工具（Node 22+）\njoin --username ag_名字 --invite-url-file 私有链接文件 --identity-file 私有身份文件\n免邀入口：join-plugin --portal https://mc.kangqiang.site --username ag_名字 --identity-file 私有身份文件\n一次完成登记、API登录和建号确认；ready 后仍需真实连接并等到 MC_AUTH_SUCCESS 与世界可用。\n已有分步接口：register、login、status、activate、state、logout；均支持 --identity-file。\n邀请码、API密钥及游戏密码不出现在命令参数或输出中。'); return 0;
   }
   if (!['register', 'login', 'status', 'activate', 'state', 'logout'].includes(action)) throw Error('UNKNOWN_COMMAND');
-  const options = {};
-  for (let i = 0; i < rest.length; i += 2) {
-    if (!['--portal', '--username', '--invite-file', '--invite-url-file', '--identity-file'].includes(rest[i]) || !rest[i + 1] || rest[i + 1].startsWith('--') || options[rest[i]]) throw Error('INVALID_OPTIONS');
-    options[rest[i]] = rest[i + 1];
-  }
+  const options = accessOptions(rest);
   let invitation;
-  if (action === 'register') {
+  if (action === 'register' && !policy.publicSignup) {
     if (!!options['--invite-file'] === !!options['--invite-url-file']) throw Error('ONE_INVITATION_FILE_REQUIRED');
     if (options['--invite-url-file']) {
       const link = parseInviteLink(await fs.readFile(options['--invite-url-file'], 'utf8'));
@@ -53,7 +51,7 @@ export async function runAgentAccess(args, output = console.log) {
   let identity;
   try { identity = JSON.parse(await fs.readFile(file, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   if (!identity) {
-    if (action !== 'register' || !options['--portal'] || !options['--username'] || !invitation) throw Error('REGISTER_OPTIONS_REQUIRED');
+    if (action !== 'register' || !options['--portal'] || !options['--username'] || !invitation && !policy.publicSignup) throw Error('REGISTER_OPTIONS_REQUIRED');
     if (!/^ag_[A-Za-z0-9_]{1,13}$/.test(options['--username'])) throw Error('INVALID_AGENT_NAME');
     identity = { schemaVersion: 1, portal: portalOrigin(options['--portal']), username: options['--username'], clientId: randomUUID(),
       clientSecret: randomBytes(32).toString('base64url'), gameRequestId: randomUUID(), gamePassword: randomBytes(24).toString('base64url') };
@@ -78,7 +76,7 @@ export async function runAgentAccess(args, output = console.log) {
     return { state: 'authenticated', username: identity.username, expiresAt: result.expiresAt, identityFile: path.resolve(file) };
   }
   if (action === 'register') {
-    const result = await call('register', 'POST', { requestId: identity.clientId, username: identity.username, clientSecret: identity.clientSecret }, invitation);
+    const result = await call(policy.publicSignup ? 'public-register' : 'register', 'POST', { requestId: identity.clientId, username: identity.username, clientSecret: identity.clientSecret }, policy.publicSignup ? null : invitation);
     if (result.clientId !== identity.clientId || result.username !== identity.username) throw Error('REGISTER_RESPONSE_MISMATCH');
     output(JSON.stringify({ state: result.state, username: identity.username, clientId: identity.clientId, duplicate: result.duplicate, identityFile: path.resolve(file), nextAction: 'login' })); return 0;
   }
@@ -93,11 +91,63 @@ export async function runAgentAccess(args, output = console.log) {
     await login(); result = await call(action === 'state' ? 'state' : 'status');
   }
   if (action === 'activate' && result.state === 'not_created') {
-    if (!result.game?.ready) { output(JSON.stringify({ state: 'awaiting_game_bridge', username: identity.username, nextAction: 'status', message: '接入身份已保存；游戏建号桥待上线，请稍后查询，不要重复注册。' })); return 2; }
+    if (!result.game?.ready) { output(JSON.stringify({ state: 'awaiting_game_bridge', username: identity.username, nextAction: 'status', message: '接入身份已保存；建号服务暂不可用，请稍后查询，不要重复注册。' })); return 2; }
     result = await call('activate', 'POST', { requestId: identity.gameRequestId, gamePassword: identity.gamePassword });
   }
   if (action === 'logout') { delete identity.token; delete identity.expiresAt; await privateWrite(file, identity, true); }
   output(JSON.stringify(result)); return 0;
+}
+
+// A short, resumable entrance over the existing API. Only status reads are
+// polled. Persist the attempted activation before POST, so a timeout or a
+// stopped CLI can never silently submit the game mutation a second time.
+function accessOptions(args) {
+  const options = {};
+  for (let i = 0; i < args.length; i += 2) {
+    if (!['--portal', '--username', '--invite-file', '--invite-url-file', '--identity-file'].includes(args[i]) || !args[i + 1] || args[i + 1].startsWith('--') || options[args[i]]) throw Error('INVALID_OPTIONS');
+    options[args[i]] = args[i + 1];
+  }
+  return options;
+}
+export async function joinAgent(args, output=console.log, timing={}, publicSignup=false) {
+  const options=accessOptions(args),file=options['--identity-file'];
+  if(!file)throw Error('IDENTITY_FILE_REQUIRED');
+  if(publicSignup&&(options['--invite-file']||options['--invite-url-file']))throw Error('INVITATION_NOT_USED_FOR_PUBLIC_SIGNUP');
+  let identity, result;
+  try{identity=JSON.parse(await fs.readFile(file,'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
+  const capture=async(action,options)=>{let value;await runAgentAccess([action,...options],line=>{value=JSON.parse(line);},timing,{publicSignup});return value;};
+  const local=['--identity-file',file];
+  // A resumed invocation must still honor the requested identity. Never turn
+  // a mistyped --username/--portal into a connection for an older saved role.
+  for(const key of ['--username','--portal'])if(options[key])local.push(key,options[key]);
+  if(identity){
+    try{result=await capture('status',local);}
+    catch(error){if(error.status!==401||identity.joinRegistered)throw error;}
+  }
+  if(!result){
+    await capture('register',args);
+    identity=JSON.parse(await fs.readFile(file,'utf8'));identity.joinRegistered=true;await privateWrite(file,identity,true);
+    result=await capture('status',local);
+  }
+  identity=JSON.parse(await fs.readFile(file,'utf8'));
+  if(!identity.joinRegistered){identity.joinRegistered=true;await privateWrite(file,identity,true);}
+  const end=Date.now()+(timing.maxWaitMs??60000),interval=timing.pollIntervalMs??1500;
+  while(true){
+    if(result.state==='ready'&&result.gameAccountCreated===true){
+      output(JSON.stringify({state:'ready',username:result.username,gameAccountCreated:true,gameAddress:result.gameAddress,gameVersion:result.gameVersion,identityFile:path.resolve(file),nextAction:'import-account',gameLoginVerified:false,message:'建号已完成；将私有身份文件导入客户端，连接并等到 MC_AUTH_SUCCESS 且世界可用，才算真实入服。'}));return 0;
+    }
+    if(result.state==='not_created'){
+      identity=JSON.parse(await fs.readFile(file,'utf8'));
+      if(identity.joinActivationAttempted){output(JSON.stringify({state:'unknown',username:identity.username,identityFile:path.resolve(file),nextAction:'status',message:'上次建号结果尚未确认；保留原身份并查询，不重复提交。'}));return 2;}
+      if(!result.game?.ready){output(JSON.stringify({state:'awaiting_game_bridge',username:identity.username,identityFile:path.resolve(file),nextAction:'join',message:'建号服务暂不可用；稍后用同一命令接续，无需重新登记。'}));return 2;}
+      identity.joinActivationAttempted=true;await privateWrite(file,identity,true);
+      result=await capture('activate',local);continue;
+    }
+    if(['failed','unknown','revoked'].includes(result.state)||Date.now()>=end){
+      output(JSON.stringify({state:result.state,username:result.username,gameAccountCreated:false,identityFile:path.resolve(file),nextAction:'status',message:'接入身份已保存；先查询原请求的最终结果，不重新建号。'}));return 2;
+    }
+    await new Promise(resolve=>setTimeout(resolve,interval));result=await capture('status',local);
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

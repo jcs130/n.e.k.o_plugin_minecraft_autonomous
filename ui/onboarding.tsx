@@ -73,19 +73,23 @@ function SetupProgress({accountReady,needsAccount,componentsReady}:any) {
   </div>)}</nav>
 }
 
-function AccountConnection({account,configured,original,username,busy,disabled,agentName,onName,onConnect,onPause,legacy,legacyRevision,onLegacy}:any) {
+function AccountConnection({account,configured,original,username,busy,disabled,agentName,onName,onConnect,onPause,legacy,legacyRevision,onLegacy,publicSelected,publicUsername,needsComponents,onPublic}:any) {
   const view=accountView(account,{configured,original})
   const authorizing=account.active&&account.phase==='authorization_required'&&account.verification_url
+  const publicMode=!configured&&!original&&!account.active&&!account.verification_url
   return <div className="mc-account" data-kind={view.kind}>
-    <div className="mc-account-header"><div><h3>{view.title}</h3><p className="mc-sub">{view.detail}</p></div><span className="mc-label">{view.badge}</span></div>
-    {(username||account.username)&&<div className="mc-role"><span>游戏角色</span><code>{configured?username:account.username||username}</code></div>}
+    <div className="mc-account-header"><div><h3>{publicMode?publicSelected?'继续准备这个游戏角色':'让猫娘加入千灯纪':view.title}</h3><p className="mc-sub">{publicMode?'免邀请码创建普通 Agent 体验角色，自动保存游戏登录。之后可在官网认领归属。':view.detail}</p></div><span className="mc-label">{publicMode?'免邀请码':view.badge}</span></div>
+    {(username||publicUsername||account.username)&&<div className="mc-role"><span>游戏角色</span><code>{configured?username:publicUsername||account.username||username}</code></div>}
     <div className="mc-actions">
+      {publicMode&&<Button className="mc-primary" disabled={busy||disabled||needsComponents} onClick={onPublic}>{busy?'正在准备原角色…':publicSelected?'继续准备原账号':'免邀请码创建账号'}</Button>}
       {authorizing?<FileDownload href={account.verification_url} label="前往官网授权" openExternal className="mc-primary" />:
-        view.action&&<Button className={view.kind==='unavailable'?'mc-secondary':'mc-primary'} disabled={busy||disabled||account.active} onClick={onConnect}>{view.action}</Button>}
+        !publicMode&&view.action&&<Button className={view.kind==='unavailable'?'mc-secondary':'mc-primary'} disabled={busy||disabled||account.active} onClick={onConnect}>{view.action}</Button>}
       {account.active&&<Button className="mc-secondary" disabled={busy} onClick={onPause}>暂停查询</Button>}
       {!configured&&<Button className={view.kind==='unavailable'||original?'mc-primary':'mc-secondary'} onClick={onLegacy}>使用已有账号</Button>}
       {configured&&<FileDownload href="https://mc.kangqiang.site/join" label="在官网管理账号 ↗" openExternal className="mc-secondary" />}
     </div>
+    {publicMode&&needsComponents&&<p className="mc-compact">先完成下方游戏环境准备，再点击创建账号。无需邀请码或手填密码。</p>}
+    {publicMode&&!publicSelected&&<Accordion open={false} title="使用猫娘计划账号关联（可选）"><p className="mc-compact">{account.phase==='provider_not_configured'?'网站关联尚未开放；不影响上方免邀请码体验。':'需要官网开放猫娘计划登录，并由本人确认授权。'}</p><Button className="mc-secondary" disabled={busy||disabled} onClick={onConnect}>检查猫娘计划账号关联</Button></Accordion>}
     {!account.selected&&!original&&!configured&&<Accordion open={false} title="自定义游戏昵称（可选）"><Field label="游戏昵称"><Input value={agentName} placeholder="留空自动生成，或输入 ag_ 开头的昵称" onChange={onName} /></Field></Accordion>}
     {view.kind==='attention'&&<div className="mc-account-note" role="status">{account.message||view.detail}</div>}
     <Accordion key={`${original}-${legacyRevision}`} open={legacyRevision>0||original} title="已有账号与邀请接入">{legacy}</Accordion>

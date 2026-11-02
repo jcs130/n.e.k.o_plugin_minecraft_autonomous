@@ -1,0 +1,58 @@
+{
+  "formatVersion": 1,
+  "game": "minecraft",
+  "versionId": "0.6.148-eye-21.1.252",
+  "name": "猫娘的方块世界 · Eye 基础观战",
+  "summary": "Minecraft 1.21.1 / NeoForge 21.1.252 / 女仆1.5.3 / YSM2.6.5 / RPG-HUD3.13；只含客户端公开下载清单，不包含账号、服务器或完整Minecraft。",
+  "dependencies": {
+    "minecraft": "1.21.1",
+    "neoforge": "21.1.252"
+  },
+  "files": [
+    {
+      "path": "mods/ysm-2.6.5-neoforge+mc1.21.1-release.jar",
+      "hashes": {
+        "sha1": "18bec74a5b7f3778ce162ddbbbd5555aff0eda2e",
+        "sha512": "75a655fe095565d949aeea5e333f3e1501443b796b250aeabe1ac230c47a99cbac6b7470956b4458f5c982c2cf8a17f170b53e0805b4f4079874fc9975b10dce"
+      },
+      "env": {
+        "client": "required",
+        "server": "unsupported"
+      },
+      "downloads": [
+        "https://cdn.modrinth.com/data/86xjpqqS/versions/HZWaR0LY/ysm-2.6.5-neoforge%2Bmc1.21.1-release.jar"
+      ],
+      "fileSize": 63463229
+    },
+    {
+      "path": "mods/touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar",
+      "hashes": {
+        "sha1": "f96507810deaa2ffd8c3bd86a79d6ccbd56ca32e",
+        "sha512": "147bc10f5cc7159ee16c4918795155b3e52cf6bab5e09f588ed3fec14f8b47bbc512948bb8fef30346a47feba2692b6dbe20781c6cc1dc1d2c6b9377a9649bbe"
+      },
+      "env": {
+        "client": "required",
+        "server": "unsupported"
+      },
+      "downloads": [
+        "https://cdn.modrinth.com/data/R0bDWFAW/versions/tXG1TkGx/touhoulittlemaid-1.5.3-neoforge%2Bmc1.21.1.jar"
+      ],
+      "fileSize": 24408776
+    },
+    {
+      "path": "mods/[1.21.1][NeoForge] RPG-HUD 3.13.jar",
+      "hashes": {
+        "sha512": "12fc59d5080a4d859c6cec06f3877dab72c2846ae1e44d67e19722352abbba679fbc0aacc304794d88060dc847995d9954ae45512e7d30fd6d372beba0e4b591",
+        "sha1": "d563e53c4b003daf7298bcd711f644c422651532"
+      },
+      "env": {
+        "client": "required",
+        "server": "unsupported"
+      },
+      "downloads": [
+        "https://cdn.modrinth.com/data/EC41AOIq/versions/rColiNyN/%5B1.21.1%5D%5BNeoForge%5D%20RPG-HUD%203.13.jar"
+      ],
+      "fileSize": 220970
+    }
+  ]
+}

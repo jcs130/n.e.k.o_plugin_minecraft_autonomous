@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import secrets
 import uuid
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -44,12 +45,14 @@ def _selection():
         raise AccountError('private_file_unavailable') from None
 
 
-def _select(path, username, invite_path=None):
+def _select(path, username, invite_path=None, *, mode=None):
     target = private_path(str(account_root() / 'selected.json'), missing=True)
     target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     value = {'identity_file': str(path), 'username': username}
     if invite_path:
         value['invite_url_file'] = str(invite_path)
+    if mode is not None:
+        value['mode'] = mode
     temporary = target.with_name('selection-' + uuid.uuid4().hex + '.tmp')
     _private_write_same(temporary, (json.dumps(value) + '\n').encode('utf-8'))
     os.replace(temporary, target)
@@ -69,7 +72,10 @@ def public_selection(raw):
         if not path.exists():
             return {'selected': True, 'username': _selection()['username'], 'imported': False}
         _, identity = read_identity(str(path))
-        return {'selected': True, 'username': identity['username'], 'imported': bool(configured)}
+        result = {'selected': True, 'username': identity['username'], 'imported': bool(configured)}
+        if _selection().get('mode') == 'public':
+            result['mode'] = 'public'
+        return result
     except (OSError, ValueError, KeyError):
         return {'selected': False, 'unavailable': True}
 
@@ -80,6 +86,39 @@ def store_identity(text):
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     _private_write_same(path, (json.dumps(identity, ensure_ascii=False, indent=2) + '\n').encode('utf-8'))
     _select(path, identity['username'])
+    return path
+
+
+def prepare_public_identity(username='', *, seed=None):
+    """Explicit public registration, retaining the original locally saved identity."""
+    previous = _selection()
+    if previous:
+        if previous.get('mode') != 'public' or username and username != previous['username']:
+            raise AccountError('identity_exists_query_status')
+        path, _ = read_identity(previous['identity_file'])
+        return path
+    if seed is not None:
+        if any(seed.get(flag) is not False for flag in ('request_sent', 'activation_sent', 'configuration_sent')):
+            raise AccountError('identity_exists_query_status')
+        if username and username != seed['username']:
+            raise AccountError('identity_exists_query_status')
+        identity = {'schemaVersion': 1, 'portal': seed['portal'], 'username': seed['username'],
+                    'clientId': seed['clientId'], 'clientSecret': seed['clientSecret'],
+                    'gameRequestId': seed['requestId'], 'gamePassword': seed['gamePassword']}
+    else:
+        username = username or 'ag_Neko' + uuid.uuid4().hex[:5]
+        if not isinstance(username, str) or not NAME.fullmatch(username):
+            raise AccountError('invalid_agent_name')
+        identity = {'schemaVersion': 1, 'portal': 'https://mc.kangqiang.site', 'username': username,
+                    'clientId': str(uuid.uuid4()), 'clientSecret': secrets.token_urlsafe(32),
+                    'gameRequestId': str(uuid.uuid4()), 'gamePassword': secrets.token_urlsafe(24)}
+    identity = parse_identity(json.dumps(identity))
+    if identity['username'].lower().endswith('eye'):
+        raise AccountError('reserved_observer_name')
+    path = private_path(str(account_root() / identity['clientId'] / 'identity.json'), missing=True)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    _private_write_same(path, (json.dumps(identity) + '\n').encode('utf-8'))
+    _select(path, identity['username'], mode='public')
     return path
 
 

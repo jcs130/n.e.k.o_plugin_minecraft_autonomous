@@ -14,7 +14,7 @@ PORTAL = "https://mc.kangqiang.site"
 ADDRESS = "micro.kangqiang.site:25702"
 VERSION = "1.21.1"
 HELPER = Path(__file__).parent / "assets/server-extensions/qiandengji/access/agent-register.mjs"
-HELPER_SHA256 = "cfa9733c093a27093100b3c08b21de0727af24f486561a07bf5a7868d49ca5cd"
+HELPER_SHA256 = "d2f7b35e5b637fe5e1f07a2e6aca02ed8b9c0e72bde8fe982178aaa042f1eafb"
 NAME = re.compile(r"ag_[A-Za-z0-9_]{1,13}\Z")
 STATES = {"ready", "pending", "unknown", "not_created", "awaiting_game_bridge", "authenticated", "registered", "revoked", "expired"}
 
@@ -126,11 +126,16 @@ async def _invoke(args, *, node="node"):
     if hashlib.sha256(HELPER.read_bytes()).hexdigest() != HELPER_SHA256:
         raise AccountError("official_helper_integrity_failed")
     process = None
+    communication = None
     try:
-        process = await asyncio.create_subprocess_exec(
-            node, str(HELPER), *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        # The official Windows host uses a SelectorEventLoop, which cannot
+        # create asyncio subprocess transports. Keep the bounded child process
+        # independent of that loop; cancellation still terminates this child.
+        process = subprocess.Popen(
+            [node, str(HELPER), *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             **({"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}))
-        out, err = await asyncio.wait_for(process.communicate(), timeout=70)
+        communication = asyncio.create_task(asyncio.to_thread(process.communicate, timeout=70))
+        out, err = await asyncio.shield(communication)
         if len(out) > 65536 or len(err) > 65536:
             raise AccountError("account_result_unknown_query_status")
         if process.returncode not in {0, 2}:
@@ -139,24 +144,35 @@ async def _invoke(args, *, node="node"):
         if not isinstance(value, dict):
             raise ValueError()
         return value
-    except (OSError, UnicodeError, ValueError, asyncio.TimeoutError) as error:
-        if process is not None and process.returncode is None:
+    except (OSError, UnicodeError, ValueError, subprocess.TimeoutExpired) as error:
+        if process is not None and process.poll() is None:
             process.kill()
-            await process.communicate()
+            await asyncio.to_thread(process.communicate)
         if isinstance(error, AccountError):
             raise
         raise AccountError("account_result_unknown_query_status") from None
     except asyncio.CancelledError:
-        if process is not None and process.returncode is None:
+        if process is not None and process.poll() is None:
             process.kill()
-            await process.communicate()
+        if communication is not None:
+            await communication
         raise
+    finally:
+        if process is not None:
+            for stream in (process.stdout, process.stderr):
+                if stream is not None:
+                    stream.close()
 
 
 async def account_action(action, identity_file, *, username="", invite_url_file="", node="node"):
-    if action not in {"register", "status", "activate"}:
+    if action not in {"register", "status", "activate", "join_public"}:
         raise AccountError("invalid_account_action")
-    if action == "register":
+    if action == 'join_public':
+        path, identity = read_identity(identity_file)
+        if username and username != identity['username']:
+            raise AccountError('account_response_mismatch_query_status')
+        args = ['join-plugin', '--portal', PORTAL, '--username', identity['username'], '--identity-file', str(path)]
+    elif action == "register":
         path = private_path(identity_file, missing=True)
         if path.exists():
             raise AccountError("identity_exists_query_status")
