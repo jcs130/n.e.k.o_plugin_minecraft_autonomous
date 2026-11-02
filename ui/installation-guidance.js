@@ -23,16 +23,17 @@ const prepared = {
 export function preparationView(installation) {
   const setup=installation?.setup||{};
   const labels={idle:'准备游戏组件',preparing:'正在准备组件',downloading:'正在下载游戏组件',
-    downloaded:'下载完成，正在校验',extracting:'正在解压游戏组件',verifying:'正在完整校验',
+    downloaded:'下载完成，正在校验',extracting:'正在解压游戏组件',copying:'正在复用已安装组件',verifying:'正在完整校验',
     installing:'正在安装游戏组件',ready:'游戏组件已就绪',failed:'组件准备未完成',cancelled:'已取消组件准备'};
-  const value=setup.phase==='extracting'?setup.files:setup.downloaded_bytes;
-  const total=setup.phase==='extracting'?setup.total_files:setup.total_bytes;
-  const measured=['downloading','extracting'].includes(setup.phase)&&Number.isFinite(value)&&value>=0&&Number.isFinite(total)&&total>0;
+  const value=['extracting','copying'].includes(setup.phase)?setup.files:setup.downloaded_bytes;
+  const total=['extracting','copying'].includes(setup.phase)?setup.total_files:setup.total_bytes;
+  const measured=['downloading','extracting','copying'].includes(setup.phase)&&Number.isFinite(value)&&value>=0&&Number.isFinite(total)&&total>0;
+  const size=bytes=>Number.isFinite(bytes)&&bytes>0?(bytes>=1e9?`${(bytes/1e9).toFixed(2)} GB`:`${Math.ceil(bytes/1e6)} MB`):'';
   return {available:setup.available===true,active:setup.active===true,phase:setup.phase||'idle',
     label:Object.hasOwn(labels,setup.phase)?labels[setup.phase]:labels.idle,
     button:['failed','cancelled'].includes(setup.phase)?'重试准备游戏组件':'准备游戏组件',
     progress:measured?Math.min(100,Math.floor(value/total*100)):null,
-    size:Number.isFinite(setup.total_bytes)&&setup.total_bytes>0?`${(setup.total_bytes/1024**3).toFixed(2)} GB`:'',
+    size:size(setup.total_bytes),musicSize:size(setup.music_total_bytes),musicAvailable:setup.music_available===true,
     message:typeof setup.message==='string'?setup.message:''};
 }
 export function preparedRuntimeSelection(settings, installation) {

@@ -240,7 +240,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <section className="mc-stage">
           <div className="mc-section-head"><span className="mc-section-index">02</span><h2>准备游戏环境</h2></div>
           <div className="mc-section-body">
-            <p className="mc-sub">{state.installation?.prepared_runtime==='prepared'?"游戏环境已准备，之后会复用本机缓存。":external?"使用你已经启动的独立运行环境。":"首次准备约 1.02 GB，包含运行环境、3D 观战与声音。"}</p>
+            <p className="mc-sub">{state.installation?.prepared_runtime==='prepared'?"游戏环境已准备，之后会复用本机缓存。":external?"使用你已经启动的独立运行环境。":"默认精简安装，包含运行环境、3D 观战、游戏音效和截图。原版背景音乐可按需补装。"}</p>
             {(!external&&['missing','incompatible'].includes(state.installation?.prepared_runtime)||preparation.active||['ready','failed','cancelled'].includes(preparation.phase))&&<Stack gap={8}>
           <Text>{preparation.label}{preparation.progress!==null?` · ${preparation.progress}%`:''}</Text>
           {preparation.progress!==null&&<progress aria-label="游戏组件准备进度" max={100} value={preparation.progress} style={{width:'100%'}} />}
@@ -248,6 +248,11 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           {preparation.active?<Button disabled={busy} onClick={()=>call('cancel_runtime_preparation',{})}>取消组件准备</Button>
             :preparation.phase!=='ready'&&preparation.available&&<Button disabled={busy||runtime.worker_alive||runtime.game_connected}
               onClick={()=>call('prepare_runtime',{})}>{preparation.button}{preparation.size?`（约 ${preparation.size}）`:''}</Button>}
+          {preparation.musicAvailable&&!external&&<details className="mc-details">
+            <summary>可选：原版背景音乐与唱片</summary>
+            <p className="mc-sub">中文解说与游戏音效已包含在基础组件中。此处只补下载音乐文件，复用已安装组件；不会自动开始游戏。</p>
+            <Button disabled={busy||preparation.active||runtime.game_connected||runtime.phase==='starting'} onClick={()=>call('prepare_runtime',{include_music:true})}>补装原版音乐{preparation.musicSize?`（约 ${preparation.musicSize}）`:''}</Button>
+          </details>}
 
           <FileDownload href="https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/latest" label="离线安装方式 ↗" openExternal />
         </Stack>}

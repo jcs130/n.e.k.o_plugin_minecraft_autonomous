@@ -43,6 +43,8 @@ test('preparation progress is bounded and actionable without paths or command li
   for(const phase of ['constructor','__proto__','untrusted'])assert.match(guidance.preparationView({setup:{phase}}).label,/准备游戏组件/);
   assert.match(guidance.preparationView({setup:{phase:'ready'}}).label,/已就绪/);
   assert.match(guidance.preparationView({setup:{phase:'failed'}}).button,/重试/);
+  const music=guidance.preparationView({setup:{phase:'copying',files:50,total_files:100,total_bytes:420732729,music_available:true,music_total_bytes:599632544}});
+  assert.equal(music.progress,50);assert.equal(music.size,'421 MB');assert.equal(music.musicSize,'600 MB');assert.equal(music.musicAvailable,true);
 });
 
 test('an explicit old prepared-runtime selection preserves account, model and data choices', () => {

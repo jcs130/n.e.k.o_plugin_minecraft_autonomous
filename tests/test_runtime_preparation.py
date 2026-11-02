@@ -4,6 +4,7 @@ import asyncio
 import contextvars
 import copy
 import threading
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -70,6 +71,43 @@ def test_explicit_job_preserves_account_model_and_waits_for_separate_start(setup
     assert raw["runtime"]["data_directory"] == original["runtime"]["data_directory"]
     assert raw["runtime"]["bundle_manifest_sha256"] == "a" * 64
     assert plugin.runtime_setup_state()["phase"] == "ready" and plugin._worker is None
+
+
+def test_optional_music_download_reuses_verified_base_and_preserves_role(setup, monkeypatch, run_async):
+    plugin, module, raw, writer, base = setup
+    original = copy.deepcopy(raw)
+    music = SimpleNamespace(bytes=2048, manifest_sha256='b' * 64)
+    complete = replace(base, manifest_sha256='b' * 64)
+    monkeypatch.setattr(plugin, '_music_resource_spec', lambda: music)
+    calls = []
+    def prepare(spec, cache, **kwargs):
+        calls.append((spec, kwargs))
+        return complete if spec is music else base
+    monkeypatch.setattr(module, 'prepare_release', prepare)
+    async def scenario():
+        assert isinstance(await plugin.prepare_runtime(include_music=True), Ok)
+        await plugin._runtime_setup_task
+    run_async(scenario())
+    assert len(calls) == 2
+    assert calls[1][1]['base_root'] == base.root
+    assert calls[1][1]['base_manifest_sha256'] == 'a' * 64
+    assert raw['server'] == original['server'] and raw['planner'] == original['planner']
+    assert raw['runtime']['bundle_manifest_sha256'] == 'b' * 64
+    assert writer.await_count == 1 and plugin._worker is None
+
+
+def test_optional_music_never_starts_while_body_is_active(setup, monkeypatch, run_async):
+    plugin, module, _, writer, _ = setup
+    plugin._worker = SimpleNamespace(snapshot=lambda: {'worker_alive': True})
+    monkeypatch.setattr(module, 'prepare_release', lambda *a, **k: pytest.fail('active music download'))
+    assert isinstance(run_async(plugin.prepare_runtime(include_music=True)), Err)
+    assert writer.await_count == 0
+
+
+def test_optional_music_requires_explicit_boolean_selection(setup, run_async):
+    plugin, _, _, writer, _ = setup
+    assert isinstance(run_async(plugin.prepare_runtime(include_music='yes')), Err)
+    assert writer.await_count == 0
 
 
 @pytest.mark.parametrize(

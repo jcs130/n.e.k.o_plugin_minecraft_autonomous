@@ -12,6 +12,7 @@ from pathlib import Path
 
 from agent_mc_autonomy.configuration import Settings
 from agent_mc_autonomy.ownership import session_is_owned
+from agent_mc_autonomy.runtime_bundle import resolve_prepared_bundle
 from agent_mc_autonomy.runtime_bundle.download import ReleaseBundle, prepare_release
 from agent_mc_autonomy.runtime_bundle.manifest import read_json
 from plugin.sdk.plugin import Err, Ok, TransportError, plugin_entry, ui
@@ -19,6 +20,7 @@ from plugin.sdk.plugin import Err, Ok, TransportError, plugin_entry, ui
 from .prepared_runtime import resolve_host_runtime
 
 RESOURCE = Path(__file__).with_name("runtime-download.json")
+MUSIC_RESOURCE = Path(__file__).with_name('runtime-music-download.json')
 SELECTION = {
     "backend": ("node", "directory"),
     "viewer": ("renderer_directory", "catalog_file", "bundled_appearance_catalog_file", "url"),
@@ -104,12 +106,23 @@ class RuntimePreparation:
     def _resource_spec(self):
         return ReleaseBundle.parse(read_json(RESOURCE, 65536))
 
+    def _music_resource_spec(self):
+        value = dict(read_json(MUSIC_RESOURCE, 65536))
+        base_hash = value.pop('base_manifest_sha256')
+        if base_hash != self._resource_spec().manifest_sha256:
+            raise ValueError('music_base_manifest_mismatch')
+        return ReleaseBundle.parse(value)
+
     def runtime_setup_state(self):
         try:
             spec = self._resource_spec()
             metadata = {"available": supported(), "total_bytes": spec.bytes}
         except (OSError, ValueError):
             metadata = {"available": False}
+        try:
+            metadata.update(music_available=True, music_total_bytes=self._music_resource_spec().bytes)
+        except (OSError, ValueError, KeyError):
+            metadata['music_available'] = False
         with self._control_lock:
             return {
                 **metadata,
@@ -169,10 +182,13 @@ class RuntimePreparation:
         id="prepare_runtime",
         name="准备或更新游戏组件",
         kind="service",
-        description="用户显式准备当前版本的完整游戏组件。下载并校验固定公开资源；保留账号和模型，不启动游戏或调用模型。",
+        description="显式准备精简组件，或按需补装原版背景音乐；逐项校验并保留原账号与模型，不启动游戏。",
+        input_schema={'type': 'object', 'properties': {'include_music': {'type': 'boolean'}}},
     )
-    async def prepare_runtime(self, **_):
+    async def prepare_runtime(self, include_music: bool = False, **_):
         try:
+            if type(include_music) is not bool:
+                raise ValueError('invalid_audio_selection')
             if self._setup_active():
                 return Ok(self.runtime_setup_state())
             if not supported():
@@ -187,7 +203,8 @@ class RuntimePreparation:
                 if self._setup_active():
                     return Ok(self.runtime_setup_state())
                 self._setup_idle(raw)
-                spec = self._resource_spec()
+                base_spec = self._resource_spec() if include_music else None
+                spec = self._music_resource_spec() if include_music else self._resource_spec()
                 effective, state = resolve_host_runtime(raw)
                 if (
                     state == "prepared"
@@ -201,7 +218,7 @@ class RuntimePreparation:
                 # inherit that completed call's RPC deadline into later saves;
                 # each own-config RPC keeps the SDK's ordinary bounded timeout.
                 self._runtime_setup_task = asyncio.create_task(
-                    self._run_runtime_setup(raw, spec), context=contextvars.Context()
+                    self._run_runtime_setup(raw, spec, base_spec=base_spec), context=contextvars.Context()
                 )
             return Ok(self.runtime_setup_state())
         except (OSError, ValueError, KeyError) as error:
@@ -217,13 +234,25 @@ class RuntimePreparation:
                 }
             )
 
-    async def _run_runtime_setup(self, original, spec):
+    async def _run_runtime_setup(self, original, spec, *, base_spec=None):
         write_started = False
         patch = None
         try:
             cache = Path(os.environ["LOCALAPPDATA"]) / "AgentMCWorld/downloads"
+            extra = {}
+            if base_spec is not None:
+                candidate = cache.parent / 'installations' / ('r-' + base_spec.manifest_sha256[:32]) / 'runtime'
+                if candidate.exists():
+                    base = await asyncio.to_thread(resolve_prepared_bundle, bundle_root=candidate, verify_integrity=True)
+                    if base.manifest_sha256 != base_spec.manifest_sha256:
+                        raise ValueError('music_base_manifest_mismatch')
+                else:
+                    base = await asyncio.to_thread(prepare_release, base_spec, cache,
+                        progress=lambda row: self._setup_progress({**row, 'component': '基础组件'}),
+                        cancelled=self._runtime_setup_cancel)
+                extra = {'base_root': base.root, 'base_manifest_sha256': base_spec.manifest_sha256}
             bundle = await asyncio.to_thread(
-                prepare_release, spec, cache, progress=self._setup_progress, cancelled=self._runtime_setup_cancel
+                prepare_release, spec, cache, progress=self._setup_progress, cancelled=self._runtime_setup_cancel, **extra
             )
             latest = await self.config.dump()
             with self._control_lock:
