@@ -205,19 +205,6 @@ export default function Panel(props: PluginSurfaceProps<any>) {
 
   return <Page className="mc-app">
     <Onboarding kind="styles" />
-    {stopConfirm&&<div role="dialog" aria-modal="true" aria-labelledby="stop-title"
-      style={{position:"fixed",inset:0,zIndex:1000,background:"#0009",display:"grid",placeItems:"center",padding:16}}>
-      <div style={{maxWidth:520,background:"#172235",color:"#f1f5f9",border:"1px solid #475569",borderRadius:12,padding:20}}>
-        <h2 id="stop-title">停止本次自主游玩？</h2>
-        <p>停止规划并等待动作收尾，保留账号、物品与历史；服务器和 Neko 继续运行。</p>
-        <Inline>
-          <Button tone="danger" disabled={busy} onClick={async()=>{
-            if(await call("panel_stop",{}))setStopConfirm(false)
-          }}>确认停止游玩</Button>
-          <Button disabled={busy} onClick={()=>setStopConfirm(false)}>继续游玩</Button>
-        </Inline>
-      </div>
-    </div>}
     <Stack gap={18}>
       {state.error && <Alert tone="danger" message="配置或观测暂不可用。请先检查插件配置。" />}
       {runtime.phase === "failed" && <Alert tone="danger" message="框架最近记录为运行失败；下方保留最后观测，刷新页面不会自动恢复游玩。" />}
@@ -292,6 +279,16 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           {state.operator?.available&&<FileDownload href={state.operator.url} label="账户授权" openExternal />}
         </Inline>
         </div>
+        {stopConfirm&&<section role="group" aria-labelledby="stop-title" className="mc-stop-confirm">
+          <h2 id="stop-title">停止本次自主游玩？</h2>
+          <p>停止规划并等待动作收尾，保留账号、物品与历史；服务器和 Neko 继续运行。</p>
+          <Inline>
+            <Button tone="danger" disabled={busy} onClick={async()=>{
+              if(await call("panel_stop",{}))setStopConfirm(false)
+            }}>确认停止游玩</Button>
+            <Button disabled={busy} onClick={()=>setStopConfirm(false)}>继续游玩</Button>
+          </Inline>
+        </section>}
         <p className="mc-compact">只有点击开始才会进服。保存设置或重开插件不会自动启动游戏。</p>
         <Accordion open={false} title="外观与更多设置"><Stack gap={10}>
         <Grid cols={2}>

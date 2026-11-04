@@ -1,7 +1,7 @@
 [plugin]
 id = "minecraft_autonomous"
 name = "千灯纪 · Agent友好的我的世界RPG服"
-version = "0.6.150"
+version = "0.6.151"
 type = "plugin"
 entry = "plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin"
 description = "把猫娘带进《我的世界》，成为一起探索、采集和建造的联机伙伴。听她分享冒险见闻，打开 3D 观战陪她看日出，也可以亲自进服一起玩。支持自己的服务器与千灯纪免邀请码体验，沿用 Neko 模型和声音，准备好后点一下开始。"

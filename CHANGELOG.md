@@ -1,3 +1,9 @@
+## 0.6.151（开发候选，未发布）
+
+- Preserve immediate and queued observation counters in the pinned autonomy 0.2.147 review evidence so repeated inspection is visible to both planners. Stage completion remains evidence-based and model-selected; native safety gates and the single queue are unchanged.
+- Keep the stop confirmation beside the play controls so it remains reachable inside the App hosted panel, without a full-frame overlay hiding its buttons. Confirm/cancel semantics and normal drain are unchanged.
+- Reuse the verified 0.6.150 execution resources; native core, viewer, account and model settings are unchanged.
+
 ## 0.6.150（开发候选，未发布）
 
 - 同步核心 rc.160-preview.9 与观战 97e76665，包括工作台可达性、1.21.1 库存与数据包、相机世界切换等上游修复。

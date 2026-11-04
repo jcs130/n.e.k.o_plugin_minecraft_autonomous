@@ -47,6 +47,9 @@ const css = `
 .mc-app .mc-account-note { border-left:2px solid var(--border); padding-left:12px; font-size:12px; color:var(--mc-muted); line-height:1.7; }
 .mc-app .mc-launch { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px; padding:20px 0 4px; }
 .mc-app .mc-launch .mc-primary { min-height:44px; padding:10px 23px; }
+.mc-app .mc-stop-confirm { margin:12px 0; padding:16px; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+.mc-app .mc-stop-confirm h2 { font-size:16px; margin-bottom:8px; }
+.mc-app .mc-stop-confirm p { color:var(--mc-muted); font-size:13px; line-height:1.7; }
 .mc-app .mc-compact { font-size:12px; color:var(--mc-muted); line-height:1.7; }
 .mc-app .mc-connection-card > .neko-card-body { padding:18px 22px 22px; gap:0; }
 .mc-app .mc-connection-card > .neko-card-header { display:none; }
