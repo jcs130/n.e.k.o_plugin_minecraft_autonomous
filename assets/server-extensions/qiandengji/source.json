@@ -89,5 +89,23 @@
   "read_only_commands": [
     "/mycli status"
   ],
-  "state_refresh_minimum_ms": 30000
+  "state_refresh_minimum_ms": 30000,
+  "engine": {
+    "source_revision": "335909c19c82e41236a46f557e5af1f901e01cf8",
+    "package_version": "0.5.0-rc.50-preview.7",
+    "backend_relative": "extensions/qiandengji/engine.mjs",
+    "source_path": "integrations/qiandengji/engine/index.ts",
+    "bundler": "esbuild@0.28.2",
+    "sha256": "a44ddfd438cc6296d6482440cb4c33b89f07cbd8ef30096c440751af127920b9",
+    "bytes": 107349,
+    "source_files": 20,
+    "external": [
+      "agent-mc-world/extension",
+      "agent-mc-world/tactics",
+      "vec3",
+      "node:path",
+      "node:crypto",
+      "node:zlib"
+    ]
+  }
 }

@@ -260,6 +260,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         </section>
         <div className="mc-launch">
           <Switch label="用当前猫娘的声音解说" checked={!!withNarration} onChange={setNarrationDraft} />
+          <p className="mc-sub">声音在本机播放；当前尚未接通服务器附近语音。</p>
           <Inline>
           <Button className="mc-primary" tone="primary" disabled={!stateReady||busy||needsRuntimeSetup||needsGameAccount||preparation.active||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
             if(loginPassword||loginEnabled!==null) {
@@ -293,7 +294,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Accordion open={false} title="外观与更多设置"><Stack gap={10}>
         <Grid cols={2}>
           <Field label="Web 角色外观"><Select value={appearanceDraft??settings.viewer?.default_appearance??"bundled:yui-ysm"} options={[{value:"bundled:yui-ysm",label:"自带 YUI YSM"},{value:"bundled:yui-slim",label:"自带 YUI 皮肤"},{value:"server",label:"跟随服务器"}]} onChange={setAppearanceDraft} /></Field>
-          <Field label="扩展资料"><Select value={extensionDraft??settings.extension_pack?.mode??"auto"} options={[{value:"auto",label:"自动识别已安装扩展"},{value:"none",label:"仅使用标准 Minecraft"},{value:"custom",label:"保留自定义扩展配置"}]} onChange={setExtensionDraft} /></Field>
+          <Field label="服务器玩法"><Select value={extensionDraft??settings.extension_pack?.mode??"auto"} options={[{value:"auto",label:"千灯纪连接自动启用 RPG 扩展"},{value:"none",label:"仅使用标准 Minecraft"},{value:"custom",label:"保留自定义扩展配置"}]} onChange={setExtensionDraft} /></Field>
           <Field label="参与游戏的 Neko 角色"><Input value={characterDraft??settings.heartbeat?.target??""} placeholder="留空跟随当前 Neko 角色" onChange={setCharacterDraft} /></Field>
         </Grid>
         <Switch label="下次启动使用 Neko 绑定的决策模型" checked={usingHostModel} onChange={setHostModel} />

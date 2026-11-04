@@ -1,3 +1,10 @@
+## 0.6.152（开发候选，未发布）
+
+- 接入固定版本千灯纪原生玩法模块，与同一 MC 核心和身体连接共用技能、法力、职业及副本查询协议。仅已配置的千灯纪连接自动启用，关闭、自定义服务器和自定义扩展仍保留。
+- 更新自治框架 0.2.148 / 核心 rc.160-preview.11。超限实体方盒 probe 保留真实已读部分、未知格和绝对坐标续读范围，施工上限不变；纳入上游活动归属契约修复。
+- 明确猫娘解说目前在本机播放。Neko 公开语音接口尚无同次音频产物出口，不冒称服务器附近语音已接通。
+- 默认精简资源和可选音乐继续独立打包；不含服务器、额外核心或模型。
+
 ## 0.6.151（开发候选，未发布）
 
 - Preserve immediate and queued observation counters in the pinned autonomy 0.2.147 review evidence so repeated inspection is visible to both planners. Stage completion remains evidence-based and model-selected; native safety gates and the single queue are unchanged.
