@@ -2,10 +2,10 @@
   "schema": "agent-mc-runtime-download/v1",
   "platform": "win32",
   "architecture": "x64",
-  "url": "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/download/v0.6.149/NEKO-MC-0.6.149-Music-Windows.zip",
-  "bytes": 599632544,
-  "sha256": "c8cdaa28aa2c2f4c2c1dbfaa6f60a96318d515b846898d87cd76958cc89cf202",
-  "manifest_sha256": "f62a117317e00a6bd125b45aa754dfab191380298210b18a8bc357335ec015f3",
-  "expanded_bytes": 609628547,
-  "base_manifest_sha256": "24d0866a6af53a72ff617b307cf1b40c748d33f6db7993da1e4ac3b69a540a57"
+  "url": "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/download/v0.6.150/NEKO-MC-0.6.150-Music-Windows.zip",
+  "bytes": 599633295,
+  "sha256": "67622840ec544008da2d8ee0f6f6d5bfdce57f8e6a9f448048e322b1ac3b1758",
+  "manifest_sha256": "8c74230ca06adab863d3432bc576bbdf011afbd6c2c3918a61956a2d082af7b6",
+  "expanded_bytes": 609631317,
+  "base_manifest_sha256": "9d19f8a263bcfde51ac9d7bf7588aee7616f80c15edba0045c60d0232a9bfc4d"
 }
