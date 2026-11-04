@@ -436,6 +436,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <Switch checked={draft.speech_output?.enabled === true} label="通过当前猫娘的现有声音播报游戏台词" onChange={v=>change("speech_output","enabled",v)} />
           {field("speech_output","base_url","Neko 本机地址（例如 http://127.0.0.1:48911，不含路径或密钥）")}
           <Switch checked={draft.speech_output?.planner_narration !== false} label="转发同一次 MC 规划中的自然台词" onChange={v=>change("speech_output","planner_narration",v)} />
+          <Text>以上声音在本机播放，游戏里的玩家暂时听不到。她可以通过原生聊天动作在游戏公屏打招呼、回应或交流见闻；不会把所有解说自动刷到公屏，也无需另配 TTS。</Text>
           {field("speech_output","min_interval_seconds","规划台词最小间隔（秒，10—900）","number")}
           <Text>角色留空时跟随上述 Neko 地址的当前猫娘；人设只取公开字段，声音沿用她的现有配置。台词独立排队，语音繁忙时保留有效新句、过期丢弃；发送受理与播放完成分别记录。</Text>
           <Switch checked={draft.presentation?.enabled === true} label="让 Neko 解说重要游戏变化" onChange={v=>change("presentation","enabled",v)} />
