@@ -51,6 +51,14 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const settings = state.settings || {}
   const runtime = state.runtime || {}
   const residentActive = !!state.resident_control?.phase && state.resident_control.phase !== "stopped"
+  const website = state.website_login || {}
+  useEffect(() => {
+    if (!website.browserCode || busy) return
+    return startPanelRefresh({document, interval: 3000, refresh: async () => {
+      await props.api.call("resident_browser_login", {op: "status", uiToken: website.uiToken})
+      await props.api.refresh()
+    }})
+  }, [website.browserCode, website.uiToken, props.api.refresh, busy])
   const stateReady = !!state.settings && !!state.runtime && !state.error
   const audit = state.audit || {}
   const external = settings.runtime?.mode === "external"
@@ -87,7 +95,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           setConnectionDraft(null); setIdentityBody(""); setInviteLink("")
         }
       }
-      setNotice(["connect_neko_account","pause_neko_account_link"].includes(id) ? "" : id === "qiandengji_account" && result?.imported
+      setNotice(["connect_neko_account","pause_neko_account_link","resident_browser_login"].includes(id) ? "" : id === "qiandengji_account" && result?.imported
         ? `已接入 ${result.username}，服务器和自动登录已配置。选好模型后点击“开始自主游玩”即可。`
         : id === "use_prepared_runtime" ? "已选择一键游戏组件。请先准备组件，完成后再开始；账号和模型保留，游戏未启动。"
         : "请求已受理，请核对更新后的状态和回执。")
@@ -198,6 +206,8 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const publicSelected = state.website_account?.mode === 'public'
   const accountSetup = <Onboarding kind="account" account={nekoAccount} configured={qiandengServer&&connection.auth==='offline'&&!needsGameAccount} original={!!accountSelected&&!publicSelected||connection.auth==='microsoft'}
     username={connection.username} busy={busy} disabled={external||runtime.game_connected||runtime.worker_alive}
+    website={website} residentActive={residentActive}
+    onWebsite={()=>call("connect_neko_account",{username:agentName,website:true,uiToken:website.uiToken})}
     publicSelected={publicSelected} publicUsername={state.website_account?.username} needsComponents={needsRuntimeSetup}
     onPublic={()=>call("join_public_account",{username:agentName})}
     agentName={agentName} onName={setAgentName} legacyRevision={legacyAccountRevision} onLegacy={()=>setLegacyAccountRevision(v=>v+1)} legacy={legacyAccountSetup}
@@ -213,16 +223,32 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <div className="mc-hero-copy"><span className="mc-world-mark" aria-hidden="true">▦</span><div><span className="mc-eyebrow">MINECRAFT · JAVA 1.21.1</span><h1>千灯纪 · Agent友好的我的世界RPG服</h1><p className="mc-sub">和猫娘一起联机，把方块世界变成家。</p></div></div>
         <Inline><StatusBadge label={runtime.game_connected?"正在游玩":['stopped','idle','starting','reconnecting','failed'].includes(runtime.phase)?({stopped:"已停止",idle:"尚未开始",starting:"正在连接",reconnecting:"正在重连",failed:"需要检查"}[runtime.phase]):"状态待确认"} tone={runtime.game_connected?"success":"default"}/><RefreshButton label="刷新状态" /></Inline>
       </div>
-      <Card title="选择怎么进入游戏"><Inline>
-        <Text>在下方以玩家身份加入服务器，也可以连接已有的千灯纪女仆。</Text>
-        <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=panel&surface=resident`}
-          label="连接车万女仆" openExternal />
-      </Inline></Card>
+      <Card title="千灯纪账号"><Stack gap={8}>
+        {(website.authorized || website.playerAuthorized) ? <StatusBadge tone="success" label="官网已授权" /> :
+          <Button tone="primary" disabled={busy||!website.uiToken||residentActive}
+            onClick={()=>call("resident_browser_login",{op:"start",uiToken:website.uiToken})}>
+            {website.browserCode?"重新打开授权页":"登录千灯纪"}
+          </Button>}
+        {website.browserCode && <Text>在官网确认六位数字 {website.browserCode}，这里会自动更新。</Text>}
+        {website.authorized && !website.playerAuthorized && <Text>本次官网授权可用于居民。新建 Mineflayer 玩家账号的共用授权需官网支持。</Text>}
+      </Stack></Card>
+      <Card title="选择游玩方式"><Stack gap={10}>
+        <Inline>
+          <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=panel&surface=resident`}
+            label="车万女仆 · 通常较省 Token" openExternal />
+          <Button onClick={()=>{
+            setConnectionDraft(applyConnectionPreset({server:connection},"qiandeng").server)
+            document.getElementById("mc-player-setup")?.scrollIntoView({block:"start"})
+          }}>Mineflayer · 通常消耗较高</Button>
+        </Inline>
+        <Text>车万女仆由服务器执行动作，模型在收到游戏回合时才参与。Mineflayer 适合完整玩家玩法、自有服务器和 3D 观战，会持续感知环境与规划。实际消耗取决于模型、活动和频率。</Text>
+      </Stack></Card>
       {residentActive &&
         <Alert tone="info" message="当前由居民模式控制。请先在居民面板停止桌面控制，再开始玩家模式。" />}
       <Onboarding kind="progress" accountReady={qiandengServer&&connection.auth==='offline'&&!needsGameAccount} needsAccount={needsGameAccount} componentsReady={state.installation?.prepared_runtime==='prepared'} />
       {runtime.planner_diagnostic?.category&&<Alert tone="warning" message={`规划请求被服务端拒绝（HTTP ${runtime.planner_diagnostic.status}，${runtime.planner_diagnostic.category}）。请核对模型和工具兼容性；原生队列继续独立运行。`} />}
       {notice && <Alert tone={failure ? "danger" : "info"} message={notice} />}
+      <div id="mc-player-setup" />
       <Card title="游玩准备" className="mc-connection-card"><Stack gap={0}>
         <div className="mc-world-picker" aria-label="选择服务器">
           <Button className={qiandengServer?"mc-selected":""} disabled={busy||runtime.game_connected} onClick={()=>setConnectionDraft(applyConnectionPreset({server:connection},"qiandeng").server)}>千灯纪</Button>

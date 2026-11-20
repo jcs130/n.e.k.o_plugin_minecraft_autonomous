@@ -40,6 +40,7 @@ MESSAGES = {
     'original_identity_selected': '本机已有原账号，请使用下方已保存身份接入；可在官网登录原千灯纪账号后关联猫娘计划。',
     'invalid_agent_name': '昵称请留空自动生成，或填写 ag_ 开头、总长不超过16位的英文字母、数字与下划线。',
     'account_runtime_active': '请先停止游玩并等待原动作结算，再关联账号。',
+    'website_login_required': '请先在上方登录千灯纪并完成六位数字授权。',
 }
 
 
@@ -71,11 +72,23 @@ class NekoAccountPanel:
     @ui.action(label='关联猫娘计划账号')
     @plugin_entry(id='connect_neko_account', name='用猫娘计划账号接入千灯纪', kind='service',
                   description='本人显式发起官网授权；后台只查询同一申请，成功后私有保存游戏自动登录。不读取宿主令牌、不自动进服。',
-                  input_schema={'type': 'object', 'properties': {'username': {'type': 'string', 'maxLength': 16}, 'renew': {'type': 'boolean'}}})
-    async def connect_neko_account(self, username: str = '', renew: bool = False, **_):
+                  input_schema={'type': 'object', 'properties': {'username': {'type': 'string', 'maxLength': 16},
+                                'renew': {'type': 'boolean'}, 'website': {'type': 'boolean'},
+                                'uiToken': {'type': 'string', 'writeOnly': True}}})
+    async def connect_neko_account(self, username: str = '', renew: bool = False, website: bool = False, uiToken: str = '', **_):
         try:
             raw = await self.config.dump()
             self._link_idle(raw)
+            website_grant = None
+            if website:
+                if not self._from_panel(uiToken):
+                    raise AccountError('website_login_required')
+                if self._resident_blocks_player():
+                    raise AccountError('account_runtime_active')
+                website_grant = self.website_player_grant()
+                saved = load_link()
+                if not website_grant and not (saved and saved.get('website_authorized') and saved['phase'] != 'expired'):
+                    raise AccountError('website_login_required')
             with self._control_lock:
                 task = getattr(self, '_neko_link_task', None)
                 if task is not None and not task.done():
@@ -95,13 +108,14 @@ class NekoAccountPanel:
                     save_link(value)
                 self._neko_link_state = {**public_link(value), 'phase': 'checking'}
                 self._neko_link_cancel = asyncio.Event()
-                self._neko_link_task = asyncio.create_task(self._run_neko_link(value, renew=renew), context=contextvars.Context())
+                self._neko_link_task = asyncio.create_task(self._run_neko_link(value, renew=renew, website_grant=website_grant),
+                                                           context=contextvars.Context())
             return Ok(self.neko_account_state())
         except (OSError, ValueError, RuntimeError) as error:
             code = str(error) if isinstance(error, AccountError) else 'neko_link_busy' if isinstance(error, RuntimeError) else 'account_runtime_active'
             return Err({'code': code, 'message': MESSAGES.get(code, '接入尚未开始，请核对原账号和运行状态。')})
 
-    async def _run_neko_link(self, value, *, renew=False):
+    async def _run_neko_link(self, value, *, renew=False, website_grant=None):
         try:
             with session_lease(account_root() / 'neko-plugin-link-lock'):
                 latest = load_link()
@@ -113,8 +127,12 @@ class NekoAccountPanel:
                 async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
                     until = time.monotonic() + MAX_WAIT_SECONDS
                     while not self._neko_link_cancel.is_set() and time.monotonic() < until:
-                        state = await advance_link(client, value, renew=renew)
+                        if website_grant:
+                            state = await advance_link(client, value, renew=renew, website_grant=website_grant)
+                        else:
+                            state = await advance_link(client, value, renew=renew)
                         renew = False
+                        website_grant = None
                         self._neko_link_state = state
                         if state['phase'] == 'ready':
                             raw = await self.config.dump()

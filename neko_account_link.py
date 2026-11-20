@@ -91,7 +91,9 @@ def public_link(value):
     result = {'selected': True, 'username': value['username'], 'phase': value['phase'], 'configured': value['phase'] == 'configured'}
     if value['phase'] == 'expired':
         result['renewable'] = value.get('renewable') is True and not value['activation_sent'] and not value['renew_sent']
-    if value['request_sent']:
+    if value.get('website_authorized'):
+        result['website_authorized'] = True
+    elif value['request_sent']:
         result['verification_url'] = PORTAL + '/join?neko_request=' + value['clientId']
     return result
 
@@ -100,8 +102,8 @@ def expected_uuid(username):
     return str(uuid.UUID(bytes=hashlib.md5(('OfflinePlayer:' + username).encode()).digest(), version=3))
 
 
-async def request(client, method, path, value=None, *, body=None):
-    headers = {'Authorization': 'Bearer qnp_' + value['clientSecret']} if value else {}
+async def request(client, method, path, value=None, *, body=None, authorization=None):
+    headers = {'Authorization': authorization} if authorization else {'Authorization': 'Bearer qnp_' + value['clientSecret']} if value else {}
     try:
         async with client.stream(method, PORTAL + path, headers=headers, json=body) as response:
             data = bytearray()
@@ -123,9 +125,18 @@ async def request(client, method, path, value=None, *, body=None):
         raise AccountError('neko_link_result_unconfirmed') from None
 
 
-async def advance_link(client, value, *, renew=False):
+async def advance_link(client, value, *, renew=False, website_grant=None):
     """Only status is retried. Both admitting POSTs are durably marked first."""
     prefix = '/api/v1/neko-plugin/requests'
+    if website_grant and not value['activation_sent'] and value['phase'] not in {'ready', 'configured'}:
+        approved = await request(client, 'POST', '/api/v1/resident-onboarding/player-link', value,
+                                 body={k: value[k] for k in ('clientId', 'clientSecret', 'username', 'requestId')},
+                                 authorization='Bearer ' + website_grant)
+        if approved.get('phase') != 'approved':
+            raise AccountError('neko_link_response_mismatch')
+        value['request_sent'] = True
+        value['website_authorized'] = True
+        save_link(value)
     if not value['request_sent']:
         capability = await request(client, 'GET', '/api/v1/auth/neko')
         if capability.get('available') is not True:
@@ -138,7 +149,8 @@ async def advance_link(client, value, *, renew=False):
             raise AccountError('neko_link_response_mismatch')
     result = await request(client, 'GET', prefix + '/' + value['clientId'] + '/status', value)
     phase = result.get('phase')
-    if phase == 'expired' and renew and result.get('renewable') is True and not value['activation_sent'] and not value['renew_sent']:
+    if (phase == 'expired' and renew and not value.get('website_authorized')
+            and result.get('renewable') is True and not value['activation_sent'] and not value['renew_sent']):
         value['renew_sent'] = True
         save_link(value)
         result = await request(client, 'POST', prefix + '/' + value['clientId'] + '/renew', value)

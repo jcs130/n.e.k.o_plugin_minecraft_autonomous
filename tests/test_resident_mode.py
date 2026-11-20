@@ -45,7 +45,8 @@ def test_browser_authorization_binds_exact_existing_body_without_start(monkeypat
         if op == "browser-start":
             return {"id": browser_id, "expiresAt": expires_at, "code": "123456", "secret": "rba_" + "b" * 43}
         if op == "browser-status":
-            return {"state": "authorized", "expiresAt": expires_at, "onboardingToken": "rot_" + "c" * 43}
+            return {"state": "authorized", "expiresAt": expires_at, "onboardingToken": "rot_" + "c" * 43,
+                    "playerAuthorizationExpiresAt": int(expires_at)}
         if op == "list":
             return {"availableBodies": ["maid", "numen"], "residents": [{**session["resident"], "state": "available"}]}
         assert op == "connect"
@@ -67,7 +68,7 @@ def test_browser_authorization_binds_exact_existing_body_without_start(monkeypat
         assert plugin.list_llm_tools() == original_tools
         assert (await plugin.resident_browser_login(op="start", uiToken=ui_token)).value == {"opened": True}
         assert (await plugin.connection_context())["browserCode"] == "123456"
-        assert opened == [plugin.portal + "/resident-connect.html?flow=browser#" + browser_id]
+        assert opened == [plugin.portal + "/resident-connect.html?flow=browser&play=1#" + browser_id]
         assert (await plugin.resident_browser_login(op="status", uiToken=ui_token)).value == {"state": "authorized"}
         args = {key: session["resident"][key] for key in ("id", "characterId")}
         wrong_body = True
@@ -83,6 +84,9 @@ def test_browser_authorization_binds_exact_existing_body_without_start(monkeypat
         assert state["characterId"] == session["resident"]["characterId"]
         assert state["control"]["phase"] == "stopped"
         assert state["control"]["health"] == "idle"
+        assert plugin.website_login_state()["playerAuthorized"] is True
+        assert plugin.website_player_grant() == "rba_" + "b" * 43
+        assert plugin.website_player_grant() not in json.dumps(plugin.website_login_state())
         assert session["token"] not in json.dumps(state)
         assert plugin.list_llm_tools() == original_tools
 

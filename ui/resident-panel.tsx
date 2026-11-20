@@ -5,7 +5,7 @@ import { startPanelRefresh } from "./panel-refresh.js"
 type Resident = { id: string, characterId: string, name: string, bodyKind: string, state: string }
 type State = { role?: string, localRoles?: string[], resident?: string, connected?: boolean, authorized?: boolean,
   bodyKind?: string, control?: { phase?: string, health?: string, playerBusy?: boolean },
-  uiToken?: string, browserCode?: string, waiting?: string, catalog?: { residents?: Resident[], availableBodies?: string[] } }
+  uiToken?: string, waiting?: string, catalog?: { residents?: Resident[], availableBodies?: string[] } }
 
 export default function ResidentPanel(props: PluginSurfaceProps<State>) {
   const state = props.state || {}
@@ -45,15 +45,12 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
   }
 
   useEffect(() => {
-    const browser = state.browserCode && !state.authorized
-    if (!browser && (!state.waiting || !state.authorized)) return
+    if (!state.waiting || !state.authorized) return
     const timer = window.setInterval(async () => {
       if (checking.current || document.hidden) return
       checking.current = true
       try {
-        await props.api.call(browser ? "resident_browser_login" : "manage_residents", {
-          op: browser ? "status" : "list", uiToken: state.uiToken,
-        })
+        await props.api.call("manage_residents", {op: "list", uiToken: state.uiToken})
       } catch {
         // Network interruptions can be retried while this panel is open.
       } finally {
@@ -61,7 +58,7 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
       }
     }, 3000)
     return () => window.clearInterval(timer)
-  }, [state.waiting, state.browserCode, state.authorized, state.uiToken])
+  }, [state.waiting, state.authorized, state.uiToken])
 
   useEffect(() => {
     if (!controlling || busy) return
@@ -70,10 +67,10 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
 
   return <Page title="连接千灯纪居民"><Stack gap={14}>
     <Card title={state.connected ? `${state.role} → ${state.resident}` : "使用千灯纪女仆或 Numen"}><Stack gap={10}>
-      <Text>选择本机角色，在官网确认六位数字，再选择已有居民或新建。游戏服运行身体，桌面无需准备玩家游戏组件。</Text>
+      <Text>角色的动作由服务器执行，模型在收到游戏回合时参与，通常较省 Token。请用主面板的千灯纪账号授权，然后在这里选择居民。</Text>
       <Inline>
         <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=panel&surface=main`}
-          label="切到玩家模式" openExternal />
+          label="返回账号与玩法选择" openExternal />
         <RefreshButton label="刷新状态" />
       </Inline>
       {state.connected && <>
@@ -105,12 +102,10 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
         <Button disabled={busy} onClick={() => props.api.refresh()}>刷新本机角色</Button>
       </Inline>
     </Stack></Card>
-    {!state.authorized ? <Card title="登录千灯纪"><Stack>
-      <Button tone="primary" disabled={!state.uiToken || busy} onClick={() => call("resident_browser_login", { op: "start" })}>
-        {state.browserCode ? "重新打开授权页" : "在浏览器登录并授权"}
-      </Button>
-      {state.browserCode ? <Text>请在官网输入 {state.browserCode}。确认后，这里会自动显示游戏角色。</Text> : null}
-      <Button disabled={busy} onClick={() => setManual(!manual)}>{manual ? "收起授权码入口" : "改用授权码"}</Button>
+    {!state.authorized ? <Card title="官网授权"><Stack>
+      <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=panel&surface=main`}
+        label="使用同一个千灯纪账号授权" openExternal />
+      <Button disabled={busy} onClick={() => setManual(!manual)}>{manual ? "收起授权码入口" : "使用已有居民授权码"}</Button>
       {manual ? <Stack>
         <Button disabled={!state.uiToken || busy} onClick={() => call("open_resident_website", { page: "authorize" })}>去官网获取授权码</Button>
         <Field label="官网授权码"><PasswordInput value={code} onChange={setCode} placeholder="XXXX-XXXX-XXXX" /></Field>

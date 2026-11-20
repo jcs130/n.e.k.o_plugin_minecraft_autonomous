@@ -81,6 +81,51 @@ def test_site_without_sso_does_not_create_an_upstream_request(link_modules, run_
     assert link.load_link()['request_sent'] is False
 
 
+def test_shared_website_authorization_resumes_one_player_without_another_login(link_modules, run_async):
+    link, _ = link_modules
+    value = link.ensure_link()
+    website_grant = 'rba_' + 'a' * 43
+    calls = []
+
+    def handle(request):
+        path = request.url.path
+        calls.append(path)
+        data = {'clientId': value['clientId'], 'username': value['username']}
+        if path == '/api/v1/resident-onboarding/player-link':
+            assert request.headers['authorization'] == 'Bearer ' + website_grant
+            assert json.loads(request.content) == {key: value[key] for key in ('clientId', 'clientSecret', 'username', 'requestId')}
+            if calls.count(path) == 1:
+                raise httpx.ReadError('lost approval response', request=request)
+            return httpx.Response(200, json={**data, 'phase': 'approved'})
+        assert request.headers['authorization'] == 'Bearer qnp_' + value['clientSecret']
+        assert path.endswith('/status') or path.endswith('/activate')
+        return httpx.Response(200, json={**data, 'phase': 'pending' if value['activation_sent'] else 'approved'})
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+            with pytest.raises(ValueError, match='neko_link_result_unconfirmed'):
+                await link.advance_link(client, value, website_grant=website_grant)
+            assert not link.load_link()['request_sent']
+            opened = await link.advance_link(client, value, website_grant=website_grant)
+            assert opened['phase'] == 'pending'
+            assert opened['website_authorized'] is True
+            assert 'verification_url' not in opened
+            assert link.load_link()['activation_sent']
+            assert website_grant not in json.dumps(link.load_link())
+            await link.advance_link(client, value)
+
+    run_async(scenario())
+    assert calls[:2] == ['/api/v1/resident-onboarding/player-link'] * 2
+    assert [path.rsplit('/', 1)[-1] for path in calls[2:]] == ['status', 'activate', 'status']
+
+
+def test_player_setup_from_plugin_requires_website_authorization(link_modules, plugin_instance, run_async):
+    link, _ = link_modules
+    result = run_async(plugin_instance.connect_neko_account(website=True,uiToken=plugin_instance.panel_token))
+    assert result.error['code'] == 'website_login_required'
+    assert link.load_link() is None
+
+
 def test_background_resume_reloads_durable_submission_flags_under_the_lease(link_modules, plugin_instance, monkeypatch, run_async):
     link, panel = link_modules
     stale = link.ensure_link()

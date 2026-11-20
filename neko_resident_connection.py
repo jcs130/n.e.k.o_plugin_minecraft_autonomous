@@ -84,6 +84,7 @@ class ResidentConnection:
     catalog = None
     waiting = None
     draft = None
+    _website_player_grant = None
 
     @staticmethod
     def local_origin():
@@ -109,19 +110,31 @@ class ResidentConnection:
     def _from_panel(self, token):
         return isinstance(token, str) and token.isascii() and bool(self.panel_token) and secrets.compare_digest(self.panel_token, token)
 
+    def website_player_grant(self):
+        grant = self._website_player_grant
+        if grant and grant[1] > time.time() * 1000:
+            return grant[0]
+        self._website_player_grant = None
+        return None
+
+    def website_login_state(self):
+        code = self.browser_login["code"] if self.browser_login and self.browser_login["expiresAt"] > time.time() * 1000 else None
+        return {"browserCode": code, "authorized": self._authorized(), "playerAuthorized": bool(self.website_player_grant()),
+                "uiToken": self.panel_token}
+
     @ui.context(id="resident_connection", title="千灯纪居民")
     async def connection_context(self):
         role, session = self._read_resident_binding()
         resident = (session or {}).get("resident", {})
-        code = self.browser_login["code"] if self.browser_login and self.browser_login["expiresAt"] > time.time() * 1000 else None
+        login = self.website_login_state()
         names, current = await asyncio.to_thread(self.local_characters)
         return {"role": role or getattr(self.ctx, "current_lanlan", "") or current,
-                "localRoles": names, "authorized": self._authorized(), "catalog": self.catalog or {},
+                "localRoles": names, "authorized": login["authorized"], "catalog": self.catalog or {},
                 "waiting": self.waiting[0]["name"] if self.waiting else None,
                 "resident": resident.get("name", ""), "connected": session is not None,
                 "bodyKind": resident.get("bodyKind"), "characterId": resident.get("characterId"),
                 "control": self._resident_status(),
-                "browserCode": code, "uiToken": self.panel_token}
+                "browserCode": login["browserCode"], "uiToken": self.panel_token}
 
     def _read_resident_binding(self):
         try:
@@ -173,7 +186,7 @@ class ResidentConnection:
                                 or not pending["expiresAt"] > time.time() * 1000):
                             raise ValueError("invalid_browser_login")
                         self.browser_login = pending
-                    url = self.portal + "/resident-connect.html?flow=browser#" + self.browser_login["id"]
+                    url = self.portal + "/resident-connect.html?flow=browser&play=1#" + self.browser_login["id"]
                     if not await asyncio.to_thread(webbrowser.open, url):
                         return Err("请在浏览器打开 " + url)
                     return Ok({"opened": True})
@@ -181,7 +194,10 @@ class ResidentConnection:
                     return Ok({"state": "expired"})
                 data = await asyncio.to_thread(request_json, api + "browser-status", {}, self.browser_login["secret"])
                 if data["state"] == "authorized":
+                    player_until = data.get("playerAuthorizationExpiresAt")
+                    player_grant = (self.browser_login["secret"], player_until) if type(player_until) is int else None
                     await self._accept_authorization(data)
+                    self._website_player_grant = player_grant
                 return Ok({"state": data["state"]})
             except HTTPError as exc:
                 if op == "status" and exc.code == 401:
@@ -196,6 +212,7 @@ class ResidentConnection:
                 or not auth["expiresAt"] > time.time() * 1000):
             raise ValueError("invalid_authorization")
         self._clear_authorization()
+        self._website_player_grant = None
         self.authorization = auth
         try:
             await self._list()
@@ -228,7 +245,9 @@ class ResidentConnection:
                     if not role:
                         return Err("请先选择本机角色，再提交旧版居民连接码。")
                     grant = await asyncio.to_thread(request_json, self.portal + "/api/v1/resident-turns/pair", payload)
-                    return await self._bind(role, grant)
+                    result = await self._bind(role, grant)
+                    self._website_player_grant = None
+                    return result
                 await self._accept_authorization(auth)
             except (OSError, ValueError, TypeError, KeyError):
                 return Err("未能完成配对。请检查网络并在官网重新生成连接码。")
