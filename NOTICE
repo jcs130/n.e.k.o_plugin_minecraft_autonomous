@@ -13,3 +13,8 @@ This repository applies its own reviewed standalone cleanup patch.
 See backend/source.json for the base revision and patch hashes.
 Supplied MIT notices are preserved in backend/LICENSE-Agent-MC-World.txt;
 third-party dependency licenses remain with their respective packages.
+
+The resident website pairing, turn adapter, and hosted panel are adapted from
+https://github.com/jcs130/minecraft-ai-friend at bf913815,
+packages/agent-harness-py/integrations/neko_resident.
+Its MIT notice is preserved in LICENSE-Qiandengji-Resident.txt.

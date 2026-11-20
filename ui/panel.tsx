@@ -50,6 +50,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   }, [props.api.refresh,editing,busy])
   const settings = state.settings || {}
   const runtime = state.runtime || {}
+  const residentActive = !!state.resident_control?.phase && state.resident_control.phase !== "stopped"
   const stateReady = !!state.settings && !!state.runtime && !state.error
   const audit = state.audit || {}
   const external = settings.runtime?.mode === "external"
@@ -212,6 +213,13 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <div className="mc-hero-copy"><span className="mc-world-mark" aria-hidden="true">▦</span><div><span className="mc-eyebrow">MINECRAFT · JAVA 1.21.1</span><h1>千灯纪 · Agent友好的我的世界RPG服</h1><p className="mc-sub">和猫娘一起联机，把方块世界变成家。</p></div></div>
         <Inline><StatusBadge label={runtime.game_connected?"正在游玩":['stopped','idle','starting','reconnecting','failed'].includes(runtime.phase)?({stopped:"已停止",idle:"尚未开始",starting:"正在连接",reconnecting:"正在重连",failed:"需要检查"}[runtime.phase]):"状态待确认"} tone={runtime.game_connected?"success":"default"}/><RefreshButton label="刷新状态" /></Inline>
       </div>
+      <Card title="选择怎么进入游戏"><Inline>
+        <Text>在下方以玩家身份加入服务器，也可以连接已有的千灯纪女仆。</Text>
+        <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=panel&surface=resident`}
+          label="连接车万女仆" openExternal />
+      </Inline></Card>
+      {residentActive &&
+        <Alert tone="info" message="当前由居民模式控制。请先在居民面板停止桌面控制，再开始玩家模式。" />}
       <Onboarding kind="progress" accountReady={qiandengServer&&connection.auth==='offline'&&!needsGameAccount} needsAccount={needsGameAccount} componentsReady={state.installation?.prepared_runtime==='prepared'} />
       {runtime.planner_diagnostic?.category&&<Alert tone="warning" message={`规划请求被服务端拒绝（HTTP ${runtime.planner_diagnostic.status}，${runtime.planner_diagnostic.category}）。请核对模型和工具兼容性；原生队列继续独立运行。`} />}
       {notice && <Alert tone={failure ? "danger" : "info"} message={notice} />}
@@ -262,7 +270,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <Switch label="用当前猫娘的声音解说" checked={!!withNarration} onChange={setNarrationDraft} />
           <p className="mc-sub">声音在本机播放；当前尚未接通服务器附近语音。</p>
           <Inline>
-          <Button className="mc-primary" tone="primary" disabled={!stateReady||busy||needsRuntimeSetup||needsGameAccount||preparation.active||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
+          <Button className="mc-primary" tone="primary" disabled={!stateReady||busy||residentActive||needsRuntimeSetup||needsGameAccount||preparation.active||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
             if(loginPassword||loginEnabled!==null) {
               setFailure(true);setNotice("请先点击“保存连接与登录”，再开始游玩。");return
             }
@@ -270,7 +278,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
               appearance:appearanceDraft??settings.viewer?.default_appearance??"bundled:yui-ysm",
               extension_mode:extensionDraft??settings.extension_pack?.mode??"auto",
               character:characterDraft??settings.heartbeat?.target??"",narration:!!withNarration}))setConnectionDraft(null)
-          }}>{!stateReady?"正在读取连接…":preparation.active?"正在准备游戏组件…":runtime.game_connected?"正在自主游玩":runtime.phase==="starting"?"正在连接…":needsRuntimeSetup?"请先准备游戏组件":needsGameAccount?"请先接入游戏账号":"开始自主游玩"}</Button>
+          }}>{!stateReady?"正在读取连接…":residentActive?"请先停止居民控制":preparation.active?"正在准备游戏组件…":runtime.game_connected?"正在自主游玩":runtime.phase==="starting"?"正在连接…":needsRuntimeSetup?"请先准备游戏组件":needsGameAccount?"请先接入游戏账号":"开始自主游玩"}</Button>
           <Button disabled={busy||runtime.game_connected||!connectionDraft} onClick={async()=>{
             if(await call("save_settings",{settings:{server:connection}}))setConnectionDraft(null)
           }}>仅保存连接</Button>

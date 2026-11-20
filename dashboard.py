@@ -208,6 +208,7 @@ class Dashboard:
             heartbeat_state["delivery_state"] = ("final_decision" if (review.get("result") or {}).get("acknowledged") else "inspected_awaiting_final" if review.get("inspected_at") else "notification_" + str(review.get("notification_status", "not_delivered")))
             heartbeat_state["next"] = "主脑尚未完成最终判断；重新检查当前心跳后提交简短判断。" if heartbeat_state["delivery_failure"] else None
             return {"website_account": public_selection(raw), "neko_account": self.neko_account_state(),
+                    "resident_control": self._resident_status(),
                     "server_login": public_login(settings.data_root(self.data_path()), settings),
                     "settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
                                  "qiandengji": {"identity_file": configured_identity(raw)},
@@ -373,6 +374,10 @@ class Dashboard:
         if (not isinstance(connection, dict) or not connection or set(connection) - EDITABLE["server"]
                 or not isinstance(goal, str) or len(goal) > 4000 or type(use_neko_model) is not bool or type(narration) is not bool):
             return Err({"code": "invalid_quick_start", "message": "请填写有效连接；不要在连接字段中传入密码或其它控制参数。"})
+        with self._control_lock:
+            if self._resident_blocks_player():
+                return self._resident_owns_control()
+            self._player_start_requests += 1
         try:
             raw = await self.config.dump()
             connection = dict(connection)
@@ -432,6 +437,9 @@ class Dashboard:
             return started
         except (OSError, ValueError, KeyError, RuntimeError):
             return Err({"code": "quick_start_not_ready", "message": "当前会话有未确认回执或配置尚未就绪；请先处理面板中的状态，未启动新角色。"})
+        finally:
+            with self._control_lock:
+                self._player_start_requests -= 1
 
     @ui.action(label="停止游玩", tone="danger", confirm="停止自主框架和它的游戏连接？服务器、模型与桌面保持运行。")
     @plugin_entry(id="panel_stop", name="控制台停止游玩", kind="service", description="显式停止本框架，保留账本。")

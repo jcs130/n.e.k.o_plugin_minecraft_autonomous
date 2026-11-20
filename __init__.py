@@ -25,6 +25,7 @@ from .neko_character_binding import NekoCharacterBinding
 from .neko_heartbeat import NekoHeartbeat
 from .neko_narration import NekoNarration
 from .neko_presentation import NekoPresentation
+from .neko_resident_mode import ResidentMode
 from .neko_tools import NekoAutonomyTools
 from .prepared_runtime import resolve_host_runtime
 from .qiandengji_account import AccountError, start_failure
@@ -34,13 +35,17 @@ from .runtime_preparation import RuntimePreparation
 
 
 @neko_plugin
-class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, NekoAccountPanel, RuntimePreparation, NekoAutonomyTools, NekoCharacterBinding, NekoHeartbeat, NekoPresentation, NekoNarration, NekoPluginBase):
+class MinecraftAutonomousPlugin(Dashboard, ResidentMode, QiandengjiPanel, NekoAccountPanel, RuntimePreparation,
+                                NekoAutonomyTools, NekoCharacterBinding, NekoHeartbeat, NekoPresentation,
+                                NekoNarration, NekoPluginBase):
     def __init__(self, ctx):
         super().__init__(ctx)
         self._control_lock = threading.RLock()
         self._generation = 0
         self._configuration_writes = 0
         self._worker = None
+        self._player_start_requests = 0
+        self._initialize_resident()
 
     def _operator_state(self, stopped):
         path = self.data_path("operator.json")
@@ -55,6 +60,7 @@ class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, NekoAccountPanel, Ru
 
     @lifecycle(id="shutdown")
     async def on_shutdown(self, **_):
+        await self._stop_resident_control()
         await self._close_neko_link()
         await self._close_runtime_setup()
         settings = Settings.parse(await self.config.dump())
@@ -110,12 +116,15 @@ class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, NekoAccountPanel, Ru
     )
     async def start(self, goal: str = "survive", **_):
         with self._control_lock:
+            if self._resident_blocks_player():
+                return self._resident_owns_control()
             if self._setup_active():
                 return Err({"code": "runtime_setup_active", "message": "游戏组件正在准备，完成后再点击开始。"})
             if self._worker and self._worker.snapshot()["worker_alive"]:
                 return Ok(self._worker.snapshot())
             self._generation += 1
             generation = self._generation
+            self._player_start_requests += 1
         try:
             if not isinstance(goal, str) or not goal.strip() or len(goal) > 4000:
                 raise ValueError("invalid_goal: goal must contain 1..4000 characters")
@@ -161,6 +170,9 @@ class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, NekoAccountPanel, Ru
             return Err({"code": "configuration_error", "message": str(error)})
         except TransportError:
             return Err({"code": "configuration_unavailable", "message": "宿主配置接口暂不可用，未启动游戏。"})
+        finally:
+            with self._control_lock:
+                self._player_start_requests -= 1
 
     @plugin_entry(
         id="stop",
@@ -182,6 +194,8 @@ class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, NekoAccountPanel, Ru
         return await self.status()
 
     async def _submit(self, kind, payload, request_id):
+        if kind != "stop" and self._resident_blocks_player():
+            return self._resident_owns_control()
         try:
             settings = Settings.parse(await self.config.dump())
             if kind != "stop" and not settings.enabled:
@@ -190,10 +204,13 @@ class MinecraftAutonomousPlugin(Dashboard, QiandengjiPanel, NekoAccountPanel, Ru
                 raise ValueError("external_data_directory_required")
             settings.require_server()
             directory = settings.data_root(self.data_path()) / "sessions" / settings.identity / "host"
-            mailbox = Mailbox(directory)
-            if payload.get("origin") == "user" and kind in {"goal", "feedback"}:
-                return Ok(mailbox.submit_user_intent(kind, {key: value for key, value in payload.items() if key != "origin"}, request_id))
-            return Ok(mailbox.submit(kind, payload, request_id))
+            with self._control_lock:
+                if kind != "stop" and self._resident_blocks_player():
+                    return self._resident_owns_control()
+                mailbox = Mailbox(directory)
+                if payload.get("origin") == "user" and kind in {"goal", "feedback"}:
+                    return Ok(mailbox.submit_user_intent(kind, {key: value for key, value in payload.items() if key != "origin"}, request_id))
+                return Ok(mailbox.submit(kind, payload, request_id))
         except (OSError, ValueError) as error:
             return Err({"code": "command_rejected", "message": str(error)})
 
