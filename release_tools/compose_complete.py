@@ -11,7 +11,7 @@ from pathlib import Path
 from agent_mc_autonomy.runtime_bundle.build import compose_delivery
 
 ENGINE = "extensions/qiandengji/engine.mjs"
-PACK = "assets/server-extensions/qiandengji"
+PACK = "payload/plugins/minecraft_autonomous/assets/server-extensions/qiandengji"
 
 
 def verify_qiandengji_engine(runtime: Path, plugin: Path) -> None:
