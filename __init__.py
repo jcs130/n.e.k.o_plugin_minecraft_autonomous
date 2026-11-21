@@ -114,7 +114,10 @@ class MinecraftAutonomousPlugin(Dashboard, ResidentMode, QiandengjiPanel, NekoAc
         name="开始自主游玩 / Start autonomous play / 自律プレイ開始",
         description="按目标启动 Minecraft 1.21.1 自主游玩；需要启用配置、安装后端并绑定 decision 模型。返回受理状态，连接结果请查 status。",
     )
-    async def start(self, goal: str = "survive", **_):
+    async def start(self, goal: str = "survive", **options):
+        device_grant = options.get("device_handoff")
+        if device_grant is not None and device_grant is not self.desktop_body_device_grant():
+            return Err({"code": "body_device_pairing_required", "message": "桌面接力授权已过期或不可用。"})
         with self._control_lock:
             if self._resident_blocks_player():
                 return self._resident_owns_control()
@@ -135,6 +138,8 @@ class MinecraftAutonomousPlugin(Dashboard, ResidentMode, QiandengjiPanel, NekoAc
             if not settings.enabled:
                 return Err({"code": "autonomy_disabled", "message": "先在配置中启用 autonomy；插件不会自动进入游戏。"})
             settings.require_server()
+            if device_grant is not None and not self._body_device_connection_supported(settings):
+                return Err({"code": "body_device_connection_mismatch", "message": "接力设备只用于千灯纪的原玩家连接。"})
             if prepared in {"missing", "incompatible"}:
                 return Err(self.runtime_start_error(planner_raw, prepared))
             await qiandengji_preflight(planner_raw, settings, data_root=settings.data_root(self.data_path()))
@@ -150,9 +155,11 @@ class MinecraftAutonomousPlugin(Dashboard, ResidentMode, QiandengjiPanel, NekoAc
 
             async def play(goal, publish, stopped):
                 from .neko_recent_context import recent_context_provider
+                worker_options = {"device_handoff": device_grant} if device_grant is not None else {}
                 await run_session(settings, entry, data_root, create_planner(planner_raw, getattr(self.ctx, "models", None), settings),
                                   goal, publish, stopped,
-                                  recent_context_provider=recent_context_provider(self, planner_raw, settings, data, generation))
+                                  recent_context_provider=recent_context_provider(self, planner_raw, settings, data, generation),
+                                  **worker_options)
 
             with self._control_lock:
                 if generation != self._generation:

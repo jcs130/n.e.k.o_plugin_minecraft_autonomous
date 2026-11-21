@@ -22,6 +22,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const [mode, setMode] = useState("append")
   const [requestId, setRequestId] = useState("")
   const [busy, setBusy] = useState(false)
+  const [deviceHandoff, setDeviceHandoff] = useState(false)
   const [stopConfirm, setStopConfirm] = useState(false)
   const [notice, setNotice] = useState("")
   const [failure, setFailure] = useState(false)
@@ -229,6 +230,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             onClick={()=>call("resident_browser_login",{op:"start",uiToken:website.uiToken})}>
             {website.browserCode?"重新打开授权页":"登录千灯纪"}
           </Button>}
+        <Button disabled={busy || !website.uiToken} onClick={() => call("open_resident_website", {page:"bodies",uiToken:website.uiToken})}>管理已有角色的身体</Button>
         {website.browserCode && <Text>在官网确认六位数字 {website.browserCode}，这里会自动更新。</Text>}
         {website.authorized && !website.playerAuthorized && <Text>本次官网授权可用于居民。新建 Mineflayer 玩家账号的共用授权需官网支持。</Text>}
       </Stack></Card>
@@ -294,6 +296,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         </section>
         <div className="mc-launch">
           <Switch label="用当前猫娘的声音解说" checked={!!withNarration} onChange={setNarrationDraft} />
+          {state.body_device_ready && <Switch label="允许此角色在游玩中交接身体" checked={deviceHandoff} onChange={setDeviceHandoff} />}
           <p className="mc-sub">声音在本机播放；当前尚未接通服务器附近语音。</p>
           <Inline>
           <Button className="mc-primary" tone="primary" disabled={!stateReady||busy||residentActive||needsRuntimeSetup||needsGameAccount||preparation.active||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
@@ -301,6 +304,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
               setFailure(true);setNotice("请先点击“保存连接与登录”，再开始游玩。");return
             }
             if(await call("quick_start",{connection,goal,use_neko_model:usingHostModel,
+              ...(state.body_device_ready && deviceHandoff ? {enable_device_handoff: true, uiToken: state.website_login?.uiToken} : {}),
               appearance:appearanceDraft??settings.viewer?.default_appearance??"bundled:yui-ysm",
               extension_mode:extensionDraft??settings.extension_pack?.mode??"auto",
               character:characterDraft??settings.heartbeat?.target??"",narration:!!withNarration}))setConnectionDraft(null)

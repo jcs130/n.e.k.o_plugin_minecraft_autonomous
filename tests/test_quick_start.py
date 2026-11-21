@@ -1,3 +1,5 @@
+import time
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from plugin.sdk.plugin import Err, Ok
@@ -19,6 +21,27 @@ def test_quick_start_saves_common_settings_then_uses_normal_start(plugin_instanc
     assert "auto_start" not in str(patch)
     assert started.await_count == 1
     assert "Minecraft" in started.call_args.kwargs["goal"]
+
+
+def test_quick_start_managed_device_is_explicit_and_bound_to_official_server(plugin_instance, run_async, monkeypatch):
+    plugin = plugin_instance
+    grant = SimpleNamespace(expires_at=time.time() * 1000 + 180_000, token="private-for-fixture-only")
+    plugin._body_device_grant = grant
+    saved = AsyncMock(return_value=Ok({"saved": True}))
+    started = AsyncMock(return_value=Ok({"accepted": True}))
+    monkeypatch.setattr(plugin, "save_settings", saved)
+    monkeypatch.setattr(plugin, "start", started)
+    official = {"host": "micro.kangqiang.site", "port": 25702, "username": "Alice"}
+    wrong_panel = run_async(plugin.quick_start(connection=official, enable_device_handoff=True, uiToken="wrong"))
+    assert wrong_panel.error["code"] == "body_device_pairing_required"
+    wrong_server = run_async(plugin.quick_start(connection={**official, "host": "fixture.test"},
+                                               enable_device_handoff=True, uiToken=plugin.panel_token))
+    assert wrong_server.error["code"] == "body_device_connection_mismatch"
+    assert not saved.await_count and not started.await_count
+    allowed = run_async(plugin.quick_start(connection=official, enable_device_handoff=True, uiToken=plugin.panel_token))
+    assert allowed.value["accepted"]
+    assert started.call_args.kwargs["device_handoff"] is grant
+    assert grant.token not in repr(saved.call_args)
 
 
 def test_quick_start_validation_failure_never_starts(plugin_instance, run_async, monkeypatch):
