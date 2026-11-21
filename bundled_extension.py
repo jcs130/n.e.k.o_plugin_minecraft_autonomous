@@ -8,6 +8,10 @@ PACK = Path(__file__).resolve().parent / "assets" / "server-extensions" / "qiand
 ENGINE_RELATIVE = "extensions/qiandengji/engine.mjs"
 
 
+class BundledEngineUnavailable(ValueError):
+    """The matching backend does not contain its pinned gameplay extension."""
+
+
 def qiandengji_connection(raw):
     """Explicit configured endpoint, never a guess from chat, account name or DNS."""
     from .qiandengji_account import ADDRESS, VERSION
@@ -111,7 +115,7 @@ def default_bundled_extension_settings(raw):
     engine = status["engine"]
     if qiandengji_connection(raw) and _managed_engine(explicit, engine):
         if not engine["available"]:
-            raise ValueError("千灯纪玩法组件尚未就绪或校验失败。请点击“准备游戏组件”安装匹配版本；未启动游戏。")
+            raise BundledEngineUnavailable("千灯纪玩法组件尚未就绪或校验失败。请点击“准备游戏组件”安装匹配版本；未启动游戏。")
         selected.update(engine_module=engine["module"], engine_sha256=engine["sha256"])
     elif not qiandengji_connection(raw) and explicit.get("engine_module") and _managed_engine(explicit, engine):
         selected.update(engine_module="", engine_sha256="")

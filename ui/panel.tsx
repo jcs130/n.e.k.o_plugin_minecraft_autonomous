@@ -11,6 +11,14 @@ import NativeControls from "./native-controls"
 import { deepseekPreset } from "./deepseek-presets.js"
 import Onboarding from "./onboarding"
 
+const playPhases: Record<string, string> = {
+  stopped: "已停止", idle: "尚未开始", starting: "正在连接", reconnecting: "正在重连",
+  failed: "需要检查", waiting_for_body: "等待身体接回",
+}
+const bodyNames: Record<string, string> = {
+  mineflayer: "Mineflayer 玩家", numen: "Numen", maid: "车万女仆", villager: "村民",
+}
+
 export default function Panel(props: PluginSurfaceProps<any>) {
   const { state, actions } = props
   const [editing, setEditing] = useState(false)
@@ -51,6 +59,10 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   }, [props.api.refresh,editing,busy])
   const settings = state.settings || {}
   const runtime = state.runtime || {}
+  const bodyControl = runtime.body_control
+  const waitingForBody = runtime.phase === "waiting_for_body"
+  const phaseLabel = Object.hasOwn(playPhases, runtime.phase) ? playPhases[runtime.phase] : "状态待确认"
+  const bodyName = Object.hasOwn(bodyNames, bodyControl?.activeKind) ? bodyNames[bodyControl.activeKind] : null
   const residentActive = !!state.resident_control?.phase && state.resident_control.phase !== "stopped"
   const website = state.website_login || {}
   useEffect(() => {
@@ -222,8 +234,19 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       {runtime.phase === "failed" && <Alert tone="danger" message="框架最近记录为运行失败；下方保留最后观测，刷新页面不会自动恢复游玩。" />}
       <div className="mc-hero">
         <div className="mc-hero-copy"><span className="mc-world-mark" aria-hidden="true">▦</span><div><span className="mc-eyebrow">MINECRAFT · JAVA 1.21.1</span><h1>千灯纪 · Agent友好的我的世界RPG服</h1><p className="mc-sub">和猫娘一起联机，把方块世界变成家。</p></div></div>
-        <Inline><StatusBadge label={runtime.game_connected?"正在游玩":['stopped','idle','starting','reconnecting','failed'].includes(runtime.phase)?({stopped:"已停止",idle:"尚未开始",starting:"正在连接",reconnecting:"正在重连",failed:"需要检查"}[runtime.phase]):"状态待确认"} tone={runtime.game_connected?"success":"default"}/><RefreshButton label="刷新状态" /></Inline>
+        <Inline><StatusBadge label={runtime.game_connected && !waitingForBody ? "正在游玩" : phaseLabel} tone={runtime.game_connected && !waitingForBody ? "success" : "default"}/><RefreshButton label="刷新状态" /></Inline>
       </div>
+      {waitingForBody && <Card title="角色身体交接"><Stack gap={8}>
+        <Text>{bodyControl?.status === "recovery_required" ? "控制权待核实。请查询原请求，避免重复切换。"
+          : bodyControl?.status === "switching" ? "正在交接身体，桌面会保留本次会话。"
+          : "桌面正在等待服务器确认控制权。"}</Text>
+        {bodyName && <Text>当前身体 · {bodyName}</Text>}
+        {bodyControl?.generation && <Text>控制版本 · {bodyControl.generation}</Text>}
+        {bodyControl?.pendingRequestId && <Text>原请求编号 · {bodyControl.pendingRequestId}</Text>}
+        <Button disabled={busy || !website.uiToken} onClick={() => call("open_resident_website", {page:"bodies",uiToken:website.uiToken})}>
+          打开官网换身页
+        </Button>
+      </Stack></Card>}
       <Card title="千灯纪账号"><Stack gap={8}>
         {(website.authorized || website.playerAuthorized) ? <StatusBadge tone="success" label="官网已授权" /> :
           <Button tone="primary" disabled={busy||!website.uiToken||residentActive}
@@ -299,7 +322,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           {state.body_handoff_ready && <Switch label="允许此角色在游玩中交接身体" checked={deviceHandoff} onChange={setDeviceHandoff} />}
           <p className="mc-sub">声音在本机播放；当前尚未接通服务器附近语音。</p>
           <Inline>
-          <Button className="mc-primary" tone="primary" disabled={!stateReady||busy||residentActive||needsRuntimeSetup||needsGameAccount||preparation.active||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
+          <Button className="mc-primary" tone="primary" disabled={!stateReady||busy||residentActive||needsRuntimeSetup||needsGameAccount||preparation.active||waitingForBody||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
             if(loginPassword||loginEnabled!==null) {
               setFailure(true);setNotice("请先点击“保存连接与登录”，再开始游玩。");return
             }
@@ -308,7 +331,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
               appearance:appearanceDraft??settings.viewer?.default_appearance??"bundled:yui-ysm",
               extension_mode:extensionDraft??settings.extension_pack?.mode??"auto",
               character:characterDraft??settings.heartbeat?.target??"",narration:!!withNarration}))setConnectionDraft(null)
-          }}>{!stateReady?"正在读取连接…":residentActive?"请先停止居民控制":preparation.active?"正在准备游戏组件…":runtime.game_connected?"正在自主游玩":runtime.phase==="starting"?"正在连接…":needsRuntimeSetup?"请先准备游戏组件":needsGameAccount?"请先接入游戏账号":"开始自主游玩"}</Button>
+          }}>{!stateReady?"正在读取连接…":residentActive?"请先停止居民控制":waitingForBody?"等待身体接回":preparation.active?"正在准备游戏组件…":runtime.game_connected?"正在自主游玩":runtime.phase==="starting"?"正在连接…":needsRuntimeSetup?"请先准备游戏组件":needsGameAccount?"请先接入游戏账号":"开始自主游玩"}</Button>
           <Button disabled={busy||runtime.game_connected||!connectionDraft} onClick={async()=>{
             if(await call("save_settings",{settings:{server:connection}}))setConnectionDraft(null)
           }}>仅保存连接</Button>

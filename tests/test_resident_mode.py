@@ -54,11 +54,14 @@ def test_browser_authorization_binds_exact_existing_body_without_start(monkeypat
         if op == "character-bodies":
             assert payload is None
             return {"available": True, "characters": [{"name": "桐人", "characterId": session["resident"]["characterId"],
-                    "activeKind": "numen", "status": "ready", "pendingRequestId": "request-1"}]}
+                    "activeKind": "numen", "status": "ready", "pendingRequestId": "request-1",
+                    "targetKinds": ["mineflayer", "maid"], "generation": 7, "autonomous": True,
+                    "token": "qdh_private_from_website"}]}
         if op == "request-1":
             assert payload is None and url.endswith("/" + session["resident"]["characterId"] + "/switch/request-1")
             return {"requestId":op, "characterId":session["resident"]["characterId"], "status":"completed",
-                    "activeKind":"numen", "targetKind":"numen"}
+                    "activeKind":"numen", "targetKind":"numen", "generation":8, "phase":"completed",
+                    "reason":"ORIGINAL_RECEIPTS_CONFIRMED", "token":"qdh_private_from_website"}
         assert op == "connect"
         assert payload == {key: session["resident"][key] for key in ("id", "characterId")}
         return {**session, "resident": {**session["resident"], "characterId": str(uuid4())}} if wrong_body else session
@@ -86,6 +89,14 @@ def test_browser_authorization_binds_exact_existing_body_without_start(monkeypat
         await plugin.read_character_body(op="list", uiToken="wrong")
         assert (await plugin.read_character_body(op="list", uiToken=ui_token)).value == {"updated":True}
         assert (await plugin.read_character_body(op="receipt", characterId=args["characterId"],requestId="request-1",uiToken=ui_token)).value == {"updated":True}
+        body_context = await plugin.connection_context()
+        assert body_context["bodyView"]["characters"][0]["targetKinds"] == ["mineflayer", "maid"]
+        assert body_context["bodyView"]["characters"][0]["generation"] == 7
+        assert body_context["bodyReceipt"]["requestId"] == "request-1"
+        assert body_context["bodyReceipt"]["generation"] == 8
+        assert body_context["bodyReceipt"]["reason"] == "ORIGINAL_RECEIPTS_CONFIRMED"
+        assert "qdh_private_from_website" not in json.dumps(body_context)
+        await plugin.read_character_body(op="list", uiToken=ui_token)
         assert (await plugin.connection_context())["bodyReceipt"]["requestId"] == "request-1"
         await plugin.open_resident_website(page="bodies", uiToken=ui_token)
         assert opened[-1] == plugin.portal + "/resident-connect.html?flow=bodies"
@@ -110,7 +121,7 @@ def test_browser_authorization_binds_exact_existing_body_without_start(monkeypat
         assert plugin.list_llm_tools() == original_tools
 
     run_async(exercise())
-    assert calls == ["browser-start", "browser-status", "list", "character-bodies", "request-1", "connect", "connect"]
+    assert calls == ["browser-start", "browser-status", "list", "character-bodies", "request-1", "character-bodies", "connect", "connect"]
 
 
 def test_resident_start_scopes_tools_and_keeps_player_mode_idle(monkeypatch, run_async, resident):
@@ -271,7 +282,7 @@ def test_owner_device_pairing_displays_only_approval_id(monkeypatch, resident, r
     until = int(time.time() * 1000) + 180_000
     character = session["resident"]["characterId"]
     plugin.authorization = {"expiresAt": until, "bodyReadExpiresAt": until}
-    plugin.body_view = {"characters": [{"characterId": character}]}
+    plugin.body_view = {"available": True, "characters": [{"characterId": character}]}
     pending = SimpleNamespace(
         pair_id="a" * 24,
         approval_url=plugin.portal + "/resident-connect.html?flow=bodies",
@@ -304,6 +315,10 @@ def test_owner_device_pairing_displays_only_approval_id(monkeypatch, resident, r
         assert (await plugin.pair_body_device(op="start", uiToken="wrong")).error
         assert not seen
         token = plugin.panel_token
+        plugin.body_view["available"] = False
+        assert (await plugin.pair_body_device(op="start", uiToken=token, characterId=character)).error
+        assert not seen
+        plugin.body_view["available"] = True
         assert (await plugin.pair_body_device(op="start", uiToken=token, characterId="other")).error
         assert (await plugin.pair_body_device(op="start", uiToken=token, characterId=character)).value == {"state": "pending"}
         assert (await plugin.pair_body_device(op="start", uiToken=token, characterId=character)).value == {"state": "pending"}
@@ -331,7 +346,7 @@ def test_owner_device_pairing_hides_private_provider_errors_and_cancels(monkeypa
     until = int(time.time() * 1000) + 180_000
     character = session["resident"]["characterId"]
     plugin.authorization = {"expiresAt": until, "bodyReadExpiresAt": until}
-    plugin.body_view = {"characters": [{"characterId": character}]}
+    plugin.body_view = {"available": True, "characters": [{"characterId": character}]}
     response = None
 
     async def begin(_):

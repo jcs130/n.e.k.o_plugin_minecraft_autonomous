@@ -22,6 +22,7 @@ from .model_check import check_model
 from .neko_heartbeat import HeartbeatSettings, is_stopped, review_port
 from .neko_host_context import HostContextSettings
 from .neko_presentation import PresentationSettings
+from .neko_resident_connection import body_control_view
 from .neko_speech import output_settings
 from .neko_tools import unwrap
 from .prepared_runtime import resolve_host_runtime
@@ -182,6 +183,9 @@ class Dashboard:
             state = {key: snapshot.get(key) for key in (
                 "phase", "game_connected", "autonomy_running", "worker_alive", "updated_at", "decisions", "source", "live_verified",
                 "standing_goal", "current_goal", "context", "host_context", "model_status", "fast_focus", "perception", "planner_error", "planner_diagnostic", "viewer", "viewer_window")}
+            body_control = body_control_view(snapshot.get("body_control"))
+            if body_control is not None:
+                state["body_control"] = body_control
             state["facts"] = [{"key": str(p.get("key", ""))[:80], "text": str(p.get("text", ""))[:900],
                                "has_more": len(str(p.get("text", ""))) > 900} for p in snapshot.get("facts", {}).get("parts", [])[:24]]
             observation = snapshot.get("facts", {}).get("observation")

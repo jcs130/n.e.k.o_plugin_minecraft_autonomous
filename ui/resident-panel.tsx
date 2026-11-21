@@ -3,14 +3,22 @@ import type { PluginSurfaceProps } from "@neko/plugin-ui"
 import { startPanelRefresh } from "./panel-refresh.js"
 
 type Resident = { id: string, characterId: string, name: string, bodyKind: string, state: string }
-type Body = {characterId: string, name: string, activeKind: string | null, status: string, pendingRequestId: string | null}
+type Body = {characterId: string, name: string, activeKind: string | null, status: string,
+  pendingRequestId: string | null, generation: number | null, targetKinds: string[], autonomous: boolean}
+type Receipt = {characterId: string, requestId: string, status: string, activeKind: string | null,
+  targetKind: string, generation: number, reason: string | null}
 const bodyNames: Record<string, string> = {maid: "车万女仆", numen: "Numen", mineflayer: "Mineflayer 玩家", villager: "村民"}
 const statuses: Record<string, string> = {ready:"可用", switching:"交接中", recovery_required:"待核实",
   completed:"已完成", blocked:"本次未执行"}
+const receiptReasons: Record<string, string> = {
+  SOURCE_NOT_READY: "原身体未就绪", TARGET_NOT_READY: "目标身体未就绪",
+  SOURCE_RELEASE_UNCONFIRMED: "原身体尚未确认释放", TARGET_ACQUIRE_UNCONFIRMED: "目标身体尚未确认接管",
+  SERVICE_RESTART: "服务已重启，需核对原回执", ORIGINAL_RECEIPTS_CONFIRMED: "服务端已核对原回执",
+}
 type State = { role?: string, localRoles?: string[], resident?: string, connected?: boolean, authorized?: boolean,
   bodyReadable?: boolean, bodyView?: {available: boolean, characters: Body[]},
-  bodyReceipt?: {characterId: string, requestId: string, status: string},
-  bodyDeviceAvailable?: boolean, bodyDevice?: {state: string, pairId?: string, characterId?: string},
+  bodyReceipt?: Receipt,
+  bodyDeviceAvailable?: boolean, bodyDevice?: {state: string, pairId?: string, characterId?: string, expiresAt?: number},
   bodyKind?: string, control?: { phase?: string, health?: string, playerBusy?: boolean },
   uiToken?: string, waiting?: string, catalog?: { residents?: Resident[], availableBodies?: string[] } }
 
@@ -30,9 +38,13 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
   const [busy, setBusy] = useState(false)
   const [characterId, setCharacterId] = useState("")
   const [receiptId, setReceiptId] = useState("")
-  const bodyRows = state.bodyView?.characters || []
+  const bodyRows = state.bodyView?.available ? state.bodyView.characters : []
   const character = bodyRows.find(row => row.characterId === characterId) || bodyRows[0]
   const original = receiptId.trim() || character?.pendingRequestId || ""
+  const receipt = state.bodyReceipt?.characterId === character?.characterId && state.bodyReceipt?.requestId === original
+    ? state.bodyReceipt : null
+  const canShowDevice = !!state.bodyDeviceAvailable && !!state.bodyView?.available &&
+    (!!character || state.bodyDevice?.state === "pending" || state.bodyDevice?.state === "paired")
   const checking = useRef(false)
   const localRole = (role ?? state.role) || roles[0] || ""
   const selected = residents.find(row => row.id === id) || residents[0]
@@ -104,7 +116,8 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
     </Stack></Card>
     {!controlling && <>
     <Card title="角色身体与换身"><Stack>
-      <Button disabled={busy || !state.uiToken} onClick={() => call("open_resident_website", {page:"bodies"})}>在官网管理身体</Button>
+      {state.bodyView?.available !== false && <Button disabled={busy || !state.uiToken}
+        onClick={() => call("open_resident_website", {page:"bodies"})}>在官网管理身体</Button>}
       {state.bodyReadable && <Stack>
         <Button disabled={busy} onClick={() => call("read_character_body", {op:"list"})}>查看身体状态</Button>
         {character ? <Stack>
@@ -112,16 +125,21 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
             options={bodyRows.map(row => ({value:row.characterId,label:row.name}))}
             onChange={value => { setCharacterId(value); setReceiptId("") }} /></Field>
           <Text>{bodyNames[character.activeKind || ""] || "身体待核实"} · {statuses[character.status] || "待核实"}</Text>
+          {character.generation !== null && <Text>控制版本 · {character.generation}</Text>}
+          <Text>{character.targetKinds.length ? "可换至 " + character.targetKinds.map(kind => bodyNames[kind]).join("、") : "当前没有可切换的身体。"}</Text>
+          {character.autonomous && <Text>服务端已允许此角色自主申请换身。</Text>}
           <Field label="换身请求编号"><Input value={receiptId} placeholder={character.pendingRequestId || "填写原请求编号"} onChange={setReceiptId} /></Field>
           <Button disabled={busy || !original} onClick={() => call("read_character_body", {
             op:"receipt",characterId:character.characterId,requestId:original
           })}>查看原回执</Button>
-          {state.bodyReceipt?.characterId === character.characterId && state.bodyReceipt.requestId === original &&
-            <Text>{statuses[state.bodyReceipt.status] || "待核实"}</Text>}
+          {receipt && <Stack gap={5}>
+            <Text>{statuses[receipt.status] || "待核实"} · {bodyNames[receipt.targetKind]} · 控制版本 {receipt.generation}</Text>
+            {receipt.reason && receiptReasons[receipt.reason] && <Text>{receiptReasons[receipt.reason]}</Text>}
+          </Stack>}
         </Stack> : state.bodyView && <Text>{state.bodyView.available ? "当前账号还没有可管理身体的角色。" : "服务器尚未开放角色换身。"}</Text>}
       </Stack>}
     </Stack></Card>
-    {state.bodyDeviceAvailable && <Card title="桌面接力设备"><Stack>
+    {canShowDevice && <Card title="桌面接力设备"><Stack>
       <Text>在上方选择本人角色，再到千灯纪官网批准该角色的桌面设备。官网可撤销设备权限。</Text>
       {state.bodyDevice?.state === "paired" ? <Stack>
           <StatusBadge label="官网已批准这台设备" tone="success" />
@@ -131,6 +149,7 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
           <Stack gap={8}>
             <StatusBadge label="等待官网批准" tone="default" />
             <Field label="一次性配对编号"><Text>{state.bodyDevice.pairId}</Text></Field>
+            {state.bodyDevice.expiresAt && <Text>到期时间 · {new Date(state.bodyDevice.expiresAt).toLocaleTimeString()}</Text>}
             <Inline>
               <Button disabled={busy || !state.uiToken} onClick={() => call("pair_body_device", {op:"open"})}>打开官网批准</Button>
               <Button disabled={busy || !state.uiToken} onClick={() => call("pair_body_device", {op:"check"})}>核对批准结果</Button>

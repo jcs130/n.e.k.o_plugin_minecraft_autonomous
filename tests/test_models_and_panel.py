@@ -280,6 +280,39 @@ def test_dashboard_uses_native_vitals_without_private_inventory_or_invented_maxi
     assert "not-for-ui" not in json.dumps(result)
 
 
+def test_dashboard_projects_only_safe_managed_body_state(plugin_instance, run_async, monkeypatch):
+    request_id = "4e2c4bd7-0540-4ece-bb61-06e747588078"
+    private_value = "qdh_" + "a" * 43
+    status = {
+        "phase": "waiting_for_body",
+        "game_connected": False,
+        "worker_alive": True,
+        "body_control": {"status": "ready", "activeKind": "numen", "generation": 3, "pendingRequestId": request_id,
+                         "token": private_value, "endpoint": "https://private.example"},
+    }
+    monkeypatch.setattr(plugin_instance, "status", AsyncMock(return_value=Ok(status)))
+    result = run_async(plugin_instance.dashboard())
+    assert result["runtime"]["phase"] == "waiting_for_body"
+    assert result["runtime"]["body_control"] == {
+        "status": "ready", "activeKind": "numen", "generation": 3, "pendingRequestId": request_id,
+    }
+    assert private_value not in json.dumps(result)
+    assert "private.example" not in json.dumps(result)
+
+    status["body_control"] = {"status": "recovery_required", "activeKind": {}, "generation": False,
+                              "pendingRequestId": private_value}
+    runtime = run_async(plugin_instance.dashboard())["runtime"]
+    assert runtime["body_control"] == {
+        "status": "recovery_required", "activeKind": None, "generation": None, "pendingRequestId": None,
+    }
+    status["body_control"] = {"status": "switching", "generation": 2**53, "pendingRequestId": "x" * 129}
+    assert run_async(plugin_instance.dashboard())["runtime"]["body_control"] == {
+        "status": "switching", "activeKind": None, "generation": None, "pendingRequestId": None,
+    }
+    status["body_control"] = {"status": {"private": private_value}}
+    assert "body_control" not in run_async(plugin_instance.dashboard())["runtime"]
+
+
 def test_settings_save_validates_without_starting_or_copying_provider_keys(plugin_instance, run_async, monkeypatch):
     update = AsyncMock(return_value={})
     monkeypatch.setattr(plugin_instance.config, "update", update)

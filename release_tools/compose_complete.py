@@ -1,17 +1,41 @@
 """Maintainer-only outer installer; the plugin itself uses the official SDK packer."""
 
 import argparse
+import hashlib
 import html
+import json
 import re
 import zipfile
 from pathlib import Path
 
 from agent_mc_autonomy.runtime_bundle.build import compose_delivery
 
+ENGINE = "extensions/qiandengji/engine.mjs"
+PACK = "assets/server-extensions/qiandengji"
+
+
+def verify_qiandengji_engine(runtime: Path, plugin: Path) -> None:
+    """A complete installation must contain the exact RPG engine the plugin pins."""
+    with zipfile.ZipFile(plugin) as archive:
+        source = archive.getinfo(f"{PACK}/source.json")
+        if source.file_size > 16384:
+            raise ValueError("Invalid bundled Qiandengji source manifest")
+        expected = json.loads(archive.read(source))["engine"]
+        engine = archive.getinfo(f"{PACK}/engine.mjs")
+        if (expected.get("backend_relative") != ENGINE or engine.file_size != expected["bytes"]
+                or not 0 < engine.file_size <= 1048576
+                or hashlib.sha256(archive.read(engine)).hexdigest() != expected["sha256"]):
+            raise ValueError("Plugin Qiandengji engine does not match its source manifest")
+    backend = runtime / "backend" / ENGINE
+    if (not backend.is_file() or backend.stat().st_size != expected["bytes"]
+            or hashlib.sha256(backend.read_bytes()).hexdigest() != expected["sha256"]):
+        raise ValueError("Runtime is missing the plugin's pinned Qiandengji gameplay engine")
+
 
 def compose(runtime: Path, plugin: Path, output: Path, instructions: Path) -> Path:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+\.neko-plugin", plugin.name):
         raise ValueError("Use the official ASCII plugin artifact filename")
+    verify_qiandengji_engine(runtime, plugin)
     result = compose_delivery(runtime, plugin, output, instructions)
     page = Path(__file__).with_name("start-here.html").read_text(encoding="utf-8")
     # This small wrapper only guides normal official import. It never writes

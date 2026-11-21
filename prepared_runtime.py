@@ -6,7 +6,7 @@ from pathlib import Path
 from agent_mc_autonomy.runtime_bundle import BundleError, apply_runtime_defaults, verify_bundle
 
 from .bundled_appearance import default_bundled_appearance_settings
-from .bundled_extension import default_bundled_extension_settings
+from .bundled_extension import BundledEngineUnavailable, default_bundled_extension_settings
 
 
 def resolve_host_runtime(raw):
@@ -30,7 +30,13 @@ def resolve_host_runtime(raw):
         if isinstance(effective.get("viewer", {}), dict):
             effective.setdefault("viewer", {}).setdefault("default_appearance", "bundled:yui-ysm")
         return effective, state
-    return default_bundled_extension_settings(default_bundled_appearance_settings(effective)), state
+    effective = default_bundled_appearance_settings(effective)
+    try:
+        return default_bundled_extension_settings(effective), state
+    except BundledEngineUnavailable:
+        # A valid core without the pinned RPG add-on cannot start on Qiandengji.
+        # Keep the repair path available even when stale config still binds it.
+        return effective, "incompatible"
 
 
 def require_prepared_runtime(state):

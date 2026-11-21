@@ -117,6 +117,10 @@ def test_rpg_engine_missing_tampered_or_untrusted_metadata_stays_unavailable(plu
     installed.unlink()
     with pytest.raises(ValueError,match='准备游戏组件'):
         module.default_bundled_extension_settings(raw)
+    preparation = importlib.import_module(plugin_module.__name__ + ".prepared_runtime")
+    effective, state = preparation.resolve_host_runtime(raw)
+    assert state == "incompatible"
+    assert effective["backend"] == raw["backend"]
     installed.write_bytes(b'tampered')
     with pytest.raises(ValueError,match='准备游戏组件'):
         module.default_bundled_extension_settings(raw)

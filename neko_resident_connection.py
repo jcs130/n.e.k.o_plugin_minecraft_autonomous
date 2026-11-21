@@ -22,6 +22,66 @@ from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
 PORTAL = "https://mc.kangqiang.site"
 SECRET = {"type": "string", "writeOnly": True}
 
+BODY_KINDS = ("mineflayer", "numen", "maid", "villager")
+BODY_STATUSES = ("ready", "switching", "recovery_required", "unavailable")
+RECEIPT_PHASES = ("releasing", "acquiring", "completed", "reconciled")
+RECEIPT_REASONS = (
+    "SOURCE_NOT_READY", "TARGET_NOT_READY", "SOURCE_RELEASE_UNCONFIRMED",
+    "TARGET_ACQUIRE_UNCONFIRMED", "SERVICE_RESTART", "ORIGINAL_RECEIPTS_CONFIRMED",
+)
+
+
+def public_body_id(value):
+    return value if (
+        isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", value)
+        and not value.startswith(("qdh_", "qdp_", "rot_", "rdt_", "rba_", "rbc_", "qda_"))
+    ) else None
+
+
+def public_generation(value):
+    return value if type(value) is int and 1 <= value <= 2**53 - 1 else None
+
+
+def body_control_view(value):
+    """Project display state without private control or pairing data."""
+    if not isinstance(value, dict) or value.get("status") not in BODY_STATUSES:
+        return None
+    kind = value.get("activeKind")
+    return {
+        "status": value["status"],
+        "activeKind": kind if kind in BODY_KINDS else None,
+        "generation": public_generation(value.get("generation")),
+        "pendingRequestId": public_body_id(value.get("pendingRequestId")),
+    }
+
+
+def body_row(value):
+    state = body_control_view(value)
+    if not state or not public_body_id(value.get("characterId")):
+        raise ValueError("invalid_character")
+    name = value.get("name")
+    if not isinstance(name, str) or not name.strip() or not name.isprintable() or len(name) > 128:
+        raise ValueError("invalid_character_name")
+    targets = value.get("targetKinds")
+    allowed = [kind for kind in BODY_KINDS if kind != state["activeKind"] and kind in targets] if isinstance(targets, list) else []
+    return {**state, "characterId": value["characterId"], "name": name,
+            "targetKinds": allowed, "autonomous": value.get("autonomous") is True}
+
+
+def body_receipt_view(value, character_id, request_id):
+    if not isinstance(value, dict) or value.get("characterId") != character_id or value.get("requestId") != request_id:
+        raise ValueError("receipt_mismatch")
+    status, phase, active, target = (value.get(key) for key in ("status", "phase", "activeKind", "targetKind"))
+    generation = public_generation(value.get("generation"))
+    if (status not in ("completed", "blocked", "switching", "recovery_required") or phase not in RECEIPT_PHASES
+            or not generation or target not in BODY_KINDS or (active is not None and active not in BODY_KINDS)
+            or (status == "completed" and (active != target or phase not in ("completed", "reconciled")))):
+        raise ValueError("invalid_receipt")
+    reason = value.get("reason")
+    return {"characterId": character_id, "requestId": request_id, "status": status, "phase": phase,
+            "activeKind": active, "targetKind": target, "generation": generation,
+            "reason": reason if reason in RECEIPT_REASONS else None}
+
 
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -152,8 +212,8 @@ class ResidentConnection:
                 if op == "start":
                     if status == "pending" and characterId != self._body_device_character:
                         return Err("请先结束当前角色的配对。")
-                    if not self._body_readable() or not any(row["characterId"] == characterId
-                            for row in (self.body_view or {}).get("characters", [])):
+                    if not self._body_readable() or (self.body_view or {}).get("available") is not True or not any(
+                            row["characterId"] == characterId for row in self.body_view["characters"]):
                         return Err("请在角色身体列表里选择本人角色，再生成配对编号。")
                     if status != "pending":
                         pairing = await provider.begin_device_pairing(self.portal)
@@ -213,30 +273,38 @@ class ResidentConnection:
                 return Err("本次授权未开放身体查询。可以打开官网查看。")
             url = self.portal + "/api/v1/character-bodies"
             if op == "receipt":
-                known = {r["characterId"] for r in (self.body_view or {}).get("characters", [])}
-                if (not isinstance(characterId, str) or characterId not in known or not isinstance(requestId, str)
-                        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", requestId)):
+                known = (self.body_view or {}).get("characters", [])
+                if not public_body_id(characterId) or not public_body_id(requestId) or not any(
+                        row["characterId"] == characterId for row in known):
                     return Err("请选择列表中的角色并填写原请求编号。")
                 url += f"/{characterId}/switch/{requestId}"
-            self.body_receipt = None
+                self.body_receipt = None
             try:
                 data = await asyncio.to_thread(request_json, url, None, self.authorization["onboardingToken"])
                 if not self._body_readable():
                     return Err("本次授权已结束，请重新打开官网。")
                 if op == "list":
-                    rows = [{k: row[k] for k in ("characterId", "name", "activeKind", "status", "pendingRequestId")}
-                            for row in data["characters"]]
-                    if any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", row["characterId"]) for row in rows):
-                        raise ValueError("invalid_character")
-                    self.body_view = {"available": data["available"] is True, "characters": rows}
+                    available = data["available"]
+                    if type(available) is not bool:
+                        raise ValueError("invalid_body_availability")
+                    rows = [body_row(row) for row in data["characters"]] if available else []
+                    self.body_view = {"available": available, "characters": rows}
+                    if self.body_receipt and not any(row["characterId"] == self.body_receipt["characterId"] for row in rows):
+                        self.body_receipt = None
                 else:
-                    if data["characterId"] != characterId or data["requestId"] != requestId:
-                        raise ValueError("receipt_mismatch")
-                    self.body_receipt = {k: data[k] for k in ("characterId", "requestId", "status", "activeKind", "targetKind")}
+                    self.body_receipt = body_receipt_view(data, characterId, requestId)
                 return Ok({"updated": True})
+            except HTTPError as error:
+                if op == "list" and error.code == 404 and self._body_readable():
+                    self.body_view = {"available": False, "characters": []}
+                    self.body_receipt = None
+                    return Ok({"updated": True})
+                if op == "list":
+                    self.body_view = self.body_receipt = None
+                return Err("未能核对身体状态或原回执。可以打开官网查看。")
             except (OSError, ValueError, TypeError, KeyError):
                 if op == "list":
-                    self.body_view = None
+                    self.body_view = self.body_receipt = None
                 return Err("未能核对身体状态或原回执。可以打开官网查看。")
 
     def _authorized(self):
