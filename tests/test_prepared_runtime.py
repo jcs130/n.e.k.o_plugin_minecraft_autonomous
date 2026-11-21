@@ -123,6 +123,42 @@ def test_dashboard_roundtrip_and_start_share_exact_runtime(prepared, plugin_inst
     assert calls and all(call["full"] is False for call in calls)
 
 
+
+def test_owned_worker_passes_only_the_memory_grant(prepared, plugin_instance, plugin_module, monkeypatch, run_async):
+    _, bundle, _ = prepared
+    plugin = plugin_instance
+    cfg = {"autonomy": {"enabled": True},
+           "server": {"host": "micro.kangqiang.site", "port": 25702, "username": "Fixture"}}
+    monkeypatch.setattr(plugin.config, "dump", AsyncMock(return_value=cfg))
+    monkeypatch.setattr(plugin_module, "qiandengji_preflight", AsyncMock())
+    monkeypatch.setattr(plugin_module, "verify_runtime", lambda _: bundle.backend / "entry.mjs")
+    monkeypatch.setattr(plugin_module, "create_planner", lambda *_: None)
+    grant = SimpleNamespace(expires_at=9_000_000_000_000, token="private-fixture-token")
+    plugin._body_device_grant = grant
+
+    class Worker:
+        def __init__(self, play, log):
+            self.play = play
+
+        def start(self, goal):
+            assert goal == "survive"
+
+        def snapshot(self):
+            return {"worker_alive": True}
+
+    runner = AsyncMock()
+    monkeypatch.setattr(plugin_module, "Worker", Worker)
+    monkeypatch.setattr(plugin_module, "run_session", runner)
+    fake = run_async(plugin.start(device_handoff={"token": grant.token}))
+    assert fake.error["code"] == "body_device_pairing_required"
+    assert plugin._worker is None
+    result = run_async(plugin.start(device_handoff=grant))
+    assert result.value == {"accepted": True, "worker_alive": True}
+    run_async(plugin._worker.play("survive", None, None))
+    assert runner.call_args.kwargs["device_handoff"] is grant
+    assert grant.token not in plugin.data_path("operator.json").read_text(encoding="utf-8")
+
+
 @pytest.mark.parametrize("one_click_supported,action", [(True, "use_prepared_runtime"), (False, "open_advanced_settings")])
 def test_incompatible_bound_runtime_does_not_start(prepared, plugin_instance, plugin_module, monkeypatch, run_async,
                                                    one_click_supported, action):

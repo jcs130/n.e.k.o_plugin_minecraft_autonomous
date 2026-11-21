@@ -3,7 +3,14 @@ import type { PluginSurfaceProps } from "@neko/plugin-ui"
 import { startPanelRefresh } from "./panel-refresh.js"
 
 type Resident = { id: string, characterId: string, name: string, bodyKind: string, state: string }
+type Body = {characterId: string, name: string, activeKind: string | null, status: string, pendingRequestId: string | null}
+const bodyNames: Record<string, string> = {maid: "车万女仆", numen: "Numen", mineflayer: "Mineflayer 玩家", villager: "村民"}
+const statuses: Record<string, string> = {ready:"可用", switching:"交接中", recovery_required:"待核实",
+  completed:"已完成", blocked:"本次未执行"}
 type State = { role?: string, localRoles?: string[], resident?: string, connected?: boolean, authorized?: boolean,
+  bodyReadable?: boolean, bodyView?: {available: boolean, characters: Body[]},
+  bodyReceipt?: {characterId: string, requestId: string, status: string},
+  bodyDeviceAvailable?: boolean, bodyDevice?: {state: string, pairId?: string, characterId?: string},
   bodyKind?: string, control?: { phase?: string, health?: string, playerBusy?: boolean },
   uiToken?: string, waiting?: string, catalog?: { residents?: Resident[], availableBodies?: string[] } }
 
@@ -21,6 +28,11 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
   const [code, setCode] = useState("")
   const [manual, setManual] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [characterId, setCharacterId] = useState("")
+  const [receiptId, setReceiptId] = useState("")
+  const bodyRows = state.bodyView?.characters || []
+  const character = bodyRows.find(row => row.characterId === characterId) || bodyRows[0]
+  const original = receiptId.trim() || character?.pendingRequestId || ""
   const checking = useRef(false)
   const localRole = (role ?? state.role) || roles[0] || ""
   const selected = residents.find(row => row.id === id) || residents[0]
@@ -91,6 +103,44 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
       </>}
     </Stack></Card>
     {!controlling && <>
+    <Card title="角色身体与换身"><Stack>
+      <Button disabled={busy || !state.uiToken} onClick={() => call("open_resident_website", {page:"bodies"})}>在官网管理身体</Button>
+      {state.bodyReadable && <Stack>
+        <Button disabled={busy} onClick={() => call("read_character_body", {op:"list"})}>查看身体状态</Button>
+        {character ? <Stack>
+          <Field label="我的角色"><Select value={character.characterId}
+            options={bodyRows.map(row => ({value:row.characterId,label:row.name}))}
+            onChange={value => { setCharacterId(value); setReceiptId("") }} /></Field>
+          <Text>{bodyNames[character.activeKind || ""] || "身体待核实"} · {statuses[character.status] || "待核实"}</Text>
+          <Field label="换身请求编号"><Input value={receiptId} placeholder={character.pendingRequestId || "填写原请求编号"} onChange={setReceiptId} /></Field>
+          <Button disabled={busy || !original} onClick={() => call("read_character_body", {
+            op:"receipt",characterId:character.characterId,requestId:original
+          })}>查看原回执</Button>
+          {state.bodyReceipt?.characterId === character.characterId && state.bodyReceipt.requestId === original &&
+            <Text>{statuses[state.bodyReceipt.status] || "待核实"}</Text>}
+        </Stack> : state.bodyView && <Text>{state.bodyView.available ? "当前账号还没有可管理身体的角色。" : "服务器尚未开放角色换身。"}</Text>}
+      </Stack>}
+    </Stack></Card>
+    {state.bodyDeviceAvailable && <Card title="桌面接力设备"><Stack>
+      <Text>在上方选择本人角色，再到千灯纪官网批准该角色的桌面设备。官网可撤销设备权限。</Text>
+      {state.bodyDevice?.state === "paired" ? <Stack>
+          <StatusBadge label="官网已批准这台设备" tone="success" />
+          <Text>回到账号与玩法主面板，开启桌面接力再启动游玩。</Text>
+        </Stack> :
+        state.bodyDevice?.state === "pending" && state.bodyDevice.pairId ?
+          <Stack gap={8}>
+            <StatusBadge label="等待官网批准" tone="default" />
+            <Field label="一次性配对编号"><Text>{state.bodyDevice.pairId}</Text></Field>
+            <Inline>
+              <Button disabled={busy || !state.uiToken} onClick={() => call("pair_body_device", {op:"open"})}>打开官网批准</Button>
+              <Button disabled={busy || !state.uiToken} onClick={() => call("pair_body_device", {op:"check"})}>核对批准结果</Button>
+              <Button disabled={busy || !state.uiToken} onClick={() => call("pair_body_device", {op:"cancel"})}>取消本次配对</Button>
+            </Inline>
+          </Stack> :
+          <Button disabled={busy || !state.uiToken || !character} onClick={() =>
+            call("pair_body_device", {op:"start", characterId:character?.characterId})}>生成配对编号</Button>}
+      {state.bodyDevice?.state === "expired" && <Text>配对编号已过期，可以重新生成。</Text>}
+    </Stack></Card>}
     <Card title="本机 N.E.K.O. 角色"><Stack>
       <Text>若这个身体已经接到旧版「千灯纪居民」或酒狐，请先停止旧连接，再到这里授权原角色。</Text>
       <Field required label="由哪个角色在游戏里行动">{roles.length ?

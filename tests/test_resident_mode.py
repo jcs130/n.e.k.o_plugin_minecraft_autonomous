@@ -4,6 +4,7 @@ import importlib
 import json
 import threading
 import time
+from types import SimpleNamespace
 from urllib.error import HTTPError
 from uuid import uuid4
 
@@ -43,12 +44,21 @@ def test_browser_authorization_binds_exact_existing_body_without_start(monkeypat
         op = url.rsplit("/", 1)[-1]
         calls.append(op)
         if op == "browser-start":
+            assert payload == {"bodyRead": True}
             return {"id": browser_id, "expiresAt": expires_at, "code": "123456", "secret": "rba_" + "b" * 43}
         if op == "browser-status":
             return {"state": "authorized", "expiresAt": expires_at, "onboardingToken": "rot_" + "c" * 43,
-                    "playerAuthorizationExpiresAt": int(expires_at)}
+                    "playerAuthorizationExpiresAt": int(expires_at), "bodyReadExpiresAt": int(expires_at)}
         if op == "list":
             return {"availableBodies": ["maid", "numen"], "residents": [{**session["resident"], "state": "available"}]}
+        if op == "character-bodies":
+            assert payload is None
+            return {"available": True, "characters": [{"name": "桐人", "characterId": session["resident"]["characterId"],
+                    "activeKind": "numen", "status": "ready", "pendingRequestId": "request-1"}]}
+        if op == "request-1":
+            assert payload is None and url.endswith("/" + session["resident"]["characterId"] + "/switch/request-1")
+            return {"requestId":op, "characterId":session["resident"]["characterId"], "status":"completed",
+                    "activeKind":"numen", "targetKind":"numen"}
         assert op == "connect"
         assert payload == {key: session["resident"][key] for key in ("id", "characterId")}
         return {**session, "resident": {**session["resident"], "characterId": str(uuid4())}} if wrong_body else session
@@ -68,9 +78,17 @@ def test_browser_authorization_binds_exact_existing_body_without_start(monkeypat
         assert plugin.list_llm_tools() == original_tools
         assert (await plugin.resident_browser_login(op="start", uiToken=ui_token)).value == {"opened": True}
         assert (await plugin.connection_context())["browserCode"] == "123456"
-        assert opened == [plugin.portal + "/resident-connect.html?flow=browser&play=1#" + browser_id]
+        assert opened == [plugin.portal + "/resident-connect.html?flow=browser&play=1&bodyRead=1#" + browser_id]
         assert (await plugin.resident_browser_login(op="status", uiToken=ui_token)).value == {"state": "authorized"}
         args = {key: session["resident"][key] for key in ("id", "characterId")}
+        assert (await plugin.connection_context())["bodyReadable"]
+        await plugin.read_character_body(op="switch", uiToken=ui_token)
+        await plugin.read_character_body(op="list", uiToken="wrong")
+        assert (await plugin.read_character_body(op="list", uiToken=ui_token)).value == {"updated":True}
+        assert (await plugin.read_character_body(op="receipt", characterId=args["characterId"],requestId="request-1",uiToken=ui_token)).value == {"updated":True}
+        assert (await plugin.connection_context())["bodyReceipt"]["requestId"] == "request-1"
+        await plugin.open_resident_website(page="bodies", uiToken=ui_token)
+        assert opened[-1] == plugin.portal + "/resident-connect.html?flow=bodies"
         wrong_body = True
         refused = await plugin.manage_residents(op="connect", localRole="YUI", uiToken=ui_token, **args)
         assert refused.error["code"] == "resident_identity_changed"
@@ -84,6 +102,7 @@ def test_browser_authorization_binds_exact_existing_body_without_start(monkeypat
         assert state["characterId"] == session["resident"]["characterId"]
         assert state["control"]["phase"] == "stopped"
         assert state["control"]["health"] == "idle"
+        assert not state["bodyReadable"] and state["bodyReceipt"] is None
         assert plugin.website_login_state()["playerAuthorized"] is True
         assert plugin.website_player_grant() == "rba_" + "b" * 43
         assert plugin.website_player_grant() not in json.dumps(plugin.website_login_state())
@@ -91,7 +110,7 @@ def test_browser_authorization_binds_exact_existing_body_without_start(monkeypat
         assert plugin.list_llm_tools() == original_tools
 
     run_async(exercise())
-    assert calls == ["browser-start", "browser-status", "list", "connect", "connect"]
+    assert calls == ["browser-start", "browser-status", "list", "character-bodies", "request-1", "connect", "connect"]
 
 
 def test_resident_start_scopes_tools_and_keeps_player_mode_idle(monkeypatch, run_async, resident):
@@ -245,3 +264,102 @@ def test_expired_portal_binding_requires_reauthorization(monkeypatch, run_async,
     assert result.error["code"] == "resident_authorization_expired"
     assert plugin._resident_status()["phase"] == "stopped"
     assert plugin.list_llm_tools() == original_tools
+
+
+def test_owner_device_pairing_displays_only_approval_id(monkeypatch, resident, run_async):
+    plugin, session, _, connection = resident
+    until = int(time.time() * 1000) + 180_000
+    character = session["resident"]["characterId"]
+    plugin.authorization = {"expiresAt": until, "bodyReadExpiresAt": until}
+    plugin.body_view = {"characters": [{"characterId": character}]}
+    pending = SimpleNamespace(
+        pair_id="a" * 24,
+        approval_url=plugin.portal + "/resident-connect.html?flow=bodies",
+        expires_at=until,
+        poll_secret="unit-test-private-poll",
+    )
+    grant = SimpleNamespace(expires_at=until, character_id=character, token="unit-test-private-device-grant")
+    seen = []
+
+    async def begin(origin):
+        assert origin == plugin.portal
+        seen.append("begin")
+        return pending
+
+    async def redeem(pairing):
+        assert pairing is pending
+        seen.append("redeem")
+        return grant if seen.count("redeem") == 2 else None
+
+    def open_browser(url):
+        assert url == pending.approval_url
+        seen.append("open")
+        return True
+
+    monkeypatch.setattr(plugin, "_body_device_provider",
+                        lambda: SimpleNamespace(begin_device_pairing=begin, redeem_device_pairing=redeem))
+    monkeypatch.setattr(connection.webbrowser, "open", open_browser)
+
+    async def exercise():
+        assert (await plugin.pair_body_device(op="start", uiToken="wrong")).error
+        assert not seen
+        token = plugin.panel_token
+        assert (await plugin.pair_body_device(op="start", uiToken=token, characterId="other")).error
+        assert (await plugin.pair_body_device(op="start", uiToken=token, characterId=character)).value == {"state": "pending"}
+        assert (await plugin.pair_body_device(op="start", uiToken=token, characterId=character)).value == {"state": "pending"}
+        state = await plugin.connection_context()
+        assert state["bodyDeviceAvailable"]
+        assert state["bodyDevice"] == {"state": "pending", "pairId": pending.pair_id,
+                                       "expiresAt": until, "characterId": character}
+        assert pending.poll_secret not in json.dumps(state)
+        assert (await plugin.pair_body_device(op="open", uiToken=token)).value == {"state": "pending"}
+        assert (await plugin.pair_body_device(op="check", uiToken=token)).value == {"state": "pending"}
+        assert (await plugin.pair_body_device(op="check", uiToken=token)).value == {"state": "paired"}
+        assert plugin.desktop_body_device_grant() is grant
+        state = await plugin.connection_context()
+        assert state["bodyDevice"] == {"state": "paired", "characterId": character}
+        assert grant.token not in json.dumps(state)
+        assert not plugin.data_path("resident-binding.json").exists()
+
+    run_async(exercise())
+    assert seen == ["begin", "open", "redeem", "redeem"]
+
+
+def test_owner_device_pairing_hides_private_provider_errors_and_cancels(monkeypatch, resident, run_async):
+    plugin, session, _, _ = resident
+    private = "unit-test-private-failed-poll"
+    until = int(time.time() * 1000) + 180_000
+    character = session["resident"]["characterId"]
+    plugin.authorization = {"expiresAt": until, "bodyReadExpiresAt": until}
+    plugin.body_view = {"characters": [{"characterId": character}]}
+    response = None
+
+    async def begin(_):
+        return SimpleNamespace(pair_id="b" * 24, approval_url=plugin.portal + "/resident-connect.html?flow=bodies",
+                               expires_at=time.time() * 1000 + 180000)
+
+    async def redeem(_):
+        if response is not None:
+            return response
+        raise ValueError(private)
+
+    monkeypatch.setattr(plugin, "_body_device_provider",
+                        lambda: SimpleNamespace(begin_device_pairing=begin, redeem_device_pairing=redeem))
+
+    async def exercise():
+        token = plugin.panel_token
+        plugin._resident_phase = "running"
+        assert (await plugin.pair_body_device(op="start", uiToken=token)).error["code"] == "resident_control_active"
+        plugin._resident_phase = "stopped"
+        assert (await plugin.pair_body_device(op="start", uiToken=token, characterId=character)).value == {"state": "pending"}
+        assert private not in (await plugin.pair_body_device(op="check", uiToken=token)).error
+        assert (await plugin.connection_context())["bodyDevice"]["state"] == "pending"
+        assert (await plugin.pair_body_device(op="cancel", uiToken=token)).value == {"state": "idle"}
+        assert (await plugin.connection_context())["bodyDevice"] == {"state": "idle"}
+        assert (await plugin.pair_body_device(op="start", uiToken=token, characterId=character)).value == {"state": "pending"}
+
+    run_async(exercise())
+    response = SimpleNamespace(character_id="another-role", expires_at=until, token=private)
+    refused = run_async(plugin.pair_body_device(op="check", uiToken=plugin.panel_token))
+    assert private not in refused.error and "另一角色" in refused.error
+    assert plugin.desktop_body_device_grant() is None

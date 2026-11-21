@@ -3,6 +3,7 @@
 # Adapted from jcs130/minecraft-ai-friend resident 0.3.2 (bf913815), MIT.
 
 import asyncio
+import importlib
 import json
 import os
 import re
@@ -84,7 +85,97 @@ class ResidentConnection:
     catalog = None
     waiting = None
     draft = None
+    body_view = None
+    body_receipt = None
     _website_player_grant = None
+    _body_device_pairing = None
+    _body_device_character = None
+    _body_device_grant = None
+
+    @staticmethod
+    def _body_device_provider():
+        try:
+            return importlib.import_module("agent_mc_autonomy.device_pairing")
+        except ModuleNotFoundError:
+            return None
+
+    def desktop_body_device_grant(self):
+        """In-process handoff for a compatible player worker."""
+        grant = self._body_device_grant
+        if grant is not None and grant.expires_at > time.time() * 1000:
+            return grant
+        self._body_device_grant = None
+        return None
+
+    @staticmethod
+    def _body_device_connection_supported(settings):
+        return (settings.host.lower() == "micro.kangqiang.site" and settings.port == 25702
+                and settings.body_provider == "mineflayer")
+
+    def _body_device_status(self):
+        grant = self.desktop_body_device_grant()
+        if grant is not None:
+            return {"state": "paired", "characterId": grant.character_id}
+        pairing = self._body_device_pairing
+        if pairing is None:
+            return {"state": "idle"}
+        if pairing.expires_at <= time.time() * 1000:
+            self._body_device_pairing = self._body_device_character = None
+            return {"state": "expired"}
+        return {"state": "pending", "pairId": pairing.pair_id, "expiresAt": pairing.expires_at,
+                "characterId": self._body_device_character}
+
+    @ui.action(id="pair_body_device", label="配对桌面接力设备")
+    @plugin_entry(id="pair_body_device", name="配对桌面接力设备", input_schema={
+        "type": "object", "properties": {"op": {"type": "string", "enum": ["start", "open", "check", "cancel"]},
+            "characterId": {"type": "string", "maxLength": 128}, "uiToken": SECRET},
+        "required": ["op", "uiToken"], "additionalProperties": False})
+    async def pair_body_device(self, op, uiToken, characterId="", **_):
+        if not self._from_panel(uiToken) or op not in ("start", "open", "check", "cancel"):
+            return Err("请从千灯纪居民面板配对设备。")
+        provider = self._body_device_provider()
+        if provider is None:
+            return Err("当前运行时尚未接入设备配对。")
+        async with self.pair_lock:
+            if self._resident_phase != "stopped":
+                return self._resident_pairing_blocked()
+            status = self._body_device_status()["state"]
+            if op == "cancel":
+                self._body_device_pairing = self._body_device_character = None
+                return Ok({"state": "paired" if status == "paired" else "idle"})
+            if status == "paired":
+                return Ok({"state": status})
+            if op != "start" and status != "pending":
+                return Err("配对已结束，请生成新的配对编号。")
+            official_page = self.portal + "/resident-connect.html?flow=bodies"
+            try:
+                if op == "start":
+                    if status == "pending" and characterId != self._body_device_character:
+                        return Err("请先结束当前角色的配对。")
+                    if not self._body_readable() or not any(row["characterId"] == characterId
+                            for row in (self.body_view or {}).get("characters", [])):
+                        return Err("请在角色身体列表里选择本人角色，再生成配对编号。")
+                    if status != "pending":
+                        pairing = await provider.begin_device_pairing(self.portal)
+                        if not re.fullmatch(r"[A-Za-z0-9_-]{24}", pairing.pair_id) or pairing.approval_url != official_page:
+                            raise ValueError("invalid_device_pairing")
+                        self._body_device_pairing = pairing
+                        self._body_device_character = characterId
+                elif op == "open":
+                    if not await asyncio.to_thread(webbrowser.open, official_page):
+                        return Err("未能打开官网。请进入千灯纪的角色身体管理页。")
+                elif op == "check":
+                    grant = await provider.redeem_device_pairing(self._body_device_pairing)
+                    if grant is not None:
+                        expected = self._body_device_character
+                        self._body_device_pairing = self._body_device_character = None
+                        if grant.character_id != expected:
+                            return Err("官网批准的是另一角色。请在官网撤销该设备，再对选定角色配对。")
+                        self._body_device_grant = grant
+                return Ok({"state": self._body_device_status()["state"]})
+            except Exception:
+                # The provider handles recovery; its exception may contain private transport data.
+                return Err("暂时无法核对设备配对，请在官网检查批准状态后重试。")
 
     @staticmethod
     def local_origin():
@@ -100,6 +191,53 @@ class ResidentConnection:
 
     def _clear_authorization(self):
         self.authorization = self.catalog = self.waiting = self.draft = None
+        self.body_view = self.body_receipt = None
+
+    def _body_readable(self):
+        until = self.authorization.get("bodyReadExpiresAt") if self._authorized() else None
+        if type(until) in (int, float) and until > time.time() * 1000:
+            return True
+        self.body_view = self.body_receipt = None
+        return False
+
+    @ui.action(id="read_character_body", label="查看身体状态和原回执")
+    @plugin_entry(id="read_character_body", name="查看身体状态和原回执", input_schema={
+        "type": "object", "properties": {"op": {"type": "string", "enum": ["list", "receipt"]},
+            "characterId": {"type": "string"}, "requestId": {"type": "string"}, "uiToken": SECRET},
+        "required": ["op", "uiToken"], "additionalProperties": False})
+    async def read_character_body(self, op, uiToken, characterId="", requestId="", **_):
+        if not self._from_panel(uiToken) or op not in ("list", "receipt"):
+            return Err("请从居民面板查看角色身体。")
+        async with self.pair_lock:
+            if not self._body_readable():
+                return Err("本次授权未开放身体查询。可以打开官网查看。")
+            url = self.portal + "/api/v1/character-bodies"
+            if op == "receipt":
+                known = {r["characterId"] for r in (self.body_view or {}).get("characters", [])}
+                if (not isinstance(characterId, str) or characterId not in known or not isinstance(requestId, str)
+                        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", requestId)):
+                    return Err("请选择列表中的角色并填写原请求编号。")
+                url += f"/{characterId}/switch/{requestId}"
+            self.body_receipt = None
+            try:
+                data = await asyncio.to_thread(request_json, url, None, self.authorization["onboardingToken"])
+                if not self._body_readable():
+                    return Err("本次授权已结束，请重新打开官网。")
+                if op == "list":
+                    rows = [{k: row[k] for k in ("characterId", "name", "activeKind", "status", "pendingRequestId")}
+                            for row in data["characters"]]
+                    if any(not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", row["characterId"]) for row in rows):
+                        raise ValueError("invalid_character")
+                    self.body_view = {"available": data["available"] is True, "characters": rows}
+                else:
+                    if data["characterId"] != characterId or data["requestId"] != requestId:
+                        raise ValueError("receipt_mismatch")
+                    self.body_receipt = {k: data[k] for k in ("characterId", "requestId", "status", "activeKind", "targetKind")}
+                return Ok({"updated": True})
+            except (OSError, ValueError, TypeError, KeyError):
+                if op == "list":
+                    self.body_view = None
+                return Err("未能核对身体状态或原回执。可以打开官网查看。")
 
     def _authorized(self):
         if self.authorization and self.authorization["expiresAt"] > time.time() * 1000:
@@ -130,6 +268,8 @@ class ResidentConnection:
         names, current = await asyncio.to_thread(self.local_characters)
         return {"role": role or getattr(self.ctx, "current_lanlan", "") or current,
                 "localRoles": names, "authorized": login["authorized"], "catalog": self.catalog or {},
+                "bodyReadable": self._body_readable(), "bodyView": self.body_view, "bodyReceipt": self.body_receipt,
+                "bodyDeviceAvailable": self._body_device_provider() is not None, "bodyDevice": self._body_device_status(),
                 "waiting": self.waiting[0]["name"] if self.waiting else None,
                 "resident": resident.get("name", ""), "connected": session is not None,
                 "bodyKind": resident.get("bodyKind"), "characterId": resident.get("characterId"),
@@ -151,12 +291,13 @@ class ResidentConnection:
 
     @ui.action(id="open_resident_website", label="打开角色管理或授权页")
     @plugin_entry(id="open_resident_website", name="打开角色管理或授权页", input_schema={
-        "type": "object", "properties": {"page": {"type": "string", "enum": ["authorize", "characters"]}, "uiToken": SECRET},
+        "type": "object", "properties": {"page": {"type": "string", "enum": ["authorize", "characters", "bodies"]}, "uiToken": SECRET},
         "required": ["page", "uiToken"], "additionalProperties": False})
     async def open_resident_website(self, page, uiToken, **_):
-        if not self._from_panel(uiToken) or page not in ("authorize", "characters"):
+        if not self._from_panel(uiToken) or page not in ("authorize", "characters", "bodies"):
             return Err("请从千灯纪居民面板打开。")
-        url = self.portal + "/resident-connect.html?flow=authorize" if page == "authorize" else self.local_origin() + "/character_card_manager"
+        url = (self.local_origin() + "/character_card_manager" if page == "characters"
+               else self.portal + "/resident-connect.html?flow=" + page)
         if not await asyncio.to_thread(webbrowser.open, url):
             return Err("请在浏览器打开 " + url)
         return Ok({"opened": True})
@@ -179,14 +320,14 @@ class ResidentConnection:
                 api = self.portal + "/api/v1/resident-onboarding/"
                 if op == "start":
                     if not self.browser_login:
-                        pending = await asyncio.to_thread(request_json, api + "browser-start", {})
+                        pending = await asyncio.to_thread(request_json, api + "browser-start", {"bodyRead": True})
                         if (str(UUID(pending["id"])) != pending["id"]
                                 or not re.fullmatch(r"rba_[A-Za-z0-9_-]{43}", pending["secret"])
                                 or not re.fullmatch(r"[0-9]{6}", pending["code"])
                                 or not pending["expiresAt"] > time.time() * 1000):
                             raise ValueError("invalid_browser_login")
                         self.browser_login = pending
-                    url = self.portal + "/resident-connect.html?flow=browser&play=1#" + self.browser_login["id"]
+                    url = self.portal + "/resident-connect.html?flow=browser&play=1&bodyRead=1#" + self.browser_login["id"]
                     if not await asyncio.to_thread(webbrowser.open, url):
                         return Err("请在浏览器打开 " + url)
                     return Ok({"opened": True})

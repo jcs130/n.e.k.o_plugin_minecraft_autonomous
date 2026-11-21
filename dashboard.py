@@ -209,6 +209,7 @@ class Dashboard:
             heartbeat_state["next"] = "主脑尚未完成最终判断；重新检查当前心跳后提交简短判断。" if heartbeat_state["delivery_failure"] else None
             return {"website_account": public_selection(raw), "neko_account": self.neko_account_state(),
                     "website_login": self.website_login_state(),
+                    **({"body_handoff_ready": True} if self.desktop_body_device_grant() is not None else {}),
                     "resident_control": self._resident_status(),
                     "server_login": public_login(settings.data_root(self.data_path()), settings),
                     "settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
@@ -364,10 +365,13 @@ class Dashboard:
                       "goal": {"type": "string", "maxLength": 4000}, "use_neko_model": {"type": "boolean"},
                       "appearance": {"type": "string"}, "extension_mode": {"enum": ["auto", "none", "custom"]},
                       "character": {"type": "string", "maxLength": 80}, "narration": {"type": "boolean"},
-                      "neko_url": {"type": "string", "maxLength": 200}}, "required": ["connection"]})
+                      "neko_url": {"type": "string", "maxLength": 200},
+                      "enable_device_handoff": {"type": "boolean"}, "uiToken": {"type": "string", "writeOnly": True}},
+                      "required": ["connection"]})
     async def quick_start(self, connection: dict, goal: str = "", use_neko_model: bool = True,
                           appearance: str | None = None, extension_mode: str | None = None, character: str | None = None,
-                          narration: bool = True, neko_url: str | None = None, **_):
+                          narration: bool = True, neko_url: str | None = None, enable_device_handoff: bool = False,
+                          uiToken: str = "", **_):
         from agent_mc_autonomy.mailbox import Mailbox
         from agent_mc_autonomy.ownership import session_is_owned
         from agent_mc_autonomy.recovery import require_no_pending_acknowledgement
@@ -375,6 +379,14 @@ class Dashboard:
         if (not isinstance(connection, dict) or not connection or set(connection) - EDITABLE["server"]
                 or not isinstance(goal, str) or len(goal) > 4000 or type(use_neko_model) is not bool or type(narration) is not bool):
             return Err({"code": "invalid_quick_start", "message": "请填写有效连接；不要在连接字段中传入密码或其它控制参数。"})
+        device_grant = None
+        if type(enable_device_handoff) is not bool:
+            return Err({"code": "invalid_device_handoff_selection"})
+        if enable_device_handoff:
+            if self._from_panel(uiToken):
+                device_grant = self.desktop_body_device_grant()
+            if device_grant is None:
+                return Err({"code": "body_device_pairing_required", "message": "请从居民面板授权这台接力设备。"})
         with self._control_lock:
             if self._resident_blocks_player():
                 return self._resident_owns_control()
@@ -398,6 +410,8 @@ class Dashboard:
                 Mailbox(directory).check_uncertain()
                 require_no_pending_acknowledgement(directory)
             desired = Settings.parse({**raw, "server": {**raw.get("server", {}), **connection}})
+            if device_grant is not None and not self._body_device_connection_supported(desired):
+                return Err({"code": "body_device_connection_mismatch", "message": "接力设备只用于千灯纪的原玩家连接。"})
             target = desired.data_root(self.data_path()) / "sessions" / desired.identity / "host"
             if target != directory:
                 if session_is_owned(target):
@@ -430,7 +444,9 @@ class Dashboard:
             result = await self.save_settings(patch)
             if isinstance(result, Err):
                 return result
-            started = await self.start(goal=goal.strip() or "在 Minecraft 世界里自主生活，结合自己的兴趣和当前事实选择目标，兼顾生存并根据用户反馈调整。")
+            start_options = {"device_handoff": device_grant} if device_grant is not None else {}
+            started = await self.start(goal=goal.strip() or "在 Minecraft 世界里自主生活，结合自己的兴趣和当前事实选择目标，兼顾生存并根据用户反馈调整。",
+                                       **start_options)
             if isinstance(started, Err) and isinstance(started.error, dict) and started.error.get("code") in {"runtime_setup_required", "runtime_setup_active"}:
                 # Installation is a normal first-use state. Keep its structured
                 # recovery action instead of the host's generic entry exception.
