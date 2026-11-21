@@ -19,6 +19,7 @@ def test_quick_start_saves_common_settings_then_uses_normal_start(plugin_instanc
     assert patch["planner"]["route"] == "host"
     assert patch["heartbeat"]["enabled"] is True
     assert "auto_start" not in str(patch)
+    assert "native" not in patch
     assert started.await_count == 1
     assert "Minecraft" in started.call_args.kwargs["goal"]
 
@@ -42,6 +43,31 @@ def test_quick_start_managed_device_is_explicit_and_bound_to_official_server(plu
     assert allowed.value["accepted"]
     assert started.call_args.kwargs["device_handoff"] is grant
     assert grant.token not in repr(saved.call_args)
+
+
+def test_quick_start_changes_only_the_opted_in_voice_setting(plugin_instance, run_async, monkeypatch):
+    original = {"native": {"reflex": {"fightBack": False}, "proximity_voice": {"enabled": True}}}
+    monkeypatch.setattr(plugin_instance.config, "dump", AsyncMock(return_value=original))
+    saved = AsyncMock(return_value=Ok({"saved": True}))
+    started = AsyncMock(return_value=Ok({"accepted": True}))
+    monkeypatch.setattr(plugin_instance, "save_settings", saved)
+    monkeypatch.setattr(plugin_instance, "start", started)
+    connection = {"host": "fixture.test", "username": "Alice"}
+
+    invalid = run_async(plugin_instance.quick_start(connection=connection, game_voice="true"))
+    assert isinstance(invalid, Err)
+    assert invalid.error["code"] == "invalid_game_voice_selection"
+    saved.assert_not_awaited()
+    started.assert_not_awaited()
+
+    for enabled in (False, True):
+        result = run_async(plugin_instance.quick_start(connection=connection, game_voice=enabled))
+        assert isinstance(result, Ok)
+        assert saved.call_args.args[0]["native"] == {
+            "reflex": {"fightBack": False}, "proximity_voice": {"enabled": enabled},
+        }
+    assert original["native"]["proximity_voice"]["enabled"] is True
+    assert started.await_count == 2
 
 
 def test_quick_start_validation_failure_never_starts(plugin_instance, run_async, monkeypatch):

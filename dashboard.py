@@ -4,6 +4,7 @@ import json
 import math
 import uuid
 from dataclasses import asdict
+from datetime import datetime
 
 from agent_mc_autonomy.configuration import Settings
 from agent_mc_autonomy.decision_profiles import validate_policy
@@ -135,6 +136,31 @@ def audit_sample(directory):
             "sample_failed_receipts": sum(row["failed"] for row in actions)}
 
 
+def game_voice_view(value):
+    if not isinstance(value, dict):
+        return {}
+    result = {}
+    for key in ("received_at", "send_at"):
+        stamp = value.get(key)
+        if isinstance(stamp, str) and len(stamp) <= 48:
+            try:
+                at = datetime.fromisoformat(stamp)
+                if at.tzinfo is not None:
+                    result[key] = at.isoformat()
+            except ValueError:
+                pass
+    state = value.get("send_state")
+    if state in ("accepted", "submitting", "synthesizing", "uploading", "queued", "playing",
+                 "sent", "failed", "cancelled", "unknown", "not_found"):
+        result["send_state"] = state
+        if state == "failed" and value.get("voice_selection_required") is True:
+            result["voice_selection_required"] = True
+        listeners = value.get("listener_count")
+        if state == "sent" and type(listeners) is int and 0 <= listeners <= 128:
+            result["listener_count"] = listeners
+    return result
+
+
 class Dashboard:
     @ui.action(label="检查直连模型", tone="default")
     @plugin_entry(id="check_direct_model", name="检查显式配置的模型服务", kind="service", timeout=45,
@@ -186,6 +212,9 @@ class Dashboard:
             body_control = body_control_view(snapshot.get("body_control"))
             if body_control is not None:
                 state["body_control"] = body_control
+            voice = game_voice_view(snapshot.get("game_voice"))
+            if voice:
+                state["game_voice"] = voice
             state["facts"] = [{"key": str(p.get("key", ""))[:80], "text": str(p.get("text", ""))[:900],
                                "has_more": len(str(p.get("text", ""))) > 900} for p in snapshot.get("facts", {}).get("parts", [])[:24]]
             observation = snapshot.get("facts", {}).get("observation")
@@ -369,13 +398,13 @@ class Dashboard:
                       "goal": {"type": "string", "maxLength": 4000}, "use_neko_model": {"type": "boolean"},
                       "appearance": {"type": "string"}, "extension_mode": {"enum": ["auto", "none", "custom"]},
                       "character": {"type": "string", "maxLength": 80}, "narration": {"type": "boolean"},
-                      "neko_url": {"type": "string", "maxLength": 200},
+                      "game_voice": {"type": "boolean"}, "neko_url": {"type": "string", "maxLength": 200},
                       "enable_device_handoff": {"type": "boolean"}, "uiToken": {"type": "string", "writeOnly": True}},
                       "required": ["connection"]})
     async def quick_start(self, connection: dict, goal: str = "", use_neko_model: bool = True,
                           appearance: str | None = None, extension_mode: str | None = None, character: str | None = None,
                           narration: bool = True, neko_url: str | None = None, enable_device_handoff: bool = False,
-                          uiToken: str = "", **_):
+                          uiToken: str = "", game_voice: bool | None = None, **_):
         from agent_mc_autonomy.mailbox import Mailbox
         from agent_mc_autonomy.ownership import session_is_owned
         from agent_mc_autonomy.recovery import require_no_pending_acknowledgement
@@ -383,6 +412,8 @@ class Dashboard:
         if (not isinstance(connection, dict) or not connection or set(connection) - EDITABLE["server"]
                 or not isinstance(goal, str) or len(goal) > 4000 or type(use_neko_model) is not bool or type(narration) is not bool):
             return Err({"code": "invalid_quick_start", "message": "请填写有效连接；不要在连接字段中传入密码或其它控制参数。"})
+        if game_voice is not None and type(game_voice) is not bool:
+            return Err({"code": "invalid_game_voice_selection"})
         device_grant = None
         if type(enable_device_handoff) is not bool:
             return Err({"code": "invalid_device_handoff_selection"})
@@ -428,6 +459,8 @@ class Dashboard:
             if "max_decisions" not in raw.get("autonomy", {}):
                 patch["autonomy"]["max_decisions"] = 0
             patch["speech_output"] = {"enabled": narration}
+            if game_voice is not None:
+                patch["native"] = {**raw.get("native", {}), "proximity_voice": {"enabled": game_voice}}
             if narration:
                 origin = neko_url if neko_url is not None else raw.get("speech_output", {}).get("base_url") or "http://127.0.0.1:48911"
                 output_settings({"speech_output": {"enabled": True, "base_url": origin}}, "current_character")

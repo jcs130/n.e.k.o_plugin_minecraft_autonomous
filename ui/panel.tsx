@@ -19,6 +19,11 @@ const playPhases: Record<string, string> = {
 const bodyNames: Record<string, string> = {
   mineflayer: "Mineflayer 玩家", numen: "Numen", maid: "车万女仆", villager: "村民",
 }
+const voiceSendLabels: Record<string, string> = {
+  accepted: "已受理", submitting: "正在请求服务器发声", synthesizing: "正在合成", uploading: "正在上传",
+  queued: "服务端已排队", playing: "服务器正在发送", sent: "服务器已发送音频",
+  failed: "发送失败", cancelled: "已取消", unknown: "待核对原回执", not_found: "未找到原回执",
+}
 
 export default function Panel(props: PluginSurfaceProps<any>) {
   const { state, actions } = props
@@ -44,6 +49,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const [extensionDraft, setExtensionDraft] = useState<string | null>(null)
   const [characterDraft, setCharacterDraft] = useState<string | null>(null)
   const [narrationDraft, setNarrationDraft] = useState<boolean | null>(null)
+  const [gameVoiceDraft, setGameVoiceDraft] = useState<boolean | null>(null)
   const [identityFile, setIdentityFile] = useState<string | null>(null)
   const [inviteFile, setInviteFile] = useState("")
   const [agentName, setAgentName] = useState("")
@@ -87,6 +93,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
     if (editing && openModelEditor) document.getElementById("mc-model-edit")?.scrollIntoView({block:"start"})
   }, [editing, openModelEditor])
   const withNarration = narrationDraft ?? (settings.speech_output?.enabled || !settings.autonomy?.enabled)
+  const withGameVoice = gameVoiceDraft ?? (settings.native?.proximity_voice?.enabled === true)
   const installation = installationGuidance(state.installation, external, state.viewer_url)
   const preparation = preparationView(state.installation)
   const preparedSelection = preparedRuntimeSelection(settings, state.installation)
@@ -352,7 +359,22 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <div className="mc-launch">
           <Switch label="用当前猫娘的声音解说" checked={!!withNarration} onChange={setNarrationDraft} />
           {state.body_handoff_ready && <Switch label="允许此角色在游玩中交接身体" checked={deviceHandoff} onChange={setDeviceHandoff} />}
-          <p className="mc-sub">声音在本机播放；当前尚未接通服务器附近语音。</p>
+          <p className="mc-sub">本机解说用 N.E.K.O. 当前角色的声音。</p>
+          {!external && <>
+            <Switch label="用 Simple Voice Chat 和附近玩家通话" checked={withGameVoice}
+              disabled={busy || residentActive || runtime.worker_alive || runtime.game_connected || waitingForBody}
+              onChange={setGameVoiceDraft} />
+            {withGameVoice && <Stack gap={5}>
+              <Text>需要服务器接入语音桥，附近玩家使用 SVC。Agent 接收附近语音转写，并可用服务器为此账号选好的音色回复。</Text>
+              {runtime.game_connected && runtime.game_voice?.received_at &&
+                <Text>上次收到语音转写 · {new Date(runtime.game_voice.received_at).toLocaleTimeString()}</Text>}
+              {runtime.game_connected && Object.hasOwn(voiceSendLabels, runtime.game_voice?.send_state) && <Text>
+                发声 · {runtime.game_voice.voice_selection_required ? "用该账号在游戏中执行 /voice voices，再用 /voice voice <音色ID> 选择" : voiceSendLabels[runtime.game_voice.send_state]}
+                {typeof runtime.game_voice.listener_count === "number" && " · SVC 接收端 " + runtime.game_voice.listener_count}
+                {runtime.game_voice.send_state === "sent" && " · 实际听见由玩家确认"}
+              </Text>}
+            </Stack>}
+          </>}
           <Inline>
           <Button className="mc-primary" tone="primary" disabled={!stateReady||busy||residentActive||needsRuntimeSetup||needsGameAccount||preparation.active||waitingForBody||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
             if(loginPassword||loginEnabled!==null) {
@@ -360,9 +382,13 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             }
             if(await call("quick_start",{connection,goal,use_neko_model:usingHostModel,
               ...(state.body_handoff_ready && deviceHandoff ? {enable_device_handoff: true, uiToken: state.website_login?.uiToken} : {}),
+              ...(!external && gameVoiceDraft !== null ? {game_voice: gameVoiceDraft} : {}),
               appearance:appearanceDraft??settings.viewer?.default_appearance??"bundled:yui-ysm",
               extension_mode:extensionDraft??settings.extension_pack?.mode??"auto",
-              character:characterDraft??settings.heartbeat?.target??"",narration:!!withNarration}))setConnectionDraft(null)
+              character:characterDraft??settings.heartbeat?.target??"",narration:!!withNarration})) {
+                setConnectionDraft(null)
+                setGameVoiceDraft(null)
+              }
           }}>{!stateReady?"正在读取连接…":residentActive?"请先停止居民控制":waitingForBody?"等待身体接回":preparation.active?"正在准备游戏组件…":runtime.game_connected?"正在自主游玩":runtime.phase==="starting"?"正在连接…":needsRuntimeSetup?"请先准备游戏组件":needsGameAccount?"请先接入游戏账号":"开始自主游玩"}</Button>
           <Button disabled={busy||runtime.game_connected||!connectionDraft} onClick={async()=>{
             if(await call("save_settings",{settings:{server:connection}}))setConnectionDraft(null)
@@ -527,7 +553,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <Switch checked={draft.speech_output?.enabled === true} label="通过当前猫娘的现有声音播报游戏台词" onChange={v=>change("speech_output","enabled",v)} />
           {field("speech_output","base_url","Neko 本机地址（例如 http://127.0.0.1:48911，不含路径或密钥）")}
           <Switch checked={draft.speech_output?.planner_narration !== false} label="转发同一次 MC 规划中的自然台词" onChange={v=>change("speech_output","planner_narration",v)} />
-          <Text>以上声音在本机播放，游戏里的玩家暂时听不到。她可以通过原生聊天动作在游戏公屏打招呼、回应或交流见闻；不会把所有解说自动刷到公屏，也无需另配 TTS。</Text>
+          <Text>这里配置本机解说。和游戏里附近的玩家通话时，用游玩准备里的 Simple Voice Chat 开关。</Text>
           {field("speech_output","min_interval_seconds","规划台词最小间隔（秒，10—900）","number")}
           <Text>角色留空时跟随上述 Neko 地址的当前猫娘；人设只取公开字段，声音沿用她的现有配置。台词独立排队，语音繁忙时保留有效新句、过期丢弃；发送受理与播放完成分别记录。</Text>
           <Switch checked={draft.presentation?.enabled === true} label="让 Neko 解说重要游戏变化" onChange={v=>change("presentation","enabled",v)} />

@@ -313,6 +313,28 @@ def test_dashboard_projects_only_safe_managed_body_state(plugin_instance, run_as
     assert "body_control" not in run_async(plugin_instance.dashboard())["runtime"]
 
 
+def test_dashboard_voice_status_never_projects_transcript_or_claims_playback(plugin_instance, run_async, monkeypatch):
+    stamp = "2026-11-21T09:45:00+00:00"
+    runtime = {"phase": "running", "game_connected": True, "game_voice": {
+        "received_at": stamp, "send_at": stamp, "send_state": "sent", "listener_count": 2,
+        "playback_verified": True, "text": "private-fixture-text", "request_id": "private-fixture-id",
+    }}
+    monkeypatch.setattr(plugin_instance, "status", AsyncMock(return_value=Ok(runtime)))
+    result = run_async(plugin_instance.dashboard())
+    assert result["runtime"]["game_voice"] == {
+        "received_at": stamp, "send_at": stamp, "send_state": "sent", "listener_count": 2,
+    }
+    assert "private-fixture-" not in json.dumps(result)
+    runtime["game_voice"] = {"send_at": stamp, "send_state": "failed", "voice_selection_required": True,
+                             "listener_count": 2, "reason": "private-fixture-text"}
+    assert run_async(plugin_instance.dashboard())["runtime"]["game_voice"] == {
+        "send_at": stamp, "send_state": "failed", "voice_selection_required": True,
+    }
+    runtime["game_voice"] = {"received_at": "private-fixture-text", "send_at": "20261121",
+                             "send_state": "private-fixture-id", "listener_count": True}
+    assert "game_voice" not in run_async(plugin_instance.dashboard())["runtime"]
+
+
 def test_settings_save_validates_without_starting_or_copying_provider_keys(plugin_instance, run_async, monkeypatch):
     update = AsyncMock(return_value={})
     monkeypatch.setattr(plugin_instance.config, "update", update)
