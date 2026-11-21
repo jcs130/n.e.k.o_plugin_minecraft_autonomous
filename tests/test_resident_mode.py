@@ -173,6 +173,78 @@ def test_resident_start_scopes_tools_and_keeps_player_mode_idle(monkeypatch, run
     assert calls == [("poll", {}), ("reply", {"id": turn["id"], "answer": {"communication": {"mode": "native", "text": "测试"}}})]
 
 
+def test_resident_voice_round_trip_preserves_scope_and_reports_server_receipt(monkeypatch, run_async, resident):
+    plugin, session, mode, _ = resident
+    turn = offered_turn(session)
+    turn["kind"] = "dialogue"
+    turn["scene"]["bodyTools"] = []
+    original = str(uuid4())
+    transcript = "private transcript"
+    turn["scene"]["communication"].update(
+        messages=[{"id": original, "medium": "voice", "scope": "private", "speakerId": str(uuid4()),
+                   "listenerId": str(uuid4()), "text": transcript}],
+        outputs=[{"mode": "speech", "scope": "private", "sourceEventId": original}],
+    )
+    calls, delivered = [], []
+
+    def post(binding, operation, payload):
+        assert binding == session
+        calls.append((operation, payload))
+        return {"turn": turn} if operation == "poll" else {"accepted": True}
+
+    def push_message(**message):
+        delivered.append(message)
+        return {"submitted": True}
+
+    monkeypatch.setattr(mode, "post", post)
+    monkeypatch.setattr(plugin, "push_message", push_message)
+
+    async def exercise():
+        await plugin._bind("YUI", session)
+        assert (await plugin.resident_start(uiToken=plugin.panel_token)).is_ok()
+        await asyncio.sleep(0)
+        assert delivered[0]["target_lanlan"] == "YUI"
+        assert delivered[0]["visibility"] == []
+        model_turn = json.loads(delivered[0]["parts"][0]["text"].split("\n", 1)[1])
+        assert model_turn["scene"]["communication"]["messages"] == turn["scene"]["communication"]["messages"]
+        control = (await plugin.connection_context())["control"]
+        assert control["voice"] == {"transcriptReceived": True, "outputModes": ["speech"], "receipt": None}
+        assert transcript not in json.dumps(control) and original not in json.dumps(control)
+
+        denied = await plugin.communicate(id=turn["id"], text="Reply", mode="speech", scope="nearby",
+                                          sourceEventId=original)
+        assert denied["detail"] == "scope_not_offered"
+        assert len(calls) == 1
+        accepted = await plugin.communicate(id=turn["id"], text="Reply", mode="speech", scope="private",
+                                            sourceEventId=original)
+        assert accepted == {"accepted": True}
+        assert plugin._resident_status()["voice"] == {"transcriptReceived": True, "outputModes": [], "receipt": None}
+
+        follow_up = offered_turn(session)
+        follow_up["scene"]["communication"]["receipts"] = [
+            {"captionRecipients": 1, "hearingVerified": True,
+             "voice": {"requestId": "private voice id", "state": "sent", "text": transcript}},
+            {"voice": {"state": "arbitrary server string"}},
+        ]
+        plugin._deliver_resident_turn(follow_up)
+        assert plugin._resident_status()["voice"] == {
+            "transcriptReceived": True, "outputModes": ["native"],
+            "receipt": {"state": "sent", "captionRecipients": 1},
+        }
+        follow_up["until"] = 0
+        assert plugin._resident_status()["voice"]["outputModes"] == []
+        assert (await plugin.resident_stop(uiToken=plugin.panel_token)).is_ok()
+        assert plugin._resident_status()["voice"] == {"transcriptReceived": False, "outputModes": [], "receipt": None}
+
+    run_async(exercise())
+    assert calls == [
+        ("poll", {}),
+        ("reply", {"id": turn["id"], "answer": {"communication": {
+            "mode": "speech", "text": "Reply", "sourceEventId": original,
+        }}}),
+    ]
+
+
 def test_new_resident_waits_for_same_body_before_binding(monkeypatch, run_async, resident):
     plugin, session, _, _ = resident
     session["resident"]["bodyKind"] = "numen"

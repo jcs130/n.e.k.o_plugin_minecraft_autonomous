@@ -19,6 +19,7 @@ from .qiandengji_panel import require_idle
 TURN_ID = {"type": "string", "description": "本次千灯纪事件给出的回合 ID。"}
 SCOPES = ("nearby", "public", "private", "party", "addressed")
 MODES = ("text", "speech", "native")
+VOICE_RECEIPT_STATES = ("submitted", "queued", "playing", "sent", "failed", "skipped", "cancelled", "unknown", "unavailable")
 logger = logging.getLogger(__name__)
 
 
@@ -58,6 +59,21 @@ def communication_outputs(turn):
         return []
     return [output for output in outputs if isinstance(output, dict)
             and output.get("mode") in MODES and output.get("scope") in SCOPES]
+
+
+def voice_receipt(communication):
+    receipts = communication.get("receipts")
+    if not isinstance(receipts, list):
+        return None
+    for receipt in reversed(receipts):
+        voice = receipt.get("voice") if isinstance(receipt, dict) else None
+        if isinstance(voice, dict) and voice.get("state") in VOICE_RECEIPT_STATES:
+            status = {"state": voice["state"]}
+            recipients = receipt.get("captionRecipients")
+            if type(recipients) is int and recipients >= 0:
+                status["captionRecipients"] = recipients
+            return status
+    return None
 
 
 def use_proactive_native_output(turn, outputs, mode, source, scope):
@@ -127,11 +143,19 @@ class ResidentMode(ResidentConnection):
         self._resident_tools = []
         self._resident_replies_path = None
         self._resident_last_reply = None
+        self._resident_voice_transcript_received = False
+        self._resident_voice_receipt = None
 
     def _resident_status(self):
+        turn = self._resident_turn
+        outputs = communication_outputs(turn) if turn and self.active_turn(turn["id"]) else []
+        modes = {output["mode"] for output in outputs}
         return {"phase": self._resident_phase, "health": self._resident_health,
                 "playerBusy": (self._player_start_requests != 0
-                               or bool(self._worker and self._worker.snapshot().get("worker_alive")))}
+                               or bool(self._worker and self._worker.snapshot().get("worker_alive"))),
+                "voice": {"transcriptReceived": self._resident_voice_transcript_received,
+                          "outputModes": [mode for mode in MODES if mode in modes],
+                          "receipt": self._resident_voice_receipt}}
 
     def _resident_blocks_player(self):
         return self._resident_phase != "stopped"
@@ -249,6 +273,15 @@ class ResidentMode(ResidentConnection):
         if submitted.get("submitted"):
             self._resident_delivered = turn["id"]
             self._resident_health = "turn_open"
+            communication = channels(turn)
+            messages = communication.get("messages")
+            if isinstance(messages, list) and any(
+                    isinstance(message, dict) and message.get("medium") == "voice"
+                    and isinstance(message.get("id"), str) and message["id"] for message in messages):
+                self._resident_voice_transcript_received = True
+            receipt = voice_receipt(communication)
+            if receipt is not None:
+                self._resident_voice_receipt = receipt
         else:
             self._resident_turn = None
             self._resident_health = "unavailable"
@@ -460,6 +493,8 @@ class ResidentMode(ResidentConnection):
         self._resident_session = self._resident_turn = self._resident_delivered = None
         self._resident_request = self._resident_poll_task = None
         self._resident_replies_path = self._resident_last_reply = None
+        self._resident_voice_transcript_received = False
+        self._resident_voice_receipt = None
         self._resident_role = ""
         self._resident_phase = "stopped"
         if self._resident_health != "reauthorize":

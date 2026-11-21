@@ -7,6 +7,8 @@ type Body = {characterId: string, name: string, activeKind: string | null, statu
   pendingRequestId: string | null, generation: number | null, targetKinds: string[], autonomous: boolean}
 type Receipt = {characterId: string, requestId: string, status: string, activeKind: string | null,
   targetKind: string, generation: number, reason: string | null}
+type VoiceStatus = {transcriptReceived: boolean, outputModes: string[],
+  receipt: {state: string, captionRecipients?: number} | null}
 const bodyNames: Record<string, string> = {maid: "车万女仆", numen: "Numen", mineflayer: "Mineflayer 玩家", villager: "村民"}
 const statuses: Record<string, string> = {ready:"可用", switching:"交接中", recovery_required:"待核实",
   completed:"已完成", blocked:"本次未执行"}
@@ -15,11 +17,16 @@ const receiptReasons: Record<string, string> = {
   SOURCE_RELEASE_UNCONFIRMED: "原身体尚未确认释放", TARGET_ACQUIRE_UNCONFIRMED: "目标身体尚未确认接管",
   SERVICE_RESTART: "服务已重启，需核对原回执", ORIGINAL_RECEIPTS_CONFIRMED: "服务端已核对原回执",
 }
+const voiceModes: Record<string, string> = {text: "游戏文字", speech: "语音", native: "身体默认方式"}
+const voiceStates: Record<string, string> = {
+  submitted: "已提交", queued: "等待播报", playing: "正在播报", sent: "服务端已发送音频",
+  failed: "播报失败", skipped: "已跳过播报", cancelled: "播报已取消", unknown: "待核实", unavailable: "语音暂不可用",
+}
 type State = { role?: string, localRoles?: string[], resident?: string, connected?: boolean, authorized?: boolean,
   bodyReadable?: boolean, bodyView?: {available: boolean, characters: Body[]},
   bodyReceipt?: Receipt,
   bodyDeviceAvailable?: boolean, bodyDevice?: {state: string, pairId?: string, characterId?: string, expiresAt?: number},
-  bodyKind?: string, control?: { phase?: string, health?: string, playerBusy?: boolean },
+  bodyKind?: string, control?: { phase?: string, health?: string, playerBusy?: boolean, voice?: VoiceStatus },
   uiToken?: string, waiting?: string, catalog?: { residents?: Resident[], availableBodies?: string[] } }
 
 export default function ResidentPanel(props: PluginSurfaceProps<State>) {
@@ -53,6 +60,8 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
   const phase = state.control?.phase || "stopped"
   const health = state.control?.health || "idle"
   const controlling = phase !== "stopped"
+  const voice = state.control?.voice
+  const offeredVoiceModes = voice?.outputModes.map(mode => voiceModes[mode]).filter(Boolean) || []
   const toast = useToast()
   const label = (kind: string) => kind === "maid" ? "车万女仆" : "Numen"
 
@@ -114,6 +123,18 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
         <Text>停止桌面控制后，千灯纪可依服务器设置继续托管该居民。</Text>
       </>}
     </Stack></Card>
+    {state.connected && <Card title="Simple Voice Chat"><Stack gap={8}>
+      <Text>在装有 Simple Voice Chat 的 Java 客户端开启麦克风和收听，走到居民附近说话。语音由游戏服务器转写和播报。</Text>
+      {phase === "running" && voice && <>
+        <Text>{voice.transcriptReceived ? "本次控制已收到游戏语音转写。" : "等待游戏语音转写。"}</Text>
+        <Text>{offeredVoiceModes.length ? `本轮可用回复方式 · ${offeredVoiceModes.join("、")}` : "当前无可用的游戏回复方式。"}</Text>
+        <Text>{voice.receipt ? `最近语音回执 · ${voiceStates[voice.receipt.state] || "待核实"}` : "尚无服务端语音回执。"}</Text>
+        {voice.receipt && <>
+          {typeof voice.receipt.captionRecipients === "number" && <Text>文字提示接收人数 · {voice.receipt.captionRecipients}</Text>}
+          <Text>实际收听待听众确认。</Text>
+        </>}
+      </>}
+    </Stack></Card>}
     {!controlling && <>
     <Card title="角色身体与换身"><Stack>
       {state.bodyView?.available !== false && <Button disabled={busy || !state.uiToken}
