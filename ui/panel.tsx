@@ -10,6 +10,7 @@ import { startPanelRefresh } from "./panel-refresh.js"
 import NativeControls from "./native-controls"
 import { deepseekPreset } from "./deepseek-presets.js"
 import Onboarding from "./onboarding"
+import { modelProbeMessage } from "./model-setup.js"
 
 const playPhases: Record<string, string> = {
   stopped: "已停止", idle: "尚未开始", starting: "正在连接", reconnecting: "正在重连",
@@ -38,7 +39,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const [modelCheck, setModelCheck] = useState<any>(null)
   const [viewerDraft, setViewerDraft] = useState<string | null>(null)
   const [connectionDraft, setConnectionDraft] = useState<any>(null)
-  const [hostModel, setHostModel] = useState<boolean | null>(null)
+  const [openModelEditor, setOpenModelEditor] = useState(false)
   const [appearanceDraft, setAppearanceDraft] = useState<string | null>(null)
   const [extensionDraft, setExtensionDraft] = useState<string | null>(null)
   const [characterDraft, setCharacterDraft] = useState<string | null>(null)
@@ -79,7 +80,12 @@ export default function Panel(props: PluginSurfaceProps<any>) {
     username:settings.server?.username||"",auth:settings.server?.auth||"offline",version:"1.21.1"}
   const setConnection = (key:string,value:any) => setConnectionDraft({...connection,[key]:value,
     ...(key==="host"?{connection_type:["","127.0.0.1","localhost","::1"].includes(value)?"local":"custom"}:{})})
-  const usingHostModel = hostModel ?? settings.planner?.route !== "direct"
+  const usingHostModel = settings.planner?.route !== "direct"
+  const modelProbe = modelProbeMessage(usingHostModel, modelCheck)
+  const canEditModel = !busy && !editing && !external && !runtime.worker_alive && !runtime.game_connected && runtime.phase !== "starting"
+  useEffect(() => {
+    if (editing && openModelEditor) document.getElementById("mc-model-edit")?.scrollIntoView({block:"start"})
+  }, [editing, openModelEditor])
   const withNarration = narrationDraft ?? (settings.speech_output?.enabled || !settings.autonomy?.enabled)
   const installation = installationGuidance(state.installation, external, state.viewer_url)
   const preparation = preparationView(state.installation)
@@ -92,6 +98,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const action = (id: string) => actions.find(a => a.entry_id === id || a.id === id)
   const call = async (id: string, args: any) => {
     setBusy(true); setNotice(""); setFailure(false); setFieldError(null)
+    if (id === "check_model" || id === "check_direct_model" || (id === "save_settings" && args?.settings?.planner)) setModelCheck(null)
     try {
       const transportId = id === "save_settings" ? "save_settings_hosted" : id
       const reply = await props.api.call(action(transportId)?.id || transportId, args, { userInitiated: true })
@@ -133,12 +140,26 @@ export default function Panel(props: PluginSurfaceProps<any>) {
     <Field label={label}><Stack gap={4}><Input type={type} value={draft?.[section]?.[key] ?? ""} placeholder={section === "server" && key === "host" ? "本机填写 127.0.0.1；远程填写域名或 IP" : ""} onChange={v => change(section, key, type === "number" ? Number(v) : v)} />{fieldError?.field === `${section}.${key}` && <Text>{fieldError.message}</Text>}</Stack></Field>
   const authField = (key: string, label: string) => <Field label={label}><Input value={draft?.planner?.auth?.[key] || ""}
     onChange={v=>change("planner","auth",{...draft.planner.auth,[key]:v})} /></Field>
+  const beginEditing = (configureDirect = false) => {
+    const next = JSON.parse(JSON.stringify(settings))
+    if (configureDirect) next.planner = {...next.planner, route:"direct"}
+    setDraft(next)
+    setParametersText(JSON.stringify(next.planner?.parameters || {},null,2))
+    setRoutineParameters(JSON.stringify(next.decision_policy?.routine_parameters || {},null,2))
+    setComplexParameters(JSON.stringify(next.decision_policy?.complex_parameters || {},null,2))
+    setOpenModelEditor(configureDirect)
+    setEditing(true)
+  }
+  const endEditing = () => {
+    setEditing(false)
+    setOpenModelEditor(false)
+  }
   const saveDraft = async () => {
     try {
       const parameters = JSON.parse(parametersText)
       const routine = JSON.parse(routineParameters), complex = JSON.parse(complexParameters)
       if ([parameters,routine,complex].some(value=>!value || Array.isArray(value) || typeof value !== "object")) throw new Error()
-      if (await call("save_settings",{settings:{...draft,planner:{...draft.planner,parameters},decision_policy:{...draft.decision_policy,routine_parameters:routine,complex_parameters:complex}}})) setEditing(false)
+      if (await call("save_settings",{settings:{...draft,planner:{...draft.planner,parameters},decision_policy:{...draft.decision_policy,routine_parameters:routine,complex_parameters:complex}}})) endEditing()
     } catch { setFailure(true); setNotice("模型参数须为有效的 JSON 对象，请检查格式。") }
   }
   const qiandengServer = connection.host === "micro.kangqiang.site" && Number(connection.port) === 25702
@@ -312,9 +333,20 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <section className="mc-stage">
           <div className="mc-section-head"><span className="mc-section-index">03</span><h2>选择一个模型</h2></div>
           <div className="mc-section-body">
-            <p className="mc-model-line">{runtime.model_status?.model ? `最近使用：${runtime.model_status.model}` : settings.planner?.route === "direct" ? `独立模型：${settings.planner.model || "尚未填写"}` : "使用 Neko 中支持工具调用的模型。已有配置可以直接沿用。"}</p>
-            <div className="mc-actions"><FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=config`} label="选择决策模型" openExternal className="mc-secondary" />
-              <FileDownload href={`${props.host?.origin || ""}/ui/model-api`} label="管理模型 API ↗" openExternal className="mc-secondary" /></div>
+            {external ? <Text>模型由独立运行环境配置。</Text> : <Stack gap={8}>
+              <p className="mc-model-line">{usingHostModel ? "决策模型来源：N.E.K.O. 模型绑定。" : `当前使用独立模型 ${settings.planner.model}。`}</p>
+              {usingHostModel && <Text>云端 API 或局域网 LiteLLM 都可在「插件 API」添加。LiteLLM 选择 OpenAI Chat，填写以 /v1 结尾的 API 根地址，再绑定到 decision。</Text>}
+              <Inline>
+                {usingHostModel ? <>
+                  <FileDownload href={`${props.host?.origin || ""}/ui/model-api`} label="添加云端或 LiteLLM 模型" openExternal />
+                  <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=config`} label="绑定决策模型" openExternal />
+                </> : <Button disabled={!canEditModel} onClick={()=>call("save_settings",{settings:{planner:{route:"host"}}})}>改用 N.E.K.O. 模型绑定</Button>}
+                <Button disabled={!canEditModel || !stateReady} onClick={()=>beginEditing(true)}>{usingHostModel ? "配置独立模型服务" : "编辑独立模型"}</Button>
+                <Button disabled={busy || editing || !stateReady}
+                  onClick={()=>usingHostModel ? call("check_model",{mode:"text"}) : call("check_direct_model",{catalog:false})}>测试当前模型（调用一次）</Button>
+              </Inline>
+              {modelProbe && <div role="status"><Text>{modelProbe}</Text></div>}
+            </Stack>}
           </div>
         </section>
         <div className="mc-launch">
@@ -358,8 +390,6 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <Field label="服务器玩法"><Select value={extensionDraft??settings.extension_pack?.mode??"auto"} options={[{value:"auto",label:"千灯纪连接自动启用 RPG 扩展"},{value:"none",label:"仅使用标准 Minecraft"},{value:"custom",label:"保留自定义扩展配置"}]} onChange={setExtensionDraft} /></Field>
           <Field label="参与游戏的 Neko 角色"><Input value={characterDraft??settings.heartbeat?.target??""} placeholder="留空跟随当前 Neko 角色" onChange={setCharacterDraft} /></Field>
         </Grid>
-        <Switch label="下次启动使用 Neko 绑定的决策模型" checked={usingHostModel} onChange={setHostModel} />
-        {!usingHostModel&&<Text>保留已配置的独立规划模型；可在高级设置中修改。</Text>}
         <Text>默认使用 Neko 官方本机地址 http://127.0.0.1:48911。自定义端口可在高级设置修改；留空角色跟随当前猫娘。</Text>
         </Stack></Accordion>
         {runtime.planner_error&&<Alert tone="warning" message={`规划暂未恢复：${runtime.planner_error}。下方运行详情保留错误和重试状态。`} />}
@@ -460,9 +490,9 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>{installation.externalView}</Text>
         <Text>仅检查配置目录中的有限元数据；版本匹配不等于后端完整性校验、游戏连接或真实画面验证。实际启动仍执行完整后端校验。</Text>
       </Stack></Accordion>
-      <Accordion open={false} title="高级设置"><Stack gap={12}>
+      <Accordion key={openModelEditor ? "model-editor" : "advanced"} open={openModelEditor} title="高级设置"><Stack gap={12}>
         <Text>保存不会启动或重启游戏。嵌入式运行参数须先显式停止再修改，观战地址可在上方单独保存。外部模式下，这些设置只改变 Neko 观察入口；独立运行的模型与策略请同步到 standalone 配置。</Text>
-        {!editing && <Button onClick={() => { setDraft(JSON.parse(JSON.stringify(settings))); setParametersText(JSON.stringify(settings.planner?.parameters || {},null,2)); setRoutineParameters(JSON.stringify(settings.decision_policy?.routine_parameters || {},null,2));setComplexParameters(JSON.stringify(settings.decision_policy?.complex_parameters || {},null,2));setEditing(true) }}>编辑设置</Button>}
+        {!editing && <Button onClick={()=>beginEditing()}>编辑设置</Button>}
         {editing && draft && <Stack gap={12}>
           <Field label="连接类型"><Stack gap={4}><Select value={draft.server.connection_type || "local"} options={[{value:"local",label:"原版 / 本地服务器（默认）"},{value:"custom",label:"自定义 / 公共服务器"}]} onChange={v=>setDraft({...draft,server:{...draft.server,connection_type:v,...(v === "local" ? {host:"127.0.0.1",port:25565} : {})}})} />{fieldError?.field === "server.connection_type" && <Text>{fieldError.message}</Text>}</Stack></Field>
           {draft.server.connection_type === "custom" && <Button onClick={()=>setDraft(applyConnectionPreset(draft,"qiandeng"))}>填入千灯纪预设（仅草稿）</Button>}
@@ -507,7 +537,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <Switch checked={draft.perception.enabled} label="接收核心真实图像（无图像或模型时文字回退）" onChange={v=>change("perception","enabled",v)} />
           <Switch checked={draft.perception.mineral_vision === true} label="允许查询已接收区块中被遮挡的矿物（默认关闭）" onChange={v=>change("perception","mineral_vision",v)} />
           <Text>关闭时依靠真实视线与历史笔记。开启仅允许查询 32 格内已接收的矿物，不显示未加载地形，不改变画面、移动或施工权限。</Text>
-          <Accordion open={false} title="模型 API 接入"><Stack gap={10}>
+          <div id="mc-model-edit"><Accordion open={openModelEditor} title="模型 API 接入"><Stack gap={10}>
             <Field label="动作规划使用的模型"><Select value={draft.planner?.route || "host"} options={[{value:"host",label:"使用 Neko 模型绑定（默认）"},{value:"direct",label:"单独配置模型服务"}]} onChange={v=>change("planner","route",v)} /></Field>
             {draft.planner?.route === "direct" && <Stack gap={10}>
               <Field label="DeepSeek 响应与成本方案"><Select value="" options={[
@@ -520,7 +550,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
                   setComplexParameters(JSON.stringify(preset.decision_policy.complex_parameters,null,2))}} /></Field>
               <Text>方案使用官方 deepseek-flash。动态方案按当前证据切换同一模型的请求参数，不增加模型调用；仍受输出预算与180秒期限约束。Neko 模型绑定路线的思考参数由宿主管理，插件不能代改。</Text>
               <Field label="模型厂商"><Select value={draft.planner.provider} options={[
-                {value:"openai-compatible",label:"自建 / 其他兼容服务"},{value:"qwen",label:"阿里云百炼 / 通义千问"},
+                {value:"openai-compatible",label:"LiteLLM / 自建 / 其他 OpenAI 兼容服务"},{value:"qwen",label:"阿里云百炼 / 通义千问"},
                 {value:"deepseek",label:"DeepSeek"},{value:"kimi",label:"Kimi / 月之暗面"},{value:"glm",label:"智谱 GLM"},
                 {value:"doubao",label:"火山方舟 / 豆包"},{value:"siliconflow",label:"硅基流动"},
                 {value:"openai",label:"OpenAI"},{value:"anthropic",label:"Anthropic Claude"},{value:"google",label:"Google Gemini"}
@@ -551,9 +581,9 @@ export default function Panel(props: PluginSurfaceProps<any>) {
               <Text>采样参数可省略，保留模型默认值。Chat 支持 temperature、top_p、reasoning_effort 和厂商 thinking / enable_thinking；Responses 使用 reasoning、text；Claude 使用 thinking、output_config；Gemini 使用 thinkingConfig、topP、topK。输出上限和超时在“调用预算”设置。参数支持取决于具体模型，服务拒绝时会显示失败。</Text>
               <Grid cols={2}>{field("planner","organization","OpenAI Organization（可选）")}{field("planner","project","OpenAI Project（可选）")}
                 {field("planner","anthropic_beta","Claude Beta 标头（可选）")}</Grid>
-              <Text>百炼可使用自己的业务空间和地域地址。国产厂商预设不会代选模型、切换区域或偷偷回退到另一家服务。</Text>
+              <Text>LiteLLM 使用 OpenAI Chat 兼容协议，填写局域网 API 根地址（通常以 /v1 结尾）和 LiteLLM 中配置的模型名。若服务要求密钥，填写 N.E.K.O. 进程可读取的环境变量名。</Text>
             </Stack>}
-          </Stack></Accordion>
+          </Stack></Accordion></div>
           <Field label="快决策方式"><Select value={draft.fast.mode} options={[{value:"rules",label:"规则（默认）"},{value:"host",label:"Neko fast 模型槽"},{value:"system_one",label:"System One：远程 Jev / 本地 Decider"}]} onChange={v=>change("fast","mode",v)} /></Field>
           {draft.fast.mode === "system_one" && <Grid cols={2}>
             {field("fast","endpoint","完整 System One 端点")}{field("fast","model","模型名")}
@@ -610,7 +640,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             {field("autonomy","model_timeout_seconds","单次模型总超时（秒）","number")}{field("autonomy","max_tool_rounds","每轮最多连续工具回合","number")}
           </Grid></Stack></Accordion>
           <Inline><Button disabled={busy} tone="primary" onClick={saveDraft}>保存设置</Button>
-            <Button onClick={()=>{setEditing(false)}}>取消编辑</Button></Inline>
+            <Button onClick={endEditing}>取消编辑</Button></Inline>
         </Stack>}
       </Stack></Accordion>
       <Accordion open={false} title="当前事实"><DataTable data={runtime.facts || []} columns={[{key:"key",label:"类型"},{key:"text",label:"最近观测（限长）"}]} emptyText="等待框架观测" /></Accordion>

@@ -37,6 +37,32 @@ def test_explicit_reasoning_history_round_trips_without_a_model_or_worker(plugin
     assert update.await_count == 1 and plugin_instance._worker is None
 
 
+def test_lan_openai_compatible_route_uses_only_an_explicit_environment_reference(
+        plugin_instance, plugin_module, monkeypatch, run_async):
+    raw = {}
+    monkeypatch.setattr(plugin_instance.config, "dump", AsyncMock(return_value=raw))
+    update = AsyncMock()
+    monkeypatch.setattr(plugin_instance.config, "update", update)
+    monkeypatch.setenv("FIXTURE_LITELLM_KEY", "fixture-only")
+    direct = {"route": "direct", "provider": "openai-compatible", "protocol": "chat",
+              "base_url": "http://192.168.100.10:4000/v1", "model": "fixture-cloud",
+              "api_key_env": "FIXTURE_LITELLM_KEY", "auth": {"mode": "api_key"}}
+    assert isinstance(run_async(plugin_instance.save_settings({"planner": direct})), Ok)
+    assert update.await_args.args[0] == {"planner": direct}
+    module = importlib.import_module(plugin_module.__name__ + ".direct_planner")
+    planner = module.create_planner({"planner": direct}, None, plugin_module.Settings())
+    assert isinstance(planner, module.HttpPlanner)
+    assert planner.config.protocol == "chat" and planner.config.base_url == direct["base_url"]
+    assert planner.config.key() == "fixture-only"
+    assert "fixture-only" not in str(module.public_planner(direct))
+    run_async(planner.aclose())
+    raw["planner"] = direct
+    host = {"planner": {"route": "host"}}
+    assert isinstance(run_async(plugin_instance.save_settings(host)), Ok)
+    assert update.await_args.args[0] == host
+    assert plugin_instance._worker is None
+
+
 def test_direct_route_uses_shared_provider_and_host_stays_default(plugin_module):
     module = importlib.import_module(plugin_module.__name__+".direct_planner")
     settings = plugin_module.Settings()

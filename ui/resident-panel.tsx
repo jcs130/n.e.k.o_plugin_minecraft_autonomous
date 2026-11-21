@@ -91,7 +91,7 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
 
   return <Page title="连接千灯纪居民"><Stack gap={14}>
     <Card title={state.connected ? `${state.role} → ${state.resident}` : "使用千灯纪女仆或 Numen"}><Stack gap={10}>
-      <Text>角色的动作由服务器执行，模型在收到游戏回合时参与，通常较省 Token。请用主面板的千灯纪账号授权，然后在这里选择居民。</Text>
+      <Text>角色动作由千灯纪执行，游戏回合交给下方绑定的 N.E.K.O. 角色。居民使用该角色的对话模型，Mineflayer 的 decision 绑定用于玩家模式。</Text>
       <Inline>
         <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=panel&surface=main`}
           label="返回账号与玩法选择" openExternal />

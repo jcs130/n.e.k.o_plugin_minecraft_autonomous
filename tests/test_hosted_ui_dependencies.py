@@ -52,4 +52,8 @@ def test_panel_dependency_graph_is_supported_by_host(monkeypatch):
             "path": "ui/onboarding.tsx",
             "source": (root / "ui/onboarding.tsx").read_text(encoding="utf-8"),
         },
+        {
+            "path": "ui/model-setup.js",
+            "source": (root / "ui/model-setup.js").read_text(encoding="utf-8"),
+        },
     ]
