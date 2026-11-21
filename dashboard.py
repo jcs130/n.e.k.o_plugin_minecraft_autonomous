@@ -209,7 +209,7 @@ class Dashboard:
             heartbeat_state["next"] = "主脑尚未完成最终判断；重新检查当前心跳后提交简短判断。" if heartbeat_state["delivery_failure"] else None
             return {"website_account": public_selection(raw), "neko_account": self.neko_account_state(),
                     "website_login": self.website_login_state(),
-                    "body_device_ready": self.desktop_body_device_grant() is not None,
+                    **({"body_handoff_ready": True} if self.desktop_body_device_grant() is not None else {}),
                     "resident_control": self._resident_status(),
                     "server_login": public_login(settings.data_root(self.data_path()), settings),
                     "settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),

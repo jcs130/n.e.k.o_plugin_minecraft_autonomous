@@ -296,7 +296,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         </section>
         <div className="mc-launch">
           <Switch label="用当前猫娘的声音解说" checked={!!withNarration} onChange={setNarrationDraft} />
-          {state.body_device_ready && <Switch label="允许此角色在游玩中交接身体" checked={deviceHandoff} onChange={setDeviceHandoff} />}
+          {state.body_handoff_ready && <Switch label="允许此角色在游玩中交接身体" checked={deviceHandoff} onChange={setDeviceHandoff} />}
           <p className="mc-sub">声音在本机播放；当前尚未接通服务器附近语音。</p>
           <Inline>
           <Button className="mc-primary" tone="primary" disabled={!stateReady||busy||residentActive||needsRuntimeSetup||needsGameAccount||preparation.active||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
@@ -304,7 +304,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
               setFailure(true);setNotice("请先点击“保存连接与登录”，再开始游玩。");return
             }
             if(await call("quick_start",{connection,goal,use_neko_model:usingHostModel,
-              ...(state.body_device_ready && deviceHandoff ? {enable_device_handoff: true, uiToken: state.website_login?.uiToken} : {}),
+              ...(state.body_handoff_ready && deviceHandoff ? {enable_device_handoff: true, uiToken: state.website_login?.uiToken} : {}),
               appearance:appearanceDraft??settings.viewer?.default_appearance??"bundled:yui-ysm",
               extension_mode:extensionDraft??settings.extension_pack?.mode??"auto",
               character:characterDraft??settings.heartbeat?.target??"",narration:!!withNarration}))setConnectionDraft(null)
