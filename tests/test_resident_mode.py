@@ -128,6 +128,7 @@ def test_resident_start_scopes_tools_and_keeps_player_mode_idle(monkeypatch, run
     plugin, session, mode, _ = resident
     original_tools = plugin.list_llm_tools()
     turn = offered_turn(session)
+    turn["resident"] = {**turn["resident"], "name": "未用于绑定的场景名称"}
     calls, messages = [], []
 
     def post(binding, operation, payload):
@@ -155,7 +156,15 @@ def test_resident_start_scopes_tools_and_keeps_player_mode_idle(monkeypatch, run
         assert tools == dict.fromkeys(mode.TOOLS, "YUI")
         assert len(messages) == 1
         assert messages[0]["target_lanlan"] == "YUI"
-        assert turn["id"] in messages[0]["parts"][0]["text"]
+        assert messages[0]["visibility"] == []
+        instructions, scene_json = messages[0]["parts"][0]["text"].split("\n", 1)
+        assert "这是你自身的游戏回合" in instructions
+        assert "第一人称" in instructions
+        assert "游戏的确认回执" in instructions
+        identity = {"desktopRole": "YUI", "controlledResident": "测试居民"}
+        assert json.loads(instructions.split("身份对应关系：", 1)[1]) == identity
+        assert json.loads(scene_json) == turn
+        assert (await plugin.capabilities(id=turn["id"]))["controlledBody"] == identity
         assert (await plugin.start()).error["code"] == "resident_control_active"
         assert (await plugin.quick_start(connection={"host": "example.invalid"})).error["code"] == "resident_control_active"
         assert (await plugin._submit("goal", {}, "test")).error["code"] == "resident_control_active"
