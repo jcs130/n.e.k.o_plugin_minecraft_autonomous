@@ -1,11 +1,11 @@
 import {
   Page, Card, Stack, Grid, Inline, Text, StatCard, StatusBadge, DataTable,
   Field, Input, Select, Switch, Textarea, Button, ActionButton, RefreshButton,
-  Alert, Accordion, JsonView, FileDownload, useState, useEffect,
+  Alert, Accordion, JsonView, FileDownload, useClipboard, useState, useEffect,
 } from "@neko/plugin-ui"
 import type { PluginSurfaceProps } from "@neko/plugin-ui"
 import { installationGuidance, preparedRuntimeSelection, preparationView, startPreparationRequired } from "./installation-guidance.js"
-import { applyConnectionPreset } from "./connection-presets.js"
+import { applyConnectionPreset, connectionKind, javaAddress } from "./connection-presets.js"
 import { startPanelRefresh } from "./panel-refresh.js"
 import NativeControls from "./native-controls"
 import { deepseekPreset } from "./deepseek-presets.js"
@@ -39,6 +39,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const [deviceHandoff, setDeviceHandoff] = useState(false)
   const [stopConfirm, setStopConfirm] = useState(false)
   const [notice, setNotice] = useState("")
+  const clipboard = useClipboard()
   const [failure, setFailure] = useState(false)
   const [fieldError, setFieldError] = useState<any>(null)
   const [modelCheck, setModelCheck] = useState<any>(null)
@@ -82,10 +83,25 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const stateReady = !!state.settings && !!state.runtime && !state.error
   const audit = state.audit || {}
   const external = settings.runtime?.mode === "external"
-  const connection = connectionDraft ?? {...settings.server,host:settings.server?.host||"127.0.0.1",port:settings.server?.port??25565,
+  const savedConnection = {...settings.server,host:settings.server?.host||"127.0.0.1",port:settings.server?.port??25565,
     username:settings.server?.username||"",auth:settings.server?.auth||"offline",version:"1.21.1"}
-  const setConnection = (key:string,value:any) => setConnectionDraft({...connection,[key]:value,
-    ...(key==="host"?{connection_type:["","127.0.0.1","localhost","::1"].includes(value)?"local":"custom"}:{})})
+  const connection = connectionDraft ?? savedConnection
+  const destination = connectionKind(connection)
+  const isVanilla = destination === "vanilla"
+  const joinAddress = javaAddress(connection.host, connection.port)
+  const canChangeConnection = !busy && !runtime.game_connected && !runtime.worker_alive && runtime.phase !== "starting"
+  const selectWorld = (preset: string) => {
+    if (!canChangeConnection || destination === preset) return
+    const previous = connectionKind(savedConnection) === preset ? savedConnection : connection
+    setConnectionDraft(applyConnectionPreset({server:previous}, preset).server)
+    setLoginPassword(""); setLoginEnabled(null); setNotice("")
+  }
+  const setConnection = (key:string,value:any) => {
+    const next = {...connection,[key]:value}
+    if (key === "host") next.connection_type = connectionKind(next) === "vanilla" ? "local" : "custom"
+    if (["host", "port", "auth", "username"].includes(key) && value !== connection[key]) next.login_config_file = ""
+    setConnectionDraft(next)
+  }
   const usingHostModel = settings.planner?.route !== "direct"
   const modelProbe = modelProbeMessage(usingHostModel, modelCheck)
   const canEditModel = !busy && !editing && !external && !runtime.worker_alive && !runtime.game_connected && runtime.phase !== "starting"
@@ -169,17 +185,33 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       if (await call("save_settings",{settings:{...draft,planner:{...draft.planner,parameters},decision_policy:{...draft.decision_policy,routine_parameters:routine,complex_parameters:complex}}})) endEditing()
     } catch { setFailure(true); setNotice("模型参数须为有效的 JSON 对象，请检查格式。") }
   }
-  const qiandengServer = connection.host === "micro.kangqiang.site" && Number(connection.port) === 25702
+  const qiandengServer = destination === "qiandeng"
   const needsGameAccount = qiandengServer && connection.auth !== "microsoft"
-    && (!state.server_login?.configured || connection.username !== settings.server?.username)
+    && (!state.server_login?.configured || connectionKind(savedConnection) !== "qiandeng" || connection.username !== settings.server?.username)
   const accountSelected = state.website_account?.selected || !!settings.qiandengji?.identity_file || !!portalResult?.username
-  const serverFields = <Stack gap={12}><Grid cols={2}>
-          <Field label="服务器地址"><Input disabled={busy||runtime.game_connected} value={connection.host||""} placeholder="域名或 IP；本机填 127.0.0.1" onChange={v=>setConnection("host",v)} /></Field>
-          <Field label="端口"><Input disabled={busy||runtime.game_connected} type="number" value={connection.port??25565} onChange={v=>setConnection("port",Number(v))} /></Field>
-          <Field label={connection.auth==="microsoft"?"Microsoft 账户标识":"玩家昵称（可留空）"}><Input disabled={busy||runtime.game_connected} value={connection.username||""} placeholder={connection.auth==="microsoft"?"填写本人账户标识":"留空自动生成，之后沿用同一昵称"} onChange={v=>setConnection("username",v)} /></Field>
-          <Field label="登录方式"><Select value={connection.auth||"offline"} options={[{value:"offline",label:"离线昵称"},{value:"microsoft",label:"Microsoft 正版账号"}]} onChange={v=>{if(!runtime.game_connected)setConnection("auth",v)}} /></Field>
+  const serverFields = <Stack gap={12}>
+        {isVanilla && <div className="mc-local-guide">
+          <h3>在原版世界里见面</h3>
+          <ol>
+            <li>用 Minecraft Java 1.21.1 进入你的单人世界。</li>
+            <li>按 Esc → 对局域网开放 → 创建局域网世界。</li>
+            <li>填上游戏聊天显示的端口，再点「加入我的世界」。</li>
+          </ol>
+          <p className="mc-sub">朋友在同一局域网可从 Minecraft「多人游戏」进入。地址 127.0.0.1 只在当前电脑使用。</p>
+        </div>}
+        <Grid cols={2}>
+          {!isVanilla&&<Field label="服务器地址"><Input disabled={!canChangeConnection} value={connection.host||""} placeholder="域名或 IP" onChange={v=>setConnection("host",v)} /></Field>}
+          <Field label={isVanilla ? "游戏聊天里显示的端口" : "端口"}><Input disabled={!canChangeConnection} type="number" value={connection.port||""} onChange={v=>setConnection("port",Number(v))} /></Field>
+          <Field label="登录方式"><Select disabled={!canChangeConnection} value={connection.auth||"offline"} options={[{value:"offline",label:"离线昵称"},{value:"microsoft",label:"Microsoft 正版账号"}]} onChange={v=>setConnection("auth",v)} /></Field>
+          <Field label={connection.auth==="microsoft"?"Microsoft 账户标识":"猫娘的游戏昵称（可留空）"}><Input disabled={!canChangeConnection} value={connection.username||""} placeholder={connection.auth==="microsoft"?"填写可用于联机的本人账户标识":"留空时自动选择昵称"} onChange={v=>setConnection("username",v)} /></Field>
         </Grid>
-        <Text>连接已有的 Minecraft Java 1.21.1 服务器。「本机原版」需要本机已开服；完整包不包含游戏服务端或模型。正版账号由本人完成官方授权。</Text>
+        {connection.auth === "microsoft" && <Text>使用与你已进服的玩家不同的正版账号，并在 Microsoft 官方页面完成授权。</Text>}
+        {connection.port !== 0 && !joinAddress && connection.host && <Text>请输入有效的服务器地址和 1–65535 的端口。</Text>}
+        {joinAddress && <Inline><code>{joinAddress}</code><Button onClick={async()=>{
+          const copied = await clipboard.write(joinAddress)
+          setFailure(!copied); setNotice(copied ? "已复制连接地址。" : "请手动复制显示的连接地址。")
+        }}>复制连接地址</Button></Inline>}
+        {isVanilla && <Button disabled={!canChangeConnection || !!goal.trim()} onClick={()=>setGoal("在这个世界里和玩家一起生存。先观察附近玩家；对方愿意一起玩时，再用游戏文字商量一个小目标。")}>设为一起生存</Button>}
         <Accordion open={!!loginPassword} title="服务器登录密码（仅需要 /login 的服务器填写）"><Stack gap={8}>
           <Switch checked={loginEnabled??state.server_login?.enabled??false} label="自动登录这个服务器上的原账号"
             onChange={setLoginEnabled} />
@@ -275,7 +307,16 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           打开官网换身页
         </Button>
       </Stack></Card>}
-      <Card title="千灯纪账号"><Stack gap={8}>
+      <Card title="从哪里开始"><Stack gap={10}>
+        <div className="mc-world-picker" aria-label="选择游玩地点">
+          <Button className={isVanilla?"mc-selected":""} disabled={!canChangeConnection} onClick={()=>selectWorld("vanilla")}>本机原版联机</Button>
+          <Button className={qiandengServer?"mc-selected":""} disabled={!canChangeConnection} onClick={()=>selectWorld("qiandeng")}>千灯纪玩家</Button>
+          <Button className={destination==="custom"?"mc-selected":""} disabled={!canChangeConnection} onClick={()=>selectWorld("custom")}>其他 Java 服务器</Button>
+          <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=panel&surface=resident`} label="千灯纪居民 · 女仆 / Numen" openExternal />
+        </div>
+        <Text>{isVanilla ? "把猫娘作为另一位玩家加进你正在玩的 Java 世界。" : qiandengServer ? "使用玩家身份进入千灯纪，支持 RPG 玩法和本机 3D 观战。" : "填写朋友发来的域名或 IP 和端口，再选择该服务器使用的登录方式。"}</Text>
+      </Stack></Card>
+      {(qiandengServer || website.browserCode) && <Card title="千灯纪账号"><Stack gap={8}>
         {(website.authorized || website.playerAuthorized) ? <StatusBadge tone="success" label="官网已授权" /> :
           <Button tone="primary" disabled={busy||!website.uiToken||residentActive}
             onClick={()=>call("resident_browser_login",{op:"start",uiToken:website.uiToken})}>
@@ -284,18 +325,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Button disabled={busy || !website.uiToken} onClick={() => call("open_resident_website", {page:"bodies",uiToken:website.uiToken})}>管理已有角色的身体</Button>
         {website.browserCode && <Text>在官网确认六位数字 {website.browserCode}，这里会自动更新。</Text>}
         {website.authorized && !website.playerAuthorized && <Text>本次官网授权可用于居民。新建 Mineflayer 玩家账号的共用授权需官网支持。</Text>}
-      </Stack></Card>
-      <Card title="选择游玩方式"><Stack gap={10}>
-        <Inline>
-          <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=panel&surface=resident`}
-            label="车万女仆 · 通常较省 Token" openExternal />
-          <Button onClick={()=>{
-            setConnectionDraft(applyConnectionPreset({server:connection},"qiandeng").server)
-            document.getElementById("mc-player-setup")?.scrollIntoView({block:"start"})
-          }}>Mineflayer · 通常消耗较高</Button>
-        </Inline>
-        <Text>车万女仆由服务器执行动作，模型在收到游戏回合时才参与。Mineflayer 适合完整玩家玩法、自有服务器和 3D 观战，会持续感知环境与规划。实际消耗取决于模型、活动和频率。</Text>
-      </Stack></Card>
+      </Stack></Card>}
       {residentActive &&
         <Alert tone="info" message="当前由居民模式控制。请先在居民面板停止桌面控制，再开始玩家模式。" />}
       <Onboarding kind="progress" accountReady={qiandengServer&&connection.auth==='offline'&&!needsGameAccount} needsAccount={needsGameAccount} componentsReady={state.installation?.prepared_runtime==='prepared'} />
@@ -303,12 +333,8 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       {notice && <Alert tone={failure ? "danger" : "info"} message={notice} />}
       <div id="mc-player-setup" />
       <Card title="游玩准备" className="mc-connection-card"><Stack gap={0}>
-        <div className="mc-world-picker" aria-label="选择服务器">
-          <Button className={qiandengServer?"mc-selected":""} disabled={busy||runtime.game_connected} onClick={()=>setConnectionDraft(applyConnectionPreset({server:connection},"qiandeng").server)}>千灯纪</Button>
-          <Button className={!qiandengServer?"mc-selected":""} disabled={busy||runtime.game_connected} onClick={()=>setConnectionDraft({...connection,host:"127.0.0.1",port:25565,version:"1.21.1",connection_type:"local"})}>自己的服务器</Button>
-        </div>
         <section className="mc-stage">
-          <div className="mc-section-head"><span className="mc-section-index">01</span><h2>{qiandengServer?"连接游戏账号":"选择你的服务器"}</h2></div>
+          <div className="mc-section-head"><span className="mc-section-index">01</span><h2>{qiandengServer?"连接游戏账号":isVanilla?"本机 Java 连接":"服务器连接"}</h2></div>
           <div className="mc-section-body">{qiandengServer?accountSetup:serverFields}</div>
         </section>
         <section className="mc-stage">
@@ -376,7 +402,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
             </Stack>}
           </>}
           <Inline>
-          <Button className="mc-primary" tone="primary" disabled={!stateReady||busy||residentActive||needsRuntimeSetup||needsGameAccount||preparation.active||waitingForBody||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!connection.host||(connection.auth==="microsoft"&&!connection.username)} onClick={async()=>{
+          <Button className="mc-primary" tone="primary" disabled={!stateReady||busy||residentActive||needsRuntimeSetup||needsGameAccount||preparation.active||waitingForBody||runtime.worker_alive||runtime.phase==="starting"||runtime.game_connected||!joinAddress||(connection.auth==="microsoft"&&!connection.username.trim())} onClick={async()=>{
             if(loginPassword||loginEnabled!==null) {
               setFailure(true);setNotice("请先点击“保存连接与登录”，再开始游玩。");return
             }
@@ -389,8 +415,8 @@ export default function Panel(props: PluginSurfaceProps<any>) {
                 setConnectionDraft(null)
                 setGameVoiceDraft(null)
               }
-          }}>{!stateReady?"正在读取连接…":residentActive?"请先停止居民控制":waitingForBody?"等待身体接回":preparation.active?"正在准备游戏组件…":runtime.game_connected?"正在自主游玩":runtime.phase==="starting"?"正在连接…":needsRuntimeSetup?"请先准备游戏组件":needsGameAccount?"请先接入游戏账号":"开始自主游玩"}</Button>
-          <Button disabled={busy||runtime.game_connected||!connectionDraft} onClick={async()=>{
+          }}>{!stateReady?"正在读取连接…":residentActive?"请先停止居民控制":waitingForBody?"等待身体接回":preparation.active?"正在准备游戏组件…":runtime.game_connected?"正在自主游玩":runtime.phase==="starting"?"正在连接…":needsRuntimeSetup?"请先准备游戏组件":needsGameAccount?"请先接入游戏账号":isVanilla?"加入我的世界":"开始自主游玩"}</Button>
+          <Button disabled={!canChangeConnection||!connectionDraft||!joinAddress} onClick={async()=>{
             if(await call("save_settings",{settings:{server:connection}}))setConnectionDraft(null)
           }}>仅保存连接</Button>
           <Button tone="danger" disabled={busy||(!runtime.worker_alive&&!runtime.game_connected&&runtime.phase!=="starting")}

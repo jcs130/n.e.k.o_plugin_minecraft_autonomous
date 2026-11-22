@@ -25,6 +25,9 @@ const css = `
 .mc-app .mc-progress-item small { display:block; color:var(--mc-muted); font-size:11px; margin-top:2px; }
 .mc-app .mc-world-picker { display:flex; flex-wrap:wrap; gap:8px; padding:3px 0 10px; }
 .mc-app .mc-world-picker .neko-button { background:transparent; border:1px solid var(--border); color:var(--mc-muted); }
+.mc-app .mc-local-guide { border:1px solid var(--border); border-radius:12px; background:var(--mc-soft); padding:14px 16px; }
+.mc-app .mc-local-guide h3 { font-size:15px; margin:0; }
+.mc-app .mc-local-guide ol { padding-left:20px; margin:8px 0; font-size:13px; line-height:1.75; }
 .mc-app .mc-world-picker .mc-selected { background:var(--mc-soft); border-color:var(--mc-accent); color:var(--mc-accent); }
 .mc-app .mc-stage { padding:22px 0; border-bottom:1px solid var(--border); }
 .mc-app .mc-stage:first-child { padding-top:7px; }

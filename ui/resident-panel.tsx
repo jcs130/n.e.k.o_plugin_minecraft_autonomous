@@ -1,6 +1,7 @@
 import { Alert, Button, Card, Field, FileDownload, Inline, Input, Page, PasswordInput, RefreshButton, Select, Stack, StatusBadge, Text, Textarea, useEffect, useRef, useState, useToast } from "@neko/plugin-ui"
 import type { PluginSurfaceProps } from "@neko/plugin-ui"
 import { startPanelRefresh } from "./panel-refresh.js"
+import { residentSelection } from "./resident-selection.js"
 
 type Resident = { id: string, characterId: string, name: string, bodyKind: string, state: string }
 type Body = {characterId: string, name: string, activeKind: string | null, status: string,
@@ -27,7 +28,7 @@ type State = { role?: string, localRoles?: string[], resident?: string, connecte
   bodyReceipt?: Receipt,
   bodyDeviceAvailable?: boolean, bodyDevice?: {state: string, pairId?: string, characterId?: string, expiresAt?: number},
   bodyKind?: string, control?: { phase?: string, health?: string, playerBusy?: boolean, voice?: VoiceStatus },
-  uiToken?: string, waiting?: string, catalog?: { residents?: Resident[], availableBodies?: string[] } }
+  uiToken?: string, browserCode?: string, characterId?: string, waiting?: string, catalog?: { residents?: Resident[], availableBodies?: string[] } }
 
 export default function ResidentPanel(props: PluginSurfaceProps<State>) {
   const state = props.state || {}
@@ -54,7 +55,7 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
     (!!character || state.bodyDevice?.state === "pending" || state.bodyDevice?.state === "paired")
   const checking = useRef(false)
   const localRole = (role ?? state.role) || roles[0] || ""
-  const selected = residents.find(row => row.id === id) || residents[0]
+  const selected = residentSelection(residents, id, state.characterId, state.bodyKind)
   const bodyKind = bodies.includes(kind) ? kind : bodies[0]
   const chosenName = name ?? localRole
   const phase = state.control?.phase || "stopped"
@@ -63,12 +64,16 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
   const voice = state.control?.voice
   const offeredVoiceModes = voice?.outputModes.map(mode => voiceModes[mode]).filter(Boolean) || []
   const toast = useToast()
-  const label = (kind: string) => kind === "maid" ? "车万女仆" : "Numen"
+  const label = (kind: string) => Object.hasOwn(bodyNames, kind) ? bodyNames[kind] : "身体待核实"
 
   async function call(entry: string, args: Record<string, unknown>) {
     setBusy(true)
     try {
-      await props.api.call(entry, { ...args, uiToken: state.uiToken })
+      const reply = await props.api.call(entry, { ...args, uiToken: state.uiToken })
+      const result = reply?.result ?? reply
+      if (result?.is_error || result?.error || result?.success === false) {
+        throw new Error((result.error || result).message || "操作未确认，请刷新后核对。")
+      }
       if (entry === "pair_resident") setCode("")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error))
@@ -94,16 +99,25 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
   }, [state.waiting, state.authorized, state.uiToken])
 
   useEffect(() => {
+    if (!state.browserCode || state.authorized || busy) return
+    return startPanelRefresh({document, interval: 3000, refresh: async () => {
+      await props.api.call("resident_browser_login", {op: "status", uiToken: state.uiToken})
+      await props.api.refresh()
+    }})
+  }, [state.browserCode, state.authorized, state.uiToken, props.api.refresh, busy])
+
+  useEffect(() => {
     if (!controlling || busy) return
     return startPanelRefresh({refresh: props.api.refresh, document, interval: 6000})
   }, [props.api.refresh, controlling, busy])
 
   return <Page title="连接千灯纪居民"><Stack gap={14}>
     <Card title={state.connected ? `${state.role} → ${state.resident}` : "使用千灯纪女仆或 Numen"}><Stack gap={10}>
-      <Text>角色动作由千灯纪执行，游戏回合交给下方绑定的 N.E.K.O. 角色。居民使用该角色的对话模型，Mineflayer 的 decision 绑定用于玩家模式。</Text>
+      <Text>授权后选择已有的车万女仆或 Numen，绑定完成后点「开始桌面控制」。居民由千灯纪执行游戏动作，使用你选的 N.E.K.O. 角色处理回合。</Text>
       <Inline>
         <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=panel&surface=main`}
           label="返回账号与玩法选择" openExternal />
+        <FileDownload href="https://mc.kangqiang.site/#live" label="官网观战 · 女神之眼" openExternal />
         <RefreshButton label="刷新状态" />
       </Inline>
       {state.connected && <>
@@ -182,10 +196,10 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
       {state.bodyDevice?.state === "expired" && <Text>配对编号已过期，可以重新生成。</Text>}
     </Stack></Card>}
     <Card title="本机 N.E.K.O. 角色"><Stack>
-      <Text>若这个身体已经接到旧版「千灯纪居民」或酒狐，请先停止旧连接，再到这里授权原角色。</Text>
+      <Text>已有旧版居民插件或酒狐控制同一身体时，先停止旧连接。随后在这里选回原居民。</Text>
       <Field required label="由哪个角色在游戏里行动">{roles.length ?
-        <Select value={localRole} options={roles.map(value => ({ value, label: value }))} onChange={setRole} /> :
-        <Input value={localRole} onChange={setRole} placeholder="本机角色名" />}
+        <Select disabled={controlling || busy} value={localRole} options={roles.map(value => ({ value, label: value }))} onChange={setRole} /> :
+        <Input disabled={controlling || busy} value={localRole} onChange={setRole} placeholder="本机角色名" />}
       </Field>
       <Inline>
         <Button disabled={!state.uiToken || busy} onClick={() => call("open_resident_website", { page: "characters" })}>打开 N.E.K.O. 角色管理</Button>
@@ -193,9 +207,12 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
       </Inline>
     </Stack></Card>
     {!state.authorized ? <Card title="官网授权"><Stack>
-      <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=panel&surface=main`}
-        label="使用同一个千灯纪账号授权" openExternal />
-      <Button disabled={busy} onClick={() => setManual(!manual)}>{manual ? "收起授权码入口" : "使用已有居民授权码"}</Button>
+      <Button tone="primary" disabled={busy || controlling || !state.uiToken}
+        onClick={() => call("resident_browser_login", {op: "start"})}>
+        {state.browserCode ? "重新打开官网确认页" : "在浏览器登录并授权"}
+      </Button>
+      {state.browserCode && <Text>请在官网确认六位数字 {state.browserCode}。授权完成后，这里会显示你的居民。</Text>}
+      <Button disabled={busy || controlling} onClick={() => setManual(!manual)}>{manual ? "收起授权码入口" : "改用已有官网授权码"}</Button>
       {manual ? <Stack>
         <Button disabled={!state.uiToken || busy} onClick={() => call("open_resident_website", { page: "authorize" })}>去官网获取授权码</Button>
         <Field label="官网授权码"><PasswordInput value={code} onChange={setCode} placeholder="XXXX-XXXX-XXXX" /></Field>
@@ -207,23 +224,25 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
         <Button tone={mode === "connect" ? "primary" : "default"} disabled={busy} onClick={() => { setMode("connect") }}>已有角色</Button>
         <Button tone={mode === "create" ? "primary" : "default"} disabled={busy} onClick={() => { setMode("create") }}>新建角色</Button>
       </Inline>
-      {mode === "connect" ? (selected ? <Stack>
-        <Field label="我的角色"><Select value={selected.id} onChange={setId} options={residents.map(row => ({
+      {mode === "connect" ? (residents.length ? <Stack>
+        <Field label="我的角色"><Select disabled={busy || controlling} value={selected?.id || ""} onChange={setId} options={residents.map(row => ({
           value: row.id, label: row.name + " · " + label(row.bodyKind) + (row.state === "preparing" ? "（准备中）" : "")
         }))} /></Field>
-        <Button disabled={busy || !!state.waiting || !localRole} onClick={() => call("manage_residents", {
-          op: "connect", id: selected.id, characterId: selected.characterId, localRole
-        })}>绑定这个角色</Button>
+        <Button disabled={busy || controlling || !!state.waiting || !localRole || !selected || selected.state !== "available"}
+          onClick={() => selected && call("manage_residents", {
+            op: "connect", id: selected.id, characterId: selected.characterId, localRole
+          })}>绑定这个角色</Button>
+        {selected?.state === "preparing" && <Text>服务器正在准备该居民。准备结束后刷新角色列表。</Text>}
       </Stack> : <Text>这个账号还没有游戏角色，可以新建一个。</Text>) : (bodyKind ? <Stack>
         <Field label="身体"><Select value={bodyKind} onChange={setKind} options={bodies.map(value => ({ value, label: label(value) }))} /></Field>
         <Field required label="游戏角色名"><Input value={chosenName} onChange={setName} /></Field>
         <Field label="游戏中的角色设定（可选）"><Textarea value={persona} onChange={setPersona} /></Field>
-        <Button disabled={busy || !!state.waiting || !localRole || !chosenName.trim()} onClick={() => call("manage_residents", {
+        <Button disabled={busy || controlling || !!state.waiting || !localRole || !chosenName.trim()} onClick={() => call("manage_residents", {
           op: "create", localRole, bodyKind, name: chosenName.trim(), persona
         })}>创建并绑定</Button>
       </Stack> : <Text>服务器当前没有可用的新身体。</Text>)}
       {state.waiting ? <Text>正在准备 {state.waiting} 的游戏身体。准备好后会保存绑定，你可以再手动开始。</Text> : null}
-      <Button disabled={busy} onClick={() => call("manage_residents", { op: "list" })}>刷新游戏角色</Button>
+      <Button disabled={busy || controlling} onClick={() => call("manage_residents", { op: "list" })}>刷新游戏角色</Button>
     </Stack></Card>}
     </>}
   </Stack></Page>
