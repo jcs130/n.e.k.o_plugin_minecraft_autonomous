@@ -242,6 +242,8 @@ def prepare_login(source, identity, directory):
 
 
 async def preflight(raw, settings, *, data_root=None):
+    if settings.host.lower().rstrip('.') != ADDRESS.split(':', 1)[0]:
+        return
     value = configured_identity(raw)
     if not value:
         return

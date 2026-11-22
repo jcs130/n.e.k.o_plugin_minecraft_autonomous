@@ -118,6 +118,33 @@ def test_legacy_account_start_has_no_portal_network_dependency(plugin_module, ru
     invoke.assert_not_awaited()
 
 
+def test_local_java_start_preserves_saved_qiandengji_identity(plugin_module, tmp_path, run_async, monkeypatch):
+    m = module(plugin_module)
+    source, _ = identity(tmp_path)
+    raw = {'server': {'host': '127.0.0.1', 'port': 25571, 'username': 'NekoLocalQA',
+                      'auth': 'offline', 'version': '1.21.1'},
+           'qiandengji': {'identity_file': str(source)}}
+    original = source.read_bytes()
+    invoke = AsyncMock()
+    monkeypatch.setattr(m, '_invoke', invoke)
+    run_async(m.preflight(raw, plugin_module.Settings.parse(raw)))
+    invoke.assert_not_awaited()
+    assert source.read_bytes() == original
+    assert raw['qiandengji']['identity_file'] == str(source)
+
+
+def test_imported_identity_rejects_a_different_port_on_the_official_host(plugin_module, tmp_path, run_async, monkeypatch):
+    m = module(plugin_module)
+    source, _ = identity(tmp_path)
+    raw = {'server': {'host': 'micro.kangqiang.site', 'port': 25703, 'username': 'ag_Test'},
+           'qiandengji': {'identity_file': str(source)}}
+    invoke = AsyncMock()
+    monkeypatch.setattr(m, '_invoke', invoke)
+    with pytest.raises(m.AccountError, match='imported_account_connection_mismatch'):
+        run_async(m.preflight(raw, plugin_module.Settings.parse(raw)))
+    invoke.assert_not_awaited()
+
+
 def test_imported_account_start_queries_ready_and_checks_private_login(plugin_module, tmp_path, run_async, monkeypatch):
     m = module(plugin_module)
     source, value = identity(tmp_path)
