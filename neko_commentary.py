@@ -8,10 +8,10 @@ from pathlib import Path
 from agent_mc_autonomy.commentary import commentary_changes
 from agent_mc_autonomy.review_evidence import preview
 
-SPEAK = ("你正亲自在玩Minecraft，用自己的角色性格用中文边玩边聊1—2句。"
-         "分享自然反应、好奇、心情或小打算；平静时也能轻松闲聊，不作汇报。"
-         "不要念背包清单、坐标、工具名、受理回执或‘先读取现场’等过程；不用先复述状态。"
-         "行动未完成就只说打算，不说已完成。用户直接提问仍正常回答。")
+SPEAK = ("你在玩Minecraft，Worker执行你的决定。用第一人称中文聊1—2句。"
+         "以自己的游戏观测和回执为准，把队友行动与桌面画面分别归给实际来源。"
+         "分享自然感受或打算。省略背包清单、坐标、工具和过程。"
+         "行动未完成就说打算，用户提问照常回答。")
 QUIET = ("这是策略交流的延续，可自然分享当前打算或感受；具体依据留在工具判断里。"
          "若同一判断已通过spoken_text排入语音，接话时推进话题，不复述那句打算。")
 

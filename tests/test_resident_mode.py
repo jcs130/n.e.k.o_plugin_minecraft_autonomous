@@ -95,6 +95,46 @@ def test_desktop_device_reads_first_then_uses_the_same_start_id_on_stop(monkeypa
     run_async(exercise())
 
 
+@pytest.mark.parametrize("desktop", [False, True])
+def test_resident_privacy_failure_keeps_body_idle(monkeypatch, run_async, resident, desktop):
+    from plugin.sdk.plugin import Err
+
+    plugin, session, mode, _ = resident
+    character = {**session["resident"], "bodyId": str(uuid4())}
+    session["resident"] = character
+    calls = []
+
+    async def privacy_error(_raw):
+        return Err({"code": "gameplay_screen_vision_enabled"})
+
+    def device_call(operation, _payload):
+        calls.append(operation)
+        assert operation == "status"
+        return {"character": character, "activeKind": "maid", "canStart": True}
+
+    def unexpected_action(*_):
+        pytest.fail("Privacy must be confirmed before opening a resident turn.")
+
+    monkeypatch.setattr(plugin, "_gameplay_privacy_error", privacy_error)
+    monkeypatch.setattr(mode, "post", unexpected_action)
+    plugin._desktop_client = SimpleNamespace(settings=lambda: {"localRole": "YUI", "refreshToken": "fixture-refresh",
+                                                               "character": character["characterId"]}, authorized=device_call)
+
+    async def exercise():
+        if desktop:
+            result = await plugin.desktop_device("start", plugin.panel_token, mode="maid", localRole="YUI")
+            assert calls == ["status"]
+        else:
+            await plugin._bind("YUI", session)
+            result = await plugin.resident_start(plugin.panel_token)
+            assert not calls
+        assert result.error["code"] == "gameplay_screen_vision_enabled"
+        assert plugin._resident_phase == "stopped"
+        assert plugin._desktop_play_record() is None
+
+    run_async(exercise())
+
+
 def test_unknown_desktop_start_is_durable_and_never_resubmitted(run_async, resident):
     plugin, session, _, _ = resident
     character = session["resident"]
@@ -421,7 +461,9 @@ def test_resident_start_scopes_tools_and_keeps_player_mode_idle(monkeypatch, run
         instructions, scene_json = messages[0]["parts"][0]["text"].split("\n", 1)
         assert "这是你自身的游戏回合" in instructions
         assert "第一人称" in instructions
-        assert "游戏的确认回执" in instructions
+        assert "游戏观测和执行回执" in instructions
+        assert "Worker 执行你的决定" in instructions
+        assert "队友视角" in instructions
         identity = {"desktopRole": "YUI", "controlledResident": "测试居民"}
         assert json.loads(instructions.split("身份对应关系：", 1)[1]) == identity
         assert json.loads(scene_json) == turn

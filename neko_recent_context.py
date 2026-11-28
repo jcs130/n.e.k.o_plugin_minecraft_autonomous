@@ -148,16 +148,15 @@ def normalize_record(value, actor, cutoff, sampled, *, full=False):
         role = field('role')
         if target != actor:
             return None
+        # Host proactive replies can be based on someone else's desktop.
         count = field('message_count')
         if source == 'main_logic.core' and type(count) is int and count == 1:
             if turn == 'user_message' and role == 'master':
                 normalized_role = 'user'
-            elif turn in {'assistant_message', 'proactive_reply'} and role == 'cat':
+            elif turn == 'assistant_message' and role == 'cat':
                 normalized_role = 'assistant'
             else:
                 return None
-        elif source == 'proactive' and turn == 'proactive_reply' and role in {None, 'cat'}:
-            normalized_role = 'assistant'
         else:
             return None
         observed = host_recent.timestamp(value.get('timestamp'))

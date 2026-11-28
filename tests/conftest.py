@@ -84,4 +84,10 @@ def plugin_instance(monkeypatch, tmp_path, run_async, plugin_module):
         _effective_config={},
         get_own_config=get_own_config,
     )
-    return plugin_module.MinecraftAutonomousPlugin(ctx)
+    instance = plugin_module.MinecraftAutonomousPlugin(ctx)
+
+    async def private_desktop(_raw):
+        return None
+
+    monkeypatch.setattr(instance, "_gameplay_privacy_error", private_desktop)
+    return instance

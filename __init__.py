@@ -22,6 +22,7 @@ from .dashboard import Dashboard
 from .direct_planner import create_planner
 from .neko_account_panel import NekoAccountPanel
 from .neko_character_binding import NekoCharacterBinding
+from .neko_gameplay_context import gameplay_privacy_error
 from .neko_heartbeat import NekoHeartbeat
 from .neko_narration import NekoNarration
 from .neko_presentation import NekoPresentation
@@ -46,6 +47,8 @@ class MinecraftAutonomousPlugin(Dashboard, ResidentMode, QiandengjiPanel, NekoAc
         self._worker = None
         self._player_start_requests = 0
         self._initialize_resident()
+
+    _gameplay_privacy_error = staticmethod(gameplay_privacy_error)
 
     def _operator_state(self, stopped):
         path = self.data_path("operator.json")
@@ -158,6 +161,10 @@ class MinecraftAutonomousPlugin(Dashboard, ResidentMode, QiandengjiPanel, NekoAc
             if selected:
                 selected.key()
                 selected.validate_budget(settings.max_output_tokens)
+
+            privacy_error = await self._gameplay_privacy_error(planner_raw)
+            if privacy_error is not None:
+                return privacy_error
 
             async def play(goal, publish, stopped):
                 from .neko_recent_context import recent_context_provider

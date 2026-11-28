@@ -123,7 +123,8 @@ def test_genuine_producers_keep_conversation_id_and_roles(plugin_instance, shape
     assert assistant['id'] != item['id']
     proactive = record(source='proactive', turn='proactive_reply')
     del proactive['metadata']['role']
-    assert module.normalize_record(proactive, 'TestRole', 9900, 10000)['role'] == 'assistant'
+    assert module.normalize_record(proactive, 'TestRole', 9900, 10000) is None
+    assert module.normalize_record(record(turn='proactive_reply'), 'TestRole', 9900, 10000) is None
 
 
 @pytest.mark.parametrize('change', [

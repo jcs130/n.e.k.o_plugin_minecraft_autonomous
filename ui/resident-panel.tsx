@@ -130,6 +130,7 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
   return <Page title="连接千灯纪居民"><Stack gap={14}>
     <Card title="登录千灯纪"><Stack gap={10}>
       <Text>在这台电脑首次使用时，去官网选择角色并确认。已保存的授权会在打开面板时恢复。</Text>
+      <Text>开局前在 N.E.K.O. 主页开启「隐私模式」，并结束手动屏幕共享。她用已绑定的居民身体在游戏里行动。</Text>
       {state.desktopPending && <Text>{state.desktopCode ? `在另一台设备确认时输入 ${state.desktopCode}` :
         "请在系统浏览器确认授权，然后返回 N.E.K.O.。"}</Text>}
       {state.desktopUrl && <Field label="在另一台设备打开的地址"><Input value={state.desktopUrl} onChange={() => {}} /></Field>}

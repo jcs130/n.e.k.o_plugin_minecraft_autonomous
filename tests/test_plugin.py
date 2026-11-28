@@ -65,6 +65,23 @@ def test_stop_persists_and_wins_over_inflight_start(plugin_instance, run_async, 
     run_async(exercise())
 
 
+def test_screen_vision_blocks_player_before_worker_start(plugin_module, plugin_instance, run_async, monkeypatch):
+    async def config():
+        return {"autonomy": {"enabled": True}, "server": {"host": "example.test", "username": "Alice"},
+                "backend": {"directory": "explicit-test-backend"}}
+
+    async def privacy_error(_raw):
+        return Err({"code": "gameplay_screen_vision_enabled"})
+
+    monkeypatch.setattr(plugin_instance.config, "dump", config)
+    monkeypatch.setattr(plugin_module, "verify_runtime", lambda _: plugin_instance.data_path("unused.mjs"))
+    monkeypatch.setattr(plugin_instance, "_gameplay_privacy_error", privacy_error)
+    result = run_async(plugin_instance.start())
+    assert result.error["code"] == "gameplay_screen_vision_enabled"
+    assert plugin_instance._worker is None
+    assert not plugin_instance.data_path("operator.json").exists()
+
+
 def test_external_shutdown_is_read_only_and_keeps_framework_ownership(plugin_instance, run_async, monkeypatch, tmp_path):
     async def config(**_):
         return {"runtime": {"mode": "external", "data_directory": str(tmp_path / "separate-runtime")},

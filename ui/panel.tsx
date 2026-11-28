@@ -314,6 +314,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
           <Button className={destination==="custom"?"mc-selected":""} disabled={!canChangeConnection} onClick={()=>selectWorld("custom")}>其他 Java 服务器</Button>
           <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=panel&surface=resident`} label="千灯纪居民 · 女仆 / Numen" openExternal />
         </div>
+        {!external && <Text>开局前在 N.E.K.O. 主页开启「隐私模式」，并结束手动屏幕共享。她用自己的游戏身体与你一起玩。</Text>}
         <Text>{isVanilla ? "把猫娘作为另一位玩家加进你正在玩的 Java 世界。" : qiandengServer ? "使用玩家身份进入千灯纪，支持 RPG 玩法和本机 3D 观战。" : "填写朋友发来的域名或 IP 和端口，再选择该服务器使用的登录方式。"}</Text>
       </Stack></Card>
       {(qiandengServer || website.browserCode) && <Card title="千灯纪账号"><Stack gap={8}>
