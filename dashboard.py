@@ -17,8 +17,9 @@ from agent_mc_autonomy.server_login import prepare_login, public_login
 from agent_mc_autonomy.viewer import viewer_observation
 from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
 
-from .bundled_extension import bundled_extension_status, extension_mode
+from .bundled_extension import bundled_extension_status, extension_mode, qiandengji_connection
 from .direct_planner import public_planner
+from .lan_world import detect_local_world
 from .model_check import check_model
 from .neko_heartbeat import HeartbeatSettings, is_stopped, review_port
 from .neko_host_context import HostContextSettings
@@ -63,6 +64,35 @@ EDITABLE = {
     "planner": {"route", *HttpPlannerConfig.__dataclass_fields__},
 }
 
+
+
+def play_connection(settings):
+    return {key: getattr(settings, key) for key in EDITABLE["server"]}
+
+
+def play_destination(server):
+    if qiandengji_connection({"server": server}):
+        return "qiandeng"
+    return "vanilla" if server["connection_type"] == "local" else "custom"
+
+
+def saved_play_connections(raw):
+    """Keep one previously chosen player connection per entry point."""
+    saved = raw.get("play_connections", {})
+    if not isinstance(saved, dict):
+        return {}
+    result = {}
+    for destination in ("vanilla", "custom", "qiandeng"):
+        server = saved.get(destination)
+        if not isinstance(server, dict) or not server.get("host"):
+            continue
+        try:
+            selected = play_connection(Settings.parse({**raw, "server": server}))
+        except (TypeError, ValueError):
+            continue
+        if play_destination(selected) == destination:
+            result[destination] = selected
+    return result
 
 def public_config(settings):
     return {
@@ -245,6 +275,11 @@ class Dashboard:
                     **({"body_handoff_ready": True} if self.desktop_body_device_grant() is not None else {}),
                     "resident_control": self._resident_status(),
                     "server_login": public_login(settings.data_root(self.data_path()), settings),
+                    "saved_connections": {
+                        name: {"server": server,
+                               "login": public_login(settings.data_root(self.data_path()), Settings.parse({**raw, "server": server}))}
+                        for name, server in saved_play_connections(raw).items()
+                    },
                     "settings": {**public_config(settings), "presentation": asdict(PresentationSettings.parse(raw)),
                                  "qiandengji": {"identity_file": configured_identity(raw)},
                                  "heartbeat": asdict(heartbeat), "host_context": asdict(HostContextSettings.parse(raw)), "planner": public_planner(raw.get("planner", {})),
@@ -299,6 +334,20 @@ class Dashboard:
             try:
                 replace_native = bool(settings.get("native") and original.get("native"))
                 patch = {**settings, **({"native": {**settings["native"], "__replace__": True}} if replace_native else {})}
+                if "server" in settings and parsed.runtime_mode == "embedded":
+                    profiles = saved_play_connections(original)
+                    try:
+                        previous = Settings.parse(original)
+                    except (TypeError, ValueError):
+                        previous = None
+                    if previous is not None and previous.host and previous.runtime_mode == "embedded":
+                        server = play_connection(previous)
+                        profiles[play_destination(server)] = server
+                    if parsed.host:
+                        server = play_connection(parsed)
+                        profiles[play_destination(server)] = server
+                    if profiles:
+                        patch["play_connections"] = profiles
                 await self.config.update(patch)
                 if set(settings) & {"host_context", "heartbeat"}:
                     port = review_port(self, parsed)
@@ -392,6 +441,11 @@ class Dashboard:
         return await self.start(goal=goal)
 
     @ui.action(label="保存并一键启动", tone="primary")
+    @plugin_entry(id="detect_lan_world", name="检测本机 Java 单人世界", kind="service", timeout=5,
+                  description="读取默认 Minecraft 目录的局域网端口，仅检查此回环端口是否开放。不会加入游戏、保存或调用模型。")
+    async def detect_lan_world(self, **_):
+        return Ok(await detect_local_world())
+
     @plugin_entry(id="quick_start", name="保存连接并显式启动自主游玩", kind="service",
                   description="保存常用连接，启用本次自主游玩和主脑参与，再通过正常启动流程运行。不会接管正在运行的外部执行器或自动重启Neko。",
                   input_schema={"type": "object", "properties": {"connection": {"type": "object"},
@@ -431,13 +485,31 @@ class Dashboard:
             connection = dict(connection)
             # Defaults are applied only on this explicit play action. Importing
             # the plugin never creates an account or joins a server.
-            if not connection.get("host"):
-                connection["host"] = "127.0.0.1"
-            if not connection.get("username"):
-                if connection.get("auth", raw.get("server", {}).get("auth", "offline")) == "microsoft":
-                    return Err({"code": "account_required", "message": "正版登录请先填写自己的 Microsoft 账户标识，再通过官方页面授权。"})
-                connection["username"] = raw.get("server", {}).get("username") or "Neko_" + uuid.uuid4().hex[:8]
             current = Settings.parse(raw)
+            host = connection.get("host", current.host)
+            if not isinstance(host, str):
+                raise ValueError("invalid_host")
+            host = host.strip()
+            if host.startswith("[") and host.endswith("]"):
+                host = host[1:-1]
+            if not host and connection.get("connection_type", current.connection_type) == "custom":
+                return Err({"code": "server_address_required", "message": "请先填写其他 Java 服务器的地址。"})
+            connection["host"] = host or "127.0.0.1"
+            local_hosts = {"", "127.0.0.1", "localhost", "::1"}
+            local = connection["host"].lower() in local_hosts
+            connection.setdefault("connection_type", "local" if local else "custom")
+            same_endpoint = (connection["host"].lower() == (current.host or "127.0.0.1").lower()
+                             and connection.get("port", current.port) == current.port)
+            same_local_world = local and current.host.lower() in local_hosts and current.connection_type == "local"
+            if "port" not in connection and not same_endpoint:
+                connection["port"] = 25565
+            connection.setdefault("auth", current.auth if same_endpoint or same_local_world else "offline")
+            if not connection.get("username"):
+                if connection["auth"] == "microsoft":
+                    return Err({"code": "account_required", "message": "正版登录请先填写自己的 Microsoft 账户标识，再通过官方页面授权。"})
+                reuse_name = (same_endpoint or same_local_world) and current.auth == connection["auth"]
+                connection["username"] = (current.username if reuse_name else "") or "Neko_" + uuid.uuid4().hex[:8]
+
             directory = current.data_root(self.data_path()) / "sessions" / current.identity / "host"
             if session_is_owned(directory) or self._worker and self._worker.snapshot().get("worker_alive"):
                 return Err({"code": "runtime_already_owned", "message": "当前角色正在游玩。请先停止并等动作排空，再修改连接或启动。"})
@@ -445,6 +517,11 @@ class Dashboard:
                 Mailbox(directory).check_uncertain()
                 require_no_pending_acknowledgement(directory)
             desired = Settings.parse({**raw, "server": {**raw.get("server", {}), **connection}})
+            if desired.identity != current.identity:
+                # Restore only a saved profile for the exact endpoint and account.
+                profile = saved_play_connections(raw).get(play_destination(play_connection(desired)))
+                same_profile = profile is not None and Settings.parse({**raw, "server": profile}).identity == desired.identity
+                connection["login_config_file"] = profile["login_config_file"] if same_profile else ""
             if device_grant is not None and not self._body_device_connection_supported(desired):
                 return Err({"code": "body_device_connection_mismatch", "message": "接力设备只用于千灯纪的原玩家连接。"})
             target = desired.data_root(self.data_path()) / "sessions" / desired.identity / "host"

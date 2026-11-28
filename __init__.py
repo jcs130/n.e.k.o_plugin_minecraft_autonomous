@@ -88,16 +88,17 @@ class MinecraftAutonomousPlugin(Dashboard, ResidentMode, QiandengjiPanel, NekoAc
         with self._control_lock:
             if self._worker:
                 state.update(self._worker.snapshot())
-        ready, reason, viewer = False, "backend_missing", ""
+        ready, reason, viewer, version = False, "backend_missing", "", None
         try:
             effective, prepared = resolve_host_runtime(await self.config.dump())
             settings = Settings.parse(effective)
+            version = settings.version
             if settings.runtime_mode == "external":
                 if not settings.data_directory:
                     return Err({"code": "external_data_directory_required", "message": "填写与 standalone 相同的 runtime.data_directory。"})
                 directory = settings.data_root(self.data_path()) / "sessions" / settings.identity / "host"
                 snapshot = observation(directory)
-                return Ok({"mode": "external", "minecraft_version": "1.21.1", "observation": snapshot,
+                return Ok({"mode": "external", "minecraft_version": version, "observation": snapshot,
                            **viewer_observation(settings, snapshot)})
             viewer = settings.external_viewer_url
             if prepared in {"missing", "incompatible"}:
@@ -114,14 +115,14 @@ class MinecraftAutonomousPlugin(Dashboard, ResidentMode, QiandengjiPanel, NekoAc
         except TransportError:
             reason = "configuration_unavailable"
         return Ok({"plugin_id": "minecraft_autonomous", "mode": "autonomous", "stage": "development",
-                   "minecraft_version": "1.21.1", "backend_ready": ready, "reason": reason,
+                   "minecraft_version": version, "backend_ready": ready, "reason": reason,
                    "viewer_url": viewer, "viewer_body_binding_verified": False, "runtime_integrity_verified": False, **state,
                    **(viewer_observation(settings, state) if ready else {})})
 
     @plugin_entry(
         id="start",
         name="开始自主游玩 / Start autonomous play / 自律プレイ開始",
-        description="按目标启动 Minecraft 1.21.1 自主游玩；需要启用配置、安装后端并绑定 decision 模型。返回受理状态，连接结果请查 status。",
+        description="按目标启动 Minecraft Java 自主游玩；需要启用配置、安装后端并绑定 decision 模型。返回受理状态，连接结果请查 status。",
     )
     async def start(self, goal: str = "survive", **options):
         device_grant = options.get("device_handoff")

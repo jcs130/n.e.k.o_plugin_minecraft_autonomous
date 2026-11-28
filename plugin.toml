@@ -1,11 +1,11 @@
 [plugin]
 id = "minecraft_autonomous"
 name = "千灯纪 · Agent友好的我的世界RPG服"
-version = "0.6.166"
+version = "0.6.167"
 type = "plugin"
 entry = "plugin.plugins.minecraft_autonomous:MinecraftAutonomousPlugin"
-description = "把猫娘带进《我的世界》。在千灯纪连接自己的车万女仆或 Numen，也可以让猫娘以玩家身份进服探索、采集和建造，通过 Simple Voice Chat 和附近同伴交流。支持自有服务器、3D 观战和本机解说。"
-short_description = "千灯纪居民连接与 Minecraft 1.21.1 自主游玩"
+description = "把猫娘带进《我的世界》。在千灯纪连接自己的车万女仆或 Numen，也可以让猫娘以玩家身份进服探索、采集和建造，通过 Simple Voice Chat 和附近同伴交流。也可加入本机开放联机的单人世界及其他 Java 服务器，支持 3D 观战和本机解说。"
+short_description = "本机单人世界、Java 服务器与千灯纪居民"
 keywords = ["Minecraft", "我的世界", "自主生存"]
 
 [plugin.author]
@@ -44,7 +44,7 @@ permissions = ["state:read", "action:call"]
 
 [[plugin.ui.panel]]
 id = "resident"
-title = "连接车万女仆"
+title = "千灯纪居民 · 女仆 / Numen"
 mode = "hosted-tsx"
 entry = "ui/resident-panel.tsx"
 context = "resident_connection"

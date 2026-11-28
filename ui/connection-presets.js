@@ -1,8 +1,8 @@
 // Presets edit a draft. They do not probe the network, save or connect.
 export function connectionKind(server = {}) {
-  const host = (server.host || '').trim().toLowerCase();
-  if (!host && server.connection_type === 'custom') return 'custom';
+  const host = (server.host || '').trim().toLowerCase().replace(/\.$/, '');
   if (host === 'micro.kangqiang.site' && Number(server.port) === 25702) return 'qiandeng';
+  if (server.connection_type === 'custom') return 'custom';
   return ['', 'localhost', '127.0.0.1', '::1', '[::1]'].includes(host) ? 'vanilla' : 'custom';
 }
 
@@ -15,13 +15,21 @@ export function javaAddress(host, port) {
   return `${host}:${port}`;
 }
 
+export function parseJavaAddress(value) {
+  if (typeof value !== 'string') return null;
+  const match = /^(\[[0-9a-f:.]+\]|[a-z0-9_.-]+)(?::([0-9]{1,5}))?$/i.exec(value.trim());
+  if (!match) return null;
+  const host = match[1].replace(/^\[|\]$/g, '');
+  const port = match[2] ? Number(match[2]) : 25565;
+  return javaAddress(host, port) ? {host, port} : null;
+}
+
 export function applyConnectionPreset(draft, preset) {
   if (!['vanilla', 'custom', 'qiandeng'].includes(preset)) throw new Error('Unknown connection preset');
   const server = draft.server || {};
   if (preset === connectionKind(server) && server.host) return {...draft, server: {...server}};
   const endpoint = preset === 'qiandeng' ? {host: 'micro.kangqiang.site', port: 25702} :
     {host: preset === 'vanilla' ? '127.0.0.1' : '', port: 25565};
-  return {...draft, server: {...server, ...endpoint, version: '1.21.1',
-    connection_type: preset === 'vanilla' ? 'local' : 'custom',
-    ...('login_config_file' in server && {login_config_file: ''})}};
+  return {...draft, server: {...endpoint, version: '1.21.1', username: '', auth: 'offline', login_config_file: '',
+    connection_type: preset === 'vanilla' ? 'local' : 'custom'}};
 }

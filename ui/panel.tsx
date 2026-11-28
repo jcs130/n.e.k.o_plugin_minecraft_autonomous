@@ -5,7 +5,7 @@ import {
 } from "@neko/plugin-ui"
 import type { PluginSurfaceProps } from "@neko/plugin-ui"
 import { installationGuidance, preparedRuntimeSelection, preparationView, startPreparationRequired } from "./installation-guidance.js"
-import { applyConnectionPreset, connectionKind, javaAddress } from "./connection-presets.js"
+import { applyConnectionPreset, connectionKind, javaAddress, parseJavaAddress } from "./connection-presets.js"
 import { startPanelRefresh } from "./panel-refresh.js"
 import NativeControls from "./native-controls"
 import { deepseekPreset } from "./deepseek-presets.js"
@@ -45,6 +45,8 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const [modelCheck, setModelCheck] = useState<any>(null)
   const [viewerDraft, setViewerDraft] = useState<string | null>(null)
   const [connectionDraft, setConnectionDraft] = useState<any>(null)
+  const [connectionProfiles, setConnectionProfiles] = useState<Record<string, any>>({})
+  const [customAddress, setCustomAddress] = useState<string | null>(null)
   const [openModelEditor, setOpenModelEditor] = useState(false)
   const [appearanceDraft, setAppearanceDraft] = useState<string | null>(null)
   const [extensionDraft, setExtensionDraft] = useState<string | null>(null)
@@ -83,8 +85,10 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const stateReady = !!state.settings && !!state.runtime && !state.error
   const audit = state.audit || {}
   const external = settings.runtime?.mode === "external"
-  const savedConnection = {...settings.server,host:settings.server?.host||"127.0.0.1",port:settings.server?.port??25565,
-    username:settings.server?.username||"",auth:settings.server?.auth||"offline",version:"1.21.1"}
+  const savedConnection = {...settings.server,
+    host:settings.server?.host || (settings.server?.connection_type === "custom" ? "" : "127.0.0.1"),
+    port:settings.server?.port??25565, username:settings.server?.username||"",
+    auth:settings.server?.auth||"offline", version:settings.server?.version||"1.21.1"}
   const connection = connectionDraft ?? savedConnection
   const destination = connectionKind(connection)
   const isVanilla = destination === "vanilla"
@@ -92,16 +96,37 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   const canChangeConnection = !busy && !runtime.game_connected && !runtime.worker_alive && runtime.phase !== "starting"
   const selectWorld = (preset: string) => {
     if (!canChangeConnection || destination === preset) return
-    const previous = connectionKind(savedConnection) === preset ? savedConnection : connection
+    if (connectionDraft) setConnectionProfiles({...connectionProfiles, [destination]: connectionDraft})
+    const previous = connectionProfiles[preset] ?? (connectionKind(savedConnection) === preset ? savedConnection :
+      state.saved_connections?.[preset]?.server ?? savedConnection)
     setConnectionDraft(applyConnectionPreset({server:previous}, preset).server)
+    setCustomAddress(null)
+    setDeviceHandoff(false)
     setLoginPassword(""); setLoginEnabled(null); setNotice("")
   }
   const setConnection = (key:string,value:any) => {
     const next = {...connection,[key]:value}
-    if (key === "host") next.connection_type = connectionKind(next) === "vanilla" ? "local" : "custom"
     if (["host", "port", "auth", "username"].includes(key) && value !== connection[key]) next.login_config_file = ""
     setConnectionDraft(next)
   }
+  const setOtherAddress = (value: string) => {
+    setCustomAddress(value)
+    const endpoint = parseJavaAddress(value) ?? {host:"",port:25565}
+    if (endpoint.host === connection.host && endpoint.port === connection.port) return
+    if (connectionKind(endpoint) === "qiandeng") {
+      const official = state.saved_connections?.qiandeng?.server ?? {}
+      setConnectionDraft(applyConnectionPreset({server:official}, "qiandeng").server)
+      setCustomAddress(null)
+    } else {
+      setConnectionDraft({...connection,...endpoint,username:"",login_config_file:""})
+    }
+    setLoginPassword(""); setLoginEnabled(null); setDeviceHandoff(false)
+  }
+  const sameLogin = (saved: any) => !!saved && ["host","port","username","auth"].every(key=>connection[key]===saved[key])
+  const savedProfile = state.saved_connections?.[destination]
+  const login = sameLogin(savedConnection) ? state.server_login : sameLogin(savedProfile?.server) ? savedProfile.login : null
+  const loginConfigured = login?.configured
+  const savedLoginEnabled = login?.enabled
   const usingHostModel = settings.planner?.route !== "direct"
   const modelProbe = modelProbeMessage(usingHostModel, modelCheck)
   const canEditModel = !busy && !editing && !external && !runtime.worker_alive && !runtime.game_connected && runtime.phase !== "starting"
@@ -132,6 +157,23 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         throw new Error(detail.message || "请求未成功，请检查回执。")
       }
       if (id === "check_model" || id === "check_direct_model") setModelCheck(result)
+      if (id === "detect_lan_world") {
+        if (result.found !== true) {
+          setNotice("未检测到本机 Java 世界。请先在游戏里对局域网开放，也可以手动填写游戏聊天里的端口。")
+          return false
+        }
+        if (result.version && !["1.21.1","1.21.11"].includes(result.version)) {
+          setFailure(true); setNotice("这个世界的 Java 版本当前不受支持。请选择 1.21.1 或 1.21.11。")
+          return false
+        }
+        setConnectionDraft({...connection,host:result.host,port:result.port,
+          version:result.version||connection.version,connection_type:"local",
+          ...(connection.host!==result.host||connection.port!==result.port?{login_config_file:""}:{})})
+        setLoginPassword(""); setLoginEnabled(null)
+        setNotice(result.version ? `检测到本机 Java ${result.version}，端口 ${result.port}。可以点击「加入我的世界」。` :
+          `检测到本机端口 ${result.port}。请确认下方的 Java 版本，再点击「加入我的世界」。`)
+        return true
+      }
       if (["qiandengji_account","join_public_account"].includes(id)) {
         setPortalResult(result)
         if (result?.imported) {
@@ -153,6 +195,9 @@ export default function Panel(props: PluginSurfaceProps<any>) {
     const next = { ...draft, [section]: { ...draft[section], [key]: value,
       ...(section === "memory" && ((key === "mode" && value !== "remote") || (key === "provider" && !["powercontext","http"].includes(value))) ? {learning_enabled:false} : {}),
     } }
+    if (section === "server" && ["host","port","username","auth"].includes(key) && value !== draft.server?.[key]) {
+      next.server.login_config_file = ""
+    }
     if (value !== draft[section]?.[key] && ((section === "backend" && ["node","directory"].includes(key)) ||
         (section === "viewer" && ["renderer_directory","catalog_file","bundled_appearance_catalog_file"].includes(key)))) {
       next.runtime = {...draft.runtime, bundle_root:"", bundle_manifest_sha256:""}
@@ -187,43 +232,47 @@ export default function Panel(props: PluginSurfaceProps<any>) {
   }
   const qiandengServer = destination === "qiandeng"
   const needsGameAccount = qiandengServer && connection.auth !== "microsoft"
-    && (!state.server_login?.configured || connectionKind(savedConnection) !== "qiandeng" || connection.username !== settings.server?.username)
+    && !loginConfigured
   const accountSelected = state.website_account?.selected || !!settings.qiandengji?.identity_file || !!portalResult?.username
   const serverFields = <Stack gap={12}>
         {isVanilla && <div className="mc-local-guide">
           <h3>在原版世界里见面</h3>
           <ol>
-            <li>用 Minecraft Java 1.21.1 进入你的单人世界。</li>
-            <li>按 Esc → 对局域网开放 → 创建局域网世界。</li>
-            <li>填上游戏聊天显示的端口，再点「加入我的世界」。</li>
+            <li>用 Minecraft Java 打开单人世界。</li>
+            <li>按 Esc → 对局域网开放 → 创建局域网世界，并让游戏保持打开。</li>
           </ol>
-          <p className="mc-sub">朋友在同一局域网可从 Minecraft「多人游戏」进入。地址 127.0.0.1 只在当前电脑使用。</p>
+          <Button tone="primary" disabled={!canChangeConnection||external} onClick={()=>call("detect_lan_world",{})}>检测本机世界</Button>
+          <p className="mc-sub">其他启动器或自定义游戏目录可手动填写聊天里的端口。</p>
         </div>}
         <Grid cols={2}>
-          {!isVanilla&&<Field label="服务器地址"><Input disabled={!canChangeConnection} value={connection.host||""} placeholder="域名或 IP" onChange={v=>setConnection("host",v)} /></Field>}
-          <Field label={isVanilla ? "游戏聊天里显示的端口" : "端口"}><Input disabled={!canChangeConnection} type="number" value={connection.port||""} onChange={v=>setConnection("port",Number(v))} /></Field>
+          {destination==="custom"&&<Field label="Java 服务器地址"><Input disabled={!canChangeConnection} value={customAddress??joinAddress}
+            placeholder="例如 play.example.org:25565" onChange={setOtherAddress} /></Field>}
+          {isVanilla&&<Field label="游戏聊天里显示的端口"><Input disabled={!canChangeConnection} type="number" value={connection.port||""} onChange={v=>setConnection("port",Number(v))} /></Field>}
+          {!qiandengServer&&<Field label="Minecraft Java 版本"><Select disabled={!canChangeConnection} value={connection.version}
+            options={[{value:"1.21.1",label:"1.21.1"},{value:"1.21.11",label:"1.21.11"}]} onChange={v=>setConnection("version",v)} /></Field>}
           <Field label="登录方式"><Select disabled={!canChangeConnection} value={connection.auth||"offline"} options={[{value:"offline",label:"离线昵称"},{value:"microsoft",label:"Microsoft 正版账号"}]} onChange={v=>setConnection("auth",v)} /></Field>
           <Field label={connection.auth==="microsoft"?"Microsoft 账户标识":"猫娘的游戏昵称（可留空）"}><Input disabled={!canChangeConnection} value={connection.username||""} placeholder={connection.auth==="microsoft"?"填写可用于联机的本人账户标识":"留空时自动选择昵称"} onChange={v=>setConnection("username",v)} /></Field>
         </Grid>
-        {connection.auth === "microsoft" && <Text>使用与你已进服的玩家不同的正版账号，并在 Microsoft 官方页面完成授权。</Text>}
-        {connection.port !== 0 && !joinAddress && connection.host && <Text>请输入有效的服务器地址和 1–65535 的端口。</Text>}
+        {connection.auth === "microsoft" && <Text>使用与你已进服的玩家不同的正版账号。在高级设置启用本机账户端口，然后开始并通过「账户授权」打开 Microsoft 官方流程。</Text>}
+        {destination==="custom" && !!customAddress && !joinAddress && <Text>请输入域名或 IP，可附加 1–65535 的端口。</Text>}
+        {!qiandengServer && connection.version==="1.21.11" && <Text>可自主游玩。随包 3D 观战资源适用于 1.21.1。</Text>}
         {joinAddress && <Inline><code>{joinAddress}</code><Button onClick={async()=>{
           const copied = await clipboard.write(joinAddress)
           setFailure(!copied); setNotice(copied ? "已复制连接地址。" : "请手动复制显示的连接地址。")
         }}>复制连接地址</Button></Inline>}
         {isVanilla && <Button disabled={!canChangeConnection || !!goal.trim()} onClick={()=>setGoal("在这个世界里和玩家一起生存。先观察附近玩家；对方愿意一起玩时，再用游戏文字商量一个小目标。")}>设为一起生存</Button>}
         <Accordion open={!!loginPassword} title="服务器登录密码（仅需要 /login 的服务器填写）"><Stack gap={8}>
-          <Switch checked={loginEnabled??state.server_login?.enabled??false} label="自动登录这个服务器上的原账号"
+          <Switch checked={loginEnabled??savedLoginEnabled??false} label="自动登录这个服务器上的原账号"
             onChange={setLoginEnabled} />
           <Field label="游戏登录密码"><Input type="password" value={loginPassword}
             disabled={busy||external||runtime.game_connected||runtime.worker_alive}
-            placeholder={state.server_login?.configured?"已配置；留空保留，填写可更换":"首次启用时填写游戏密码"}
+            placeholder={loginConfigured?"已配置；留空保留，填写可更换":"首次启用时填写游戏密码"}
             onChange={v=>{setLoginPassword(v);if(v)setLoginEnabled(true)}} /></Field>
           <Text>先填写原玩家昵称。密码只在本机保存，不会回显；Windows 使用当前用户加密。连接后仅响应服务器登录提示，收到成功回执才继续。不会注册或修改游戏密码。</Text>
-          <Button disabled={busy||external||runtime.game_connected||runtime.worker_alive||!connection.username}
+          <Button disabled={!canChangeConnection||external||!connection.username||!joinAddress}
             onClick={async()=>{if(await call("configure_server_login",{connection:Object.fromEntries(Object.entries(connection).filter(([key])=>key!=="login_config_file")),
-              enabled:loginEnabled??state.server_login?.enabled??false,password:loginPassword})) {
-              setLoginPassword("");setLoginEnabled(null);setConnectionDraft(null)
+              enabled:loginEnabled??savedLoginEnabled??false,password:loginPassword})) {
+              setLoginPassword("");setLoginEnabled(null);setConnectionDraft(null);setCustomAddress(null);setConnectionProfiles({})
             }}}>保存连接与登录</Button>
         </Stack></Accordion></Stack>
   const legacyAccountSetup = <Stack gap={14}>
@@ -293,7 +342,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       {state.error && <Alert tone="danger" message="配置或观测暂不可用。请先检查插件配置。" />}
       {runtime.phase === "failed" && <Alert tone="danger" message="框架最近记录为运行失败；下方保留最后观测，刷新页面不会自动恢复游玩。" />}
       <div className="mc-hero">
-        <div className="mc-hero-copy"><span className="mc-world-mark" aria-hidden="true">▦</span><div><span className="mc-eyebrow">MINECRAFT · JAVA 1.21.1</span><h1>千灯纪 · Agent友好的我的世界RPG服</h1><p className="mc-sub">和猫娘一起联机，把方块世界变成家。</p></div></div>
+        <div className="mc-hero-copy"><span className="mc-world-mark" aria-hidden="true">▦</span><div><span className="mc-eyebrow">MINECRAFT · JAVA</span><h1>和猫娘一起玩《我的世界》</h1><p className="mc-sub">和猫娘一起联机，把方块世界变成家。</p></div></div>
         <Inline><StatusBadge label={runtime.game_connected && !waitingForBody ? "正在游玩" : phaseLabel} tone={runtime.game_connected && !waitingForBody ? "success" : "default"}/><RefreshButton label="刷新状态" /></Inline>
       </div>
       {waitingForBody && <Card title="角色身体交接"><Stack gap={8}>
@@ -309,7 +358,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
       </Stack></Card>}
       <Card title="从哪里开始"><Stack gap={10}>
         <div className="mc-world-picker" aria-label="选择游玩地点">
-          <Button className={isVanilla?"mc-selected":""} disabled={!canChangeConnection} onClick={()=>selectWorld("vanilla")}>本机原版联机</Button>
+          <Button className={isVanilla?"mc-selected":""} disabled={!canChangeConnection} onClick={()=>selectWorld("vanilla")}>本机单人世界</Button>
           <Button className={qiandengServer?"mc-selected":""} disabled={!canChangeConnection} onClick={()=>selectWorld("qiandeng")}>千灯纪玩家</Button>
           <Button className={destination==="custom"?"mc-selected":""} disabled={!canChangeConnection} onClick={()=>selectWorld("custom")}>其他 Java 服务器</Button>
           <FileDownload href={`${props.host?.origin || ""}/ui/plugins/minecraft_autonomous?tab=panel&surface=resident`} label="千灯纪居民 · 女仆 / Numen" openExternal />
@@ -385,7 +434,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         </section>
         <div className="mc-launch">
           <Switch label="用当前猫娘的声音解说" checked={!!withNarration} onChange={setNarrationDraft} />
-          {state.body_handoff_ready && <Switch label="允许此角色在游玩中交接身体" checked={deviceHandoff} onChange={setDeviceHandoff} />}
+          {qiandengServer && state.body_handoff_ready && <Switch label="允许此角色在游玩中交接身体" checked={deviceHandoff} onChange={setDeviceHandoff} />}
           <p className="mc-sub">本机解说用 N.E.K.O. 当前角色的声音。</p>
           {!external && <>
             <Switch label="用 Simple Voice Chat 和附近玩家通话" checked={withGameVoice}
@@ -408,17 +457,21 @@ export default function Panel(props: PluginSurfaceProps<any>) {
               setFailure(true);setNotice("请先点击“保存连接与登录”，再开始游玩。");return
             }
             if(await call("quick_start",{connection,goal,use_neko_model:usingHostModel,
-              ...(state.body_handoff_ready && deviceHandoff ? {enable_device_handoff: true, uiToken: state.website_login?.uiToken} : {}),
+              ...(qiandengServer && state.body_handoff_ready && deviceHandoff ? {enable_device_handoff: true, uiToken: state.website_login?.uiToken} : {}),
               ...(!external && gameVoiceDraft !== null ? {game_voice: gameVoiceDraft} : {}),
               appearance:appearanceDraft??settings.viewer?.default_appearance??"bundled:yui-ysm",
               extension_mode:extensionDraft??settings.extension_pack?.mode??"auto",
               character:characterDraft??settings.heartbeat?.target??"",narration:!!withNarration})) {
                 setConnectionDraft(null)
+                setConnectionProfiles({})
+                setCustomAddress(null)
                 setGameVoiceDraft(null)
               }
           }}>{!stateReady?"正在读取连接…":residentActive?"请先停止居民控制":waitingForBody?"等待身体接回":preparation.active?"正在准备游戏组件…":runtime.game_connected?"正在自主游玩":runtime.phase==="starting"?"正在连接…":needsRuntimeSetup?"请先准备游戏组件":needsGameAccount?"请先接入游戏账号":isVanilla?"加入我的世界":"开始自主游玩"}</Button>
           <Button disabled={!canChangeConnection||!connectionDraft||!joinAddress} onClick={async()=>{
-            if(await call("save_settings",{settings:{server:connection}}))setConnectionDraft(null)
+            if(await call("save_settings",{settings:{server:connection}})){
+              setConnectionDraft(null);setConnectionProfiles({});setCustomAddress(null)
+            }
           }}>仅保存连接</Button>
           <Button tone="danger" disabled={busy||(!runtime.worker_alive&&!runtime.game_connected&&runtime.phase!=="starting")}
             onClick={()=>setStopConfirm(true)}>停止游玩</Button>
@@ -465,7 +518,7 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>使用与当前角色配套的 HTTP(S) 页面。游戏连接成功后默认自动打开一次；重连不重复弹窗，可在设置中关闭。</Text>
         {!state.viewer_url && <Alert tone="info" message="尚未取得可用的观战地址；可配置同角色渲染器与版本资源目录，运行数据仍可查看。" />}
         {runtime.viewer && <Accordion open={false} title="资源版本与画面接入状态"><JsonView data={{pack:runtime.viewer.pack,version:runtime.viewer.minecraftVersion,reason:runtime.viewer.reason,window:runtime.viewer_window,content:runtime.viewer.content}} /></Accordion>}
-        {state.viewer_url && !state.viewer_body_binding_verified && <Alert tone="warning" message="已保存页面地址；画面与当前 1.21.1 角色的绑定尚未核验。" />}
+        {state.viewer_url && !state.viewer_body_binding_verified && <Alert tone="warning" message="已保存页面地址，画面与当前角色的绑定仍待核对。" />}
       </Stack></Accordion>
       <Accordion open={!!runtime.worker_alive||!!runtime.game_connected||!!goal} title={runtime.worker_alive||runtime.game_connected?"当前工作与用户反馈":"给她一个目标（可选）"}><Stack gap={12}>
         {(runtime.worker_alive||runtime.game_connected)&&<Inline><ActionButton action={action("review_game")} />
@@ -547,16 +600,16 @@ export default function Panel(props: PluginSurfaceProps<any>) {
         <Text>保存不会启动或重启游戏。嵌入式运行参数须先显式停止再修改，观战地址可在上方单独保存。外部模式下，这些设置只改变 Neko 观察入口；独立运行的模型与策略请同步到 standalone 配置。</Text>
         {!editing && <Button onClick={()=>beginEditing()}>编辑设置</Button>}
         {editing && draft && <Stack gap={12}>
-          <Field label="连接类型"><Stack gap={4}><Select value={draft.server.connection_type || "local"} options={[{value:"local",label:"原版 / 本地服务器（默认）"},{value:"custom",label:"自定义 / 公共服务器"}]} onChange={v=>setDraft({...draft,server:{...draft.server,connection_type:v,...(v === "local" ? {host:"127.0.0.1",port:25565} : {})}})} />{fieldError?.field === "server.connection_type" && <Text>{fieldError.message}</Text>}</Stack></Field>
+          <Field label="连接类型"><Stack gap={4}><Select value={draft.server.connection_type || "local"} options={[{value:"local",label:"原版 / 本地服务器（默认）"},{value:"custom",label:"自定义 / 公共服务器"}]} onChange={v=>setDraft({...draft,server:{...draft.server,connection_type:v,...(v === "local" ? {host:"127.0.0.1",port:25565,login_config_file:""} : {})}})} />{fieldError?.field === "server.connection_type" && <Text>{fieldError.message}</Text>}</Stack></Field>
           {draft.server.connection_type === "custom" && <Button onClick={()=>setDraft(applyConnectionPreset(draft,"qiandeng"))}>填入千灯纪预设（仅草稿）</Button>}
-          <Text>千灯纪可选预设：micro.kangqiang.site:25702 · Java 1.21.1。保留你填写的账号和认证方式；空账号仍需填写。只填入草稿，请核对后保存，再显式开始；不会自动连接或授予服务器权限。</Text>
+          <Text>千灯纪可选预设：micro.kangqiang.site:25702 · Java 1.21.1。切换服务器后的账号信息需重新核对。预设只填入草稿，保存后仍需手动开始。</Text>
           <Text>开始前必须填写服务器地址和账户。本机服务器通常为 127.0.0.1:25565；远程地址请选择自定义连接。填写与保存均不自动连接。</Text>
           {draft.server.auth === "microsoft" && !draft.operator?.port && <Alert tone="info" message="Microsoft 账户：可先设置 1024–65535 的空闲本机账户端口，保存后显式启动，再在运行机器打开授权页；保持 0 时请由本人查看私有原生设备授权日志。不要把授权码或令牌填到观战页面。" />}
           <Grid cols={2}>
             {field("server","host","服务器地址")}{field("server","port","端口","number")}
             {field("server","username",draft.server.auth === "microsoft" ? "Microsoft 账户标识（原生授权缓存按此隔离）" : "离线玩家昵称（1–16 位字母、数字或下划线）")}
             <Field label="认证方式"><Select value={draft.server.auth} options={[{value:"offline",label:"离线昵称"},{value:"microsoft",label:"Microsoft 正版账号授权"}]} onChange={v=>change("server","auth",v)} /></Field>
-            <Field label="请求 Java 版本"><Select value={draft.server.version} options={["1.21.1"]} onChange={v=>change("server","version",v)} /></Field>
+            <Field label="请求 Java 版本"><Select value={draft.server.version} options={["1.21.1","1.21.11"]} onChange={v=>change("server","version",v)} /></Field>
             {field("operator","port","本机账户端口（0 关闭；启用后下次显式启动生效）","number")}
             {field("server","login_config_file","私有游戏登录配置文件路径（不填密码）")}
             <Field label="运行方式"><Select value={draft.runtime.mode} options={[{value:"embedded",label:"Neko 嵌入式"},{value:"external",label:"独立运行观察入口"}]} onChange={v=>change("runtime","mode",v)} /></Field>

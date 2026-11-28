@@ -1,4 +1,5 @@
 import time
+from copy import deepcopy
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -185,3 +186,70 @@ def test_quick_start_never_invents_microsoft_identity_or_uses_remote_tts(plugin_
         assert isinstance(run_async(plugin_instance.quick_start(**args)), Err)
     saved.assert_not_awaited()
     started.assert_not_awaited()
+
+
+
+def test_blank_custom_host_never_falls_back_to_localhost(plugin_instance, run_async, monkeypatch):
+    saved, started = AsyncMock(), AsyncMock()
+    monkeypatch.setattr(plugin_instance, "save_settings", saved)
+    monkeypatch.setattr(plugin_instance, "start", started)
+    result = run_async(plugin_instance.quick_start(connection={"connection_type": "custom", "host": ""}))
+    assert result.error["code"] == "server_address_required"
+    saved.assert_not_awaited()
+    started.assert_not_awaited()
+
+
+def test_new_server_does_not_reuse_old_server_identity_or_login_file(plugin_instance, run_async, monkeypatch):
+    current = {"host": "old.test", "username": "PreviouslyUsed", "port": 25600,
+               "auth": "offline", "login_config_file": "old-login.json"}
+    monkeypatch.setattr(plugin_instance.config, "dump", AsyncMock(return_value={"server": current}))
+    saved = AsyncMock(return_value=Ok({"saved": True}))
+    started = AsyncMock(return_value=Ok({"accepted": True}))
+    monkeypatch.setattr(plugin_instance, "save_settings", saved)
+    monkeypatch.setattr(plugin_instance, "start", started)
+    result = run_async(plugin_instance.quick_start(connection={"host": "new.test", "version": "1.21.11"}))
+    assert result.value["accepted"]
+    connection = saved.call_args.args[0]["server"]
+    assert connection["port"] == 25565
+    assert connection["username"].startswith("Neko_")
+    assert connection["login_config_file"] == ""
+    assert connection["version"] == "1.21.11"
+
+
+def test_local_world_new_port_preserves_offline_name(plugin_instance, run_async, monkeypatch):
+    current = {"host": "127.0.0.1", "username": "SameLocalName", "port": 52178, "auth": "offline"}
+    monkeypatch.setattr(plugin_instance.config, "dump", AsyncMock(return_value={"server": current}))
+    saved = AsyncMock(return_value=Ok({"saved": True}))
+    started = AsyncMock(return_value=Ok({"accepted": True}))
+    monkeypatch.setattr(plugin_instance, "save_settings", saved)
+    monkeypatch.setattr(plugin_instance, "start", started)
+    result = run_async(plugin_instance.quick_start(connection={"host": "127.0.0.1", "port": 52180}))
+    assert result.value["accepted"]
+    assert saved.call_args.args[0]["server"]["username"] == "SameLocalName"
+
+
+
+def test_switching_routes_remembers_the_exact_previous_account(plugin_instance, run_async, monkeypatch):
+    official = {"host": "micro.kangqiang.site", "port": 25702, "username": "PreviouslyUsed",
+                "auth": "offline", "version": "1.21.1", "login_config_file": "original-login.json"}
+    raw = {"server": dict(official)}
+
+    async def update(patch):
+        for name, fields in patch.items():
+            raw.setdefault(name, {}).update(deepcopy(fields))
+
+    monkeypatch.setattr(plugin_instance.config, "dump", AsyncMock(side_effect=lambda: deepcopy(raw)))
+    monkeypatch.setattr(plugin_instance.config, "update", AsyncMock(side_effect=update))
+    monkeypatch.setattr(plugin_instance, "start", AsyncMock(return_value=Ok({"accepted": True})))
+    local = {"host": "127.0.0.1", "port": 52178, "username": "LocalNeko"}
+    assert run_async(plugin_instance.quick_start(connection=local)).value["accepted"]
+    assert raw["server"]["login_config_file"] == ""
+    assert raw["play_connections"]["qiandeng"]["username"] == "PreviouslyUsed"
+
+    return_to_official = {key: value for key, value in official.items() if key != "login_config_file"}
+    assert run_async(plugin_instance.quick_start(connection=return_to_official)).value["accepted"]
+    assert raw["server"]["login_config_file"] == "original-login.json"
+    assert raw["play_connections"]["vanilla"]["port"] == 52178
+
+    assert run_async(plugin_instance.quick_start(connection={**return_to_official, "username": "AnotherAccount"})).value["accepted"]
+    assert raw["server"]["login_config_file"] == ""
