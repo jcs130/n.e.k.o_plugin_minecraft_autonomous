@@ -15,7 +15,7 @@ const dirty = execFileSync('git', ['-C', checkout, 'status', '--porcelain', '--'
 if (dirty.trim()) throw Error('Build the original Git engine source, not a dirty working tree');
 const {build, version} = createRequire(import.meta.url)(esbuildModule);
 if (version !== '0.28.2') throw Error('Use the recorded esbuild 0.28.2');
-const allowedImports = ['agent-mc-world/extension','agent-mc-world/tactics','vec3','node:path','node:crypto','node:zlib'];
+const allowedImports = ['agent-mc-world/extension','agent-mc-world/tactics','agent-mc-world/context','vec3','node:path','node:crypto','node:zlib'];
 const result = await build({absWorkingDir:checkout, entryPoints:[entry], bundle:true, write:false,
   format:'esm', platform:'node', target:'node22', packages:'external', sourcemap:false, metafile:true});
 for (const name of Object.keys(result.metafile.inputs)) {

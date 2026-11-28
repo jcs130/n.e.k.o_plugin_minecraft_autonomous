@@ -98,6 +98,25 @@ def test_rpg_engine_uses_explicit_connection_and_same_backend(plugin_module, tmp
     assert module.default_bundled_extension_settings(custom)['server_extension']['engine_module'] == 'D:/custom/engine.mjs'
 
 
+def test_previous_managed_engine_follows_updated_backend(plugin_module, tmp_path, monkeypatch):
+    module, raw, _, installed, metadata = engine_fixture(plugin_module, tmp_path, monkeypatch)
+    old_module = tmp_path / "old" / "extensions/qiandengji/engine.mjs"
+    previous = {"engine_module": str(old_module),
+                "engine_sha256": "e80aa6f4d1afedbc8bc24074b83462c02fad720d6be19cf884a5694c788f7b85"}
+    saved = {**raw, "server_extension": previous}
+
+    effective = module.default_bundled_extension_settings(saved)["server_extension"]
+    assert effective["engine_module"] == str(installed)
+    assert effective["engine_sha256"] == metadata["engine"]["sha256"]
+    assert saved["server_extension"] == previous
+
+    custom = {**saved, "extension_pack": {"mode": "custom"}}
+    assert module.default_bundled_extension_settings(custom) == custom
+    installed.unlink()
+    with pytest.raises(module.BundledEngineUnavailable):
+        module.default_bundled_extension_settings(saved)
+
+
 def test_saved_managed_presentation_does_not_hide_missing_gameplay_engine(plugin_module,tmp_path,monkeypatch):
     module,raw,pack,installed,metadata = engine_fixture(plugin_module,tmp_path,monkeypatch)
     old = tmp_path / 'old/plugin/assets/server-extensions/qiandengji/presentation.mjs'

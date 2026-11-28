@@ -6,6 +6,7 @@ from pathlib import Path
 
 PACK = Path(__file__).resolve().parent / "assets" / "server-extensions" / "qiandengji"
 ENGINE_RELATIVE = "extensions/qiandengji/engine.mjs"
+PREVIOUS_ENGINE_SHA256 = "e80aa6f4d1afedbc8bc24074b83462c02fad720d6be19cf884a5694c788f7b85"
 
 
 class BundledEngineUnavailable(ValueError):
@@ -57,7 +58,7 @@ def _managed_presentation(explicit, status):
 def _managed_engine(explicit, status):
     value = explicit.get("engine_module")
     return (not value or (Path(value).parts[-3:] == ("extensions", "qiandengji", "engine.mjs")
-                         and explicit.get("engine_sha256") == status.get("sha256")))
+                         and explicit.get("engine_sha256") in (status.get("sha256"), PREVIOUS_ENGINE_SHA256)))
 
 
 def extension_mode(raw):

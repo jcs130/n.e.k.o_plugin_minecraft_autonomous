@@ -1,12 +1,12 @@
 [project]
 name = "minecraft_autonomous"
-version = "0.6.164"
+version = "0.6.165"
 description = "Thin N.E.K.O adapter for the host-neutral Minecraft autonomy framework"
 requires-python = ">=3.11"
 readme = "README.md"
 license = "Apache-2.0"
 dependencies = [
-  "agent-mc-autonomy @ git+https://github.com/jcs130/minecraft-ai-friend.git@a7f3d88a21c81276ea013e1f9bbbf4016511fe48#subdirectory=packages/agent-mc-autonomy",
+  "agent-mc-autonomy @ git+https://github.com/jcs130/minecraft-ai-friend.git@0ac2d3fdfde6d19d003fe14dba0f08c6702ffb9a#subdirectory=packages/agent-mc-autonomy",
   "mcp==2.1.1", "httpx>=0.27,<1", "openai>=1,<3"
 ]
 
@@ -16,7 +16,7 @@ Issues = "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/issues"
 
 [tool.neko.build]
 exclude_dirs = ["tests", "test", "_tests", "docs", "tasks", "release_tools", "local", "runtime", "logs", ".superpowers", "vendor/*/benchmarks", "vendor/*/samples", "vendor/*/[dD]emos"]
-exclude_files = ["AGENTS.md", "CONTRIBUTING.md", "ruff.toml", ".git", ".gitignore", ".gitattributes", ".editorconfig"]
+exclude_files = ["AGENTS.md", "CONTRIBUTING.md", "ruff.toml", ".git", ".gitignore", ".gitattributes", ".editorconfig", "test_localsystem.txt"]
 exclude = [".env", ".env.*", "*.key", "*.log", "*.local.toml", "*.bak", "*.orig", "*.rej", "vendor/annotated_types/test_cases.py", "vendor/win32com/servers/test_pycomtest.py", "vendor/win32/scripts/pywin32_testall.py"]
 
 # Official excludes run before includes. These suffix-complement patterns keep

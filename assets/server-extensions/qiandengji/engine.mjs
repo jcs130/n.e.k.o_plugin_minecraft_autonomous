@@ -141,12 +141,26 @@ function portableStorageMisuseNote(bot, steps) {
 }
 
 // integrations/qiandengji/engine/storage-trade-query.ts
-function stashTakeArrival(command) {
-  const request = /^\/mycli\s+arena\s+stash\s+take\s+([1-9]\d{0,2})(?:\s+([1-9]\d?))?$/i.exec(command.trim());
-  if (!request) return;
+var stashTakePrefix = /^\/mycli\s+arena\s+stash\s+take(?:\s|$)/i;
+function stashTakeArguments(command) {
+  const request = /^\/mycli[ \t]+arena[ \t]+stash[ \t]+take[ \t]+(\+?\d+)(?:[ \t]+(\+?\d+))?$/i.exec(command.trim());
+  if (!request) return null;
   const slot = Number(request[1]);
   const limit = Number(request[2] ?? 64);
-  if (slot > 540 || limit > 64) return;
+  return slot >= 1 && slot <= 540 && limit >= 1 && limit <= 64 ? { slot, limit } : null;
+}
+function stashTakeAdmission(steps) {
+  const index = steps.findIndex((step) => {
+    if (step.skill === "server_travel") return stashTakePrefix.test(step.command.trim());
+    return step.skill === "chat" && stashTakePrefix.test(step.text.trim()) && !stashTakeArguments(step.text);
+  });
+  if (index < 0) return null;
+  return `\u7B2C ${index + 1} \u6B65\u672A\u53D1\u9001\u3002\u7528 chat.text \u53D1\u9001 /mycli arena stash take <\u5168\u5C40\u7BB1\u69FD 1\u2013540> [\u6570\u91CF 1\u201364]\u3002\u5148\u7528 storage.stash \u67E5\u8BE2\u5BF9\u5E94\u9875\u7684\u7269\u54C1\u548C\u5B9E\u9645\u69FD\u53F7\u3002\u5F85\u5165\u7BB1\u7269\u54C1\u5148\u6309\u670D\u52A1\u7AEF\u56DE\u6267\u6253\u5F00\u6307\u5B9A\u9875\uFF0C\u518D\u67E5\u8BE2\u5DF2\u5165\u7BB1\u7684\u69FD\u53F7\u3002\u5F85\u9886\u5956\u52B1\u5217\u8868\u4E2D\u7684\u69FD\u53F7\u4E0D\u80FD\u7528\u4E8E\u53D6\u4E2A\u4EBA\u7BB1\u3002`;
+}
+function stashTakeArrival(command) {
+  const request = stashTakeArguments(command);
+  if (!request) return;
+  const { slot, limit } = request;
   return (line) => {
     if (line === `MC_STASH_TAKE slot=${slot} moved=0 reason=empty`) return { rejected: `\u4E2A\u4EBA\u7BB1\u69FD ${slot} \u5DF2\u7A7A\uFF0C\u672A\u53D6\u51FA\u7269\u54C1\u3002` };
     const receipt = /^MC_STASH_TAKE slot=(\d{1,3}) id=minecraft:([a-z0-9_]+) moved=(\d{1,2})$/.exec(line);
@@ -189,7 +203,7 @@ function itemRow(text2, marker) {
 var pendingTrialRewards = {
   id: "trial.rewards",
   argumentsSchema: noArgs,
-  maxReplyParts: 17,
+  maxReplyParts: 18,
   description: "\u53EA\u8BFB\u672C\u4EBA\u8BD5\u70BC\u5F85\u5165\u7BB1\u5956\u52B1\u4E0E\u53EF\u89C1\u7269\u54C1\u3002\u4E09\u4E2A\u8BA1\u6570\u5168\u96F6\u5373\u53EF\u7ED3\u675F\u672C\u6B21\u9886\u5956\u6838\u67E5\uFF1B\u5DF2\u5165\u7BB1\u7684\u5E93\u5B58\u53E6\u67E5 storage.overview\u3002\u67E5\u8BE2\u4E0D\u8017\u9B54\u529B\u3001\u4E0D\u6253\u5F00\u7A97\u53E3\u3002",
   command: (args) => args.length ? null : "/mycli arena rewards list",
   matchReply(text2, args, username, parts = []) {
@@ -197,7 +211,7 @@ var pendingTrialRewards = {
     const item = itemRow(text2, "MC_REWARD");
     if (item) {
       const slot = item.slot;
-      if (!integer(slot) || slot === 8 || slot > 17 || parts.some((p) => object(p) && p.slot === slot)) return null;
+      if (!integer(slot) || slot === 8 && item.id !== "minecraft:copper_ingot" || slot > 17 || parts.some((p) => object(p) && p.slot === slot)) return null;
       return { partial: true, data: item };
     }
     const summary = /^MC_REWARD_SUMMARY visible=(\d+) queuedBonus=(\d+) queuedPhotos=(\d+)$/.exec(text2);
@@ -944,7 +958,43 @@ var dungeonList = {
     return { data: value, ok: true };
   }
 };
+var journalArgument = {
+  type: "array",
+  minItems: 0,
+  maxItems: 2,
+  items: {
+    type: "string",
+    pattern: "^(?:guild|skills|[1-9][0-9]{0,2})$",
+    maxLength: 6,
+    description: "Optional group (guild|skills) and/or page (1-999). Omit for all groups. Copy a later page from the current journal nextCommand."
+  }
+};
+function journalDefinition(id2) {
+  return {
+    id: id2,
+    argumentsSchema: journalArgument,
+    description: 'Read the current private two-axis journal (guild/life and personal skills/foundation), at most seven rows per page. arguments:[] or ["guild"|"skills"] and optional ["page"]. Returns current itemId, sourceSystem/sourceId, runId, state, nextCommand and journalSubmitCommand. Old task-list emptiness is not evidence that no journal item exists. This query never accepts, submits, claims, learns or migrates; execute only an exact current nextCommand in a separate explicit body action, then read the journal again.',
+    command: (args) => {
+      if (args.length > 2 || args.some((arg) => !/^(?:guild|skills|[1-9][0-9]{0,2})$/.test(arg)) || args.length === 2 && !["guild", "skills"].includes(args[0])) return null;
+      const group = args.length === 2 ? ` ${args[0]}` : args.length === 1 && ["guild", "skills"].includes(args[0]) ? ` ${args[0]}` : "";
+      const page2 = args.length === 2 ? ` ${args[1]}` : args.length === 1 && /^[1-9]/.test(args[0]) ? ` ${args[0]}` : "";
+      return `/mycli journal${group}${page2} --json`;
+    },
+    matchReply: (text2, args, username) => {
+      if (!username || args.length > 2 || args.some((arg) => !/^(?:guild|skills|[1-9][0-9]{0,2})$/.test(arg)) || args.length === 2 && !["guild", "skills"].includes(args[0])) return null;
+      const value = payload(text2, "MC_JOURNAL");
+      if (!value || value.type !== "journal" || value.scope !== "self" || value.readOnly !== true || typeof value.subjectUuid !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value.subjectUuid) || !["all", "guild", "skills"].includes(String(value.filter)) || !Number.isSafeInteger(value.page) || Number(value.page) < 1 || !Number.isSafeInteger(value.pages) || Number(value.pages) < Number(value.page) || value.pageSize !== 7 || !Array.isArray(value.items) || value.items.length > 7 || !Array.isArray(value.groups) || value.groups.length !== 2 || !value.groups.includes("guild") || !value.groups.includes("skills")) return null;
+      const filter = args[0] && ["guild", "skills"].includes(args[0]) ? args[0] : "all";
+      const page2 = args.length === 2 ? Number(args[1]) : args.length === 1 && /^[1-9]/.test(args[0]) ? Number(args[0]) : 1;
+      if (value.filter !== filter || value.page !== page2) return null;
+      if (!value.items.every((item) => object3(item) && typeof item.itemId === "string" && /^[a-z_]{1,32}:[A-Za-z0-9_:.-]{1,100}$/.test(item.itemId) && ["guild", "skills"].includes(String(item.group)) && typeof item.sourceSystem === "string" && typeof item.sourceId === "string" && typeof item.state === "string" && typeof item.nextCommand === "string" && item.nextCommand.startsWith("/mycli "))) return null;
+      return { ok: true, data: value };
+    }
+  };
+}
 var sharedQueries = [
+  journalDefinition("journal"),
+  journalDefinition("tasks.overview"),
   guildExam("promotion"),
   guildExam("status"),
   guildExam("info"),
@@ -1014,10 +1064,10 @@ var sharedQueries = [
   ),
   nativeDefinition(
     "profession.status",
-    "Read the currently selected class; none means unselected, not an unavailable server. arguments:[] only. Never chooses, changes or resets a class.",
+    "Read the currently selected class; none means unselected, not an unavailable server. arguments:[] only. Preserves current authority metadata when present (for example VortexRPG). Never chooses, changes or resets a class.",
     "/mycli profession status",
     false,
-    (value) => typeof value.class === "string" && subjectId.test(value.class) && value.queryOnly === true && !Object.hasOwn(value, "authority")
+    (value) => typeof value.class === "string" && subjectId.test(value.class) && value.queryOnly === true && (!Object.hasOwn(value, "authority") || value.authority === "VortexRPG")
   ),
   nativeDefinition(
     "profession.info",
@@ -1229,7 +1279,8 @@ var AdventureGatherings = class {
 };
 
 // integrations/qiandengji/engine/world.ts
-import { ObservedCommandCatalog, serverQueryTool, bindEntityIdentityResolver } from "agent-mc-world/extension";
+import { ObservedCommandCatalog, serverQueryTool, bindEntityIdentityResolver, readWorldIdentity } from "agent-mc-world/extension";
+import { hasExecutionFeedbackContext } from "agent-mc-world/context";
 
 // integrations/qiandengji/engine/command-usage.ts
 function observedCommandUsage(text2, observedAt = Date.now()) {
@@ -1624,11 +1675,14 @@ var MaidState = class {
   notices = /* @__PURE__ */ new Set();
   scene;
   sceneChangedAt = 0;
+  captions = /* @__PURE__ */ new Map();
   reset() {
     this.rows.clear();
     this.notices.clear();
     this.scene = void 0;
     this.sceneChangedAt = 0;
+    for (const row of this.captions.values()) clearTimeout(row.timer);
+    this.captions.clear();
   }
   /** Source-owned supervisor summary; full inventory and task lists stay on demand. */
   summary() {
@@ -1729,6 +1783,72 @@ var MaidState = class {
       source: "qiandengji-maids/v1",
       observedAt: row.sampledAt
     };
+  }
+  /** Match the literal server presentation format against a current native entity.
+   * This is nearby scene speech, not an ASR transcript or a managed dialogue receipt. */
+  nearbySceneSpeech(notice, currentEntityUuids) {
+    const match = /^\[MC (?:系统|插件)\] \[附近·女仆\] ([^：:\r\n]{1,160})[：:]([^\r\n]{1,500})$/u.exec(notice);
+    if (!match) return;
+    const body = match[2].trim();
+    if (!body) return;
+    const known = [...this.rows.values()].filter((row) => row.name === match[1]);
+    if (known.length !== 1 || !currentEntityUuids.has(known[0].maidId.toLowerCase())) return;
+    const { maidId, name } = known[0];
+    return {
+      text: notice,
+      senderKey: `maid:${maidId}`,
+      meta: {
+        from: name,
+        body,
+        senderUuid: maidId,
+        senderKind: "companion",
+        channel: "public",
+        socialScope: "minecraft-server",
+        identityEvidence: "qiandengji-maids/v1",
+        chatChannel: "nearby",
+        chatScope: "same-world-range",
+        chatRoutingSource: "native-maid-scene"
+      }
+    };
+  }
+  speechKey(scope, dialogue) {
+    return JSON.stringify([scope, dialogue.senderKey, dialogue.meta.body]);
+  }
+  recentSpeech(key) {
+    const now = Date.now();
+    for (const [saved, row] of this.captions) if (!row.timer && now - row.at > 2500) this.captions.delete(saved);
+    return this.captions.get(key);
+  }
+  /** The server sends the public caption immediately before its typed dialogue
+   * receipt. Give that receipt preference without delaying normal HUD events. */
+  queueSceneSpeech(scope, dialogue, deliver) {
+    const key = this.speechKey(scope, dialogue), recent = this.recentSpeech(key);
+    if (recent) {
+      if (recent.kind === "typed") this.captions.delete(key);
+      return true;
+    }
+    if (this.captions.size >= 64) return false;
+    const row = { kind: "caption", at: Date.now() };
+    row.timer = setTimeout(() => {
+      if (this.captions.get(key) !== row) return;
+      delete row.timer;
+      row.at = Date.now();
+      deliver();
+    }, 400);
+    row.timer.unref();
+    this.captions.set(key, row);
+    return true;
+  }
+  acceptTypedSpeech(scope, dialogue) {
+    const key = this.speechKey(scope, dialogue), recent = this.recentSpeech(key);
+    if (recent?.kind === "caption") {
+      this.captions.delete(key);
+      if (!recent.timer) return false;
+      clearTimeout(recent.timer);
+      return true;
+    }
+    if (!recent && this.captions.size < 64) this.captions.set(key, { kind: "typed", at: Date.now() });
+    return true;
   }
   /** Legacy additive note; new consumers should carry identity() as the primary label. */
   identityNote(entityUuid) {
@@ -2933,9 +3053,29 @@ var AgentFriendProtection = class {
 
 // integrations/qiandengji/engine/bridge.ts
 import { BREAK_ACL_CHANNEL } from "agent-mc-world/extension";
+
+// integrations/qiandengji/engine/server-identity.ts
+var AGENT_IDENTITY_CHANNEL = "qiandengji:agent";
+function advertiseAgentIdentity(client, reconnect) {
+  try {
+    client.write("custom_payload", { channel: "minecraft:register", data: Buffer.from(AGENT_IDENTITY_CHANNEL, "utf8") });
+    client.write("custom_payload", {
+      channel: AGENT_IDENTITY_CHANNEL,
+      data: Buffer.from(JSON.stringify({ op: "identity", protocol: 1, control: "agent", reconnect }), "utf8")
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// integrations/qiandengji/engine/bridge.ts
 var QiandengjiBridge = class extends Bridge {
   constructor(options) {
-    super({ ...options, protectionChannel: BREAK_ACL_CHANNEL });
+    super({ ...options, protectionChannel: BREAK_ACL_CHANNEL, onServerReady(bot, reconnect) {
+      if (!advertiseAgentIdentity(bot._client, reconnect)) options.log.warn("Qiandengji identity announcement failed");
+      options.onServerReady?.(bot, reconnect);
+    } });
   }
   createProtectionPort(bot, reply) {
     return new AgentFriendProtection(bot, reply);
@@ -3014,6 +3154,20 @@ var ChatPolicyState = class {
     if (!p) return void 0;
     if (text2.startsWith(p.shout.prefix)) return { channel: "shout", scope: "server", source: "server-policy", observedAt: p.observedAt };
     return p.defaultChannel === "nearby" ? { channel: "nearby", scope: "same-world-range", radius: p.nearby.radius, source: "server-policy", observedAt: p.observedAt } : { channel: "server-default", scope: p.defaultChannel === "server" ? "server" : "unknown", source: "server-policy", observedAt: p.observedAt };
+  }
+  /** This server's rendered relay carries a display name, not a packet sender. */
+  nearbyRelay(text2) {
+    const policy = this.value;
+    if (!policy || policy.defaultChannel !== "nearby" || text2.length > 2048 || /[\r\n]/u.test(text2)) return null;
+    const line = text2.replace(/§[0-9a-fk-orx]/gi, "");
+    const match = /^\[附近\]\s+(?:\[[^\]\r\n]{1,80}\]\s+)?([\p{L}\p{N}_. -]{1,32})\s*[:：]\s*(\S.*)$/u.exec(line);
+    if (!match) return null;
+    const displayName = match[1].trim();
+    if (!/[\p{L}\p{N}_]/u.test(displayName)) return null;
+    return { displayName, body: match[2], shoutPrefix: policy.shout.prefix, radius: policy.nearby.radius };
+  }
+  nearbyRelayResponse(worldKey) {
+    return worldKey && this.value?.defaultChannel === "nearby" ? { worldKey, shoutPrefix: this.value.shout.prefix, channel: "nearby" } : null;
   }
   brief() {
     const p = this.value;
@@ -3257,6 +3411,7 @@ var QiandengjiEngine = class extends TacticalMinecraftWorld {
   /** Submission records for this connection; read the server for the actual effect. */
   maidWrites = /* @__PURE__ */ new Map();
   releaseMaidIdentity = null;
+  lastNearbyRelay;
   constructor(options) {
     const tactics = new CombatSpells(new combat_tactics_exports.CombatTacticBook(options.dataDir ? join(options.dataDir, "minecraft-combat-tactics.json") : null));
     super(options, tactics);
@@ -3267,6 +3422,34 @@ var QiandengjiEngine = class extends TacticalMinecraftWorld {
   }
   extensionInventoryArrival(command) {
     return stashTakeArrival(command);
+  }
+  emit(...args) {
+    const [type, text2, urgent, options] = args;
+    const bot = this.bridge?.bot;
+    const feedback = options?.meta?.executionFeedback;
+    if (type === "minecraft.chat" && options?.deliver !== false && bot?._client?.state === "play" && this.bridge?.connected && /^\[MC (?:系统|插件)\] \[附近·女仆\] /u.test(text2) && feedback?.kind === "server-message" && hasExecutionFeedbackContext(text2, feedback)) {
+      const world = readWorldIdentity(bot);
+      if (world.key) {
+        const current = new Set(Object.values(bot.entities).flatMap((entity) => entity.isValid !== false && typeof entity.uuid === "string" ? [entity.uuid.toLowerCase()] : []));
+        const dialogue = this.maids.nearbySceneSpeech(text2, current);
+        if (dialogue && this.maids.queueSceneSpeech(JSON.stringify([world.key, world.revision]), dialogue, () => {
+          const live = readWorldIdentity(bot);
+          if (!this.bridge?.connected || this.bridge.bot !== bot || bot._client?.state !== "play" || live.revision !== world.revision) return;
+          const { executionFeedback: _feedback, ...meta } = options?.meta ?? {};
+          super.emit(type, dialogue.text, urgent, {
+            ...options,
+            meta: {
+              ...meta,
+              ...dialogue.meta,
+              deliveryWorld: world,
+              deliveryWorldKey: world.key,
+              companionSpeech: { kind: "nearby-caption", originalSha256: feedback.originalSha256 }
+            }
+          }, dialogue.senderKey);
+        })) return;
+      }
+    }
+    super.emit(...args);
   }
   playerQueries;
   serverQueryDefinitions() {
@@ -3421,7 +3604,9 @@ var QiandengjiEngine = class extends TacticalMinecraftWorld {
     const notice = this.maids.observe(reply);
     if (notice?.publicDialogue) {
       const dialogue = notice.publicDialogue;
-      this.emit("minecraft.chat", dialogue.text, false, { meta: { ...dialogue.meta, ...notice.meta } }, dialogue.senderKey);
+      const world = readWorldIdentity(this.bridge?.bot), scope = JSON.stringify([world.key, world.revision]);
+      if (this.maids.acceptTypedSpeech(scope, dialogue))
+        this.emit("minecraft.chat", dialogue.text, false, { meta: { ...dialogue.meta, ...notice.meta } }, dialogue.senderKey);
     } else if (notice) this.emit("minecraft.event", notice.text, notice.urgent, { meta: notice.meta });
   }
   castSpell(args) {
@@ -3503,6 +3688,38 @@ var QiandengjiEngine = class extends TacticalMinecraftWorld {
   extensionLowHealth(bot) {
     this.tryAutoSelfHeal(bot);
   }
+  extensionServerRelayedChat(text2) {
+    const bot = this.bridge?.bot;
+    if (!bot) return false;
+    const relay = this.chatPolicy.nearbyRelay(text2);
+    if (!relay) return false;
+    const world = readWorldIdentity(bot);
+    if (!world.key) return false;
+    const username = this.chatName();
+    const ownDisplay = bot.players?.[username]?.displayName?.toString().replace(/§[0-9a-fk-orx]/gi, "").trim();
+    const label = relay.displayName.toLowerCase();
+    if ([username, bot.username, ownDisplay].some((name) => name?.toLowerCase() === label)) return true;
+    const at = performance.now();
+    const previous = this.lastNearbyRelay;
+    if (previous?.text === text2 && previous.worldRevision === world.revision && previous.connectionGeneration === this.connectionGeneration && at - previous.at < 500) return true;
+    this.lastNearbyRelay = { text: text2, worldRevision: world.revision, connectionGeneration: this.connectionGeneration, at };
+    this.emit("minecraft.chat", `[MC \u9644\u8FD1\u8F6C\u8FF0\uFF0C\u8EAB\u4EFD\u672A\u786E\u8BA4] ${relay.displayName}\uFF1A${relay.body}`, true, {
+      meta: {
+        channel: "nearby",
+        chatChannel: "nearby",
+        chatScope: "same-world-range",
+        chatRadius: relay.radius,
+        chatRoutingSource: "server-nearby-relay",
+        socialScope: "minecraft-server",
+        relaySpeakerDisplayName: relay.displayName,
+        body: relay.body,
+        relayShoutPrefix: relay.shoutPrefix,
+        deliveryWorld: world,
+        deliveryWorldKey: world.key
+      }
+    });
+    return true;
+  }
   extensionMessage(text2) {
     if (parseProtectReply(text2)) return true;
     const bot = this.bridge?.bot;
@@ -3559,6 +3776,7 @@ var QiandengjiEngine = class extends TacticalMinecraftWorld {
     const facts = super.requestFacts();
     if (!facts) return facts;
     const observations = facts.decision?.state?.identityObservations;
+    const nearbyRelayResponse = this.bridge?.connectionState?.ready ? this.chatPolicy.nearbyRelayResponse(readWorldIdentity(this.bridge.bot).key) : null;
     const currentTrial = this.trialSearch.facts();
     const preparedSkillWithoutRule = this.preparedRuleGap();
     const gatherings = currentTrial.fresh && "participant" in currentTrial && currentTrial.participant ? [] : this.adventureGatherings?.current() ?? [];
@@ -3581,6 +3799,7 @@ var QiandengjiEngine = class extends TacticalMinecraftWorld {
       ...facts.decision ? { decision: { ...facts.decision, state: {
         ...facts.decision.state,
         currentTrial,
+        ...nearbyRelayResponse ? { nearbyRelayResponse } : {},
         ...preparedSkillWithoutRule ? { preparedSkillWithoutRule } : {},
         ...gatherings.length ? { adventureGatherings: gatherings } : {},
         ...companions.length ? { companionObservations: companions } : {}
@@ -3696,7 +3915,7 @@ var QiandengjiEngine = class extends TacticalMinecraftWorld {
     });
   }
   extensionAdmission(steps) {
-    return portableStorageMisuseNote(this.bridge?.bot ?? null, steps);
+    return stashTakeAdmission(steps) ?? portableStorageMisuseNote(this.bridge?.bot ?? null, steps);
   }
   createBridge(options) {
     return new QiandengjiBridge(options);

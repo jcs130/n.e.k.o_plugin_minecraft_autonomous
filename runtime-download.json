@@ -2,9 +2,9 @@
   "schema": "agent-mc-runtime-download/v1",
   "platform": "win32",
   "architecture": "x64",
-  "url": "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/download/v0.6.164/NEKO-MC-0.6.164-Resources-Windows.zip",
-  "bytes": 425107051,
-  "sha256": "d0c1729b8e1b1fc80368d006a3dc6308d1e197fe0f420fb544ade55a113537a6",
-  "manifest_sha256": "727703700c37ff8d77438af8b53d6745eb4f45229b6d520a775b255f9444e9c5",
-  "expanded_bytes": 1793262168
+  "url": "https://github.com/jcs130/n.e.k.o_plugin_minecraft_autonomous/releases/download/v0.6.165/NEKO-MC-0.6.165-Resources-Windows.zip",
+  "bytes": 430514695,
+  "sha256": "7c5811b2a66f3d9014fa6f713839627002f971beba14ca7c204b526fcbd6c6e3",
+  "manifest_sha256": "5e8d12cc29bc986f73a90146d6838046eee96a5ef4bcd989ee6d4e63fced5af6",
+  "expanded_bytes": 1882184729
 }
