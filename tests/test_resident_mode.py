@@ -5,6 +5,7 @@ import json
 import threading
 import time
 from contextlib import nullcontext
+from io import BytesIO
 from types import SimpleNamespace
 from urllib.error import HTTPError
 from uuid import uuid4
@@ -179,6 +180,82 @@ def test_desktop_play_receipt_must_match_original_role_mode_and_id(run_async, re
         assert calls == [("play-status", {"requestId": original["requestId"]})] * 4
 
     run_async(exercise())
+
+
+@pytest.mark.parametrize("binding", ["matching", "other-character", "other-mode"])
+@pytest.mark.parametrize("status, reason", [(401, "LOGIN_REQUIRED"), (403, "BROWSER_SESSION_REQUIRED")])
+def test_legacy_portal_verifies_device_and_preserves_grant(run_async, resident, binding, status, reason):
+    plugin, session, _, connection = resident
+    character = session["resident"]
+    original = {"requestId": str(uuid4()), "characterId": character["characterId"], "mode": "maid"}
+    plugin._write_desktop_play(original, "running")
+    credential = {"character": original["characterId"], "device": str(uuid4()), "proof": "fixture-proof",
+                  "accessToken": "fixture-access", "refreshToken": "fixture-refresh",
+                  "expiresAt": int(time.time() * 1000) + 60_000}
+    calls, saves = [], []
+    controller = "this_device"
+
+    def request(url, payload, token, *, extra_headers):
+        nonlocal controller
+        op = url.rsplit("/", 1)[-1]
+        calls.append(op)
+        assert token == credential["accessToken"]
+        if op == "status":
+            if controller is None and binding == "other-character":
+                return {"character": {"characterId": str(uuid4())}, "controller": None}
+            if controller is None and binding == "other-mode":
+                return {"character": {**character, "bodyKind": "numen"}, "controller": None}
+            return {"character": character, "controller": controller, "canStart": controller is None}
+        if op == "stop":
+            assert payload == {"requestId": original["requestId"]}
+            controller = None
+            return {"stopped": True}
+        assert op == "play-status"
+        raise HTTPError(url, status, "Denied", {}, BytesIO(json.dumps({"error": {"reason": reason}}).encode()))
+
+    vault = SimpleNamespace(lock=nullcontext, load=lambda: dict(credential), save=saves.append)
+    plugin._desktop_client = connection.DesktopDevice(plugin.portal, vault, request)
+    result = run_async(plugin.desktop_device("stop", plugin.panel_token))
+    if binding == "matching":
+        assert result.value == {"stopped": True, "requestId": original["requestId"], "controllerReleased": True}
+        assert calls == ["status", "stop", "play-status", "status", "status"]
+        assert not plugin._resident_blocks_player()
+    else:
+        assert result.error["code"] == "desktop_play_unconfirmed"
+        assert plugin._desktop_play_record()["requestId"] == original["requestId"]
+        assert calls == ["status", "stop", "play-status", "status"]
+    assert not saves
+
+
+@pytest.mark.parametrize("status, reason, should_refresh", [
+    (401, "DESKTOP_AUTHORIZATION_ENDED", True), (401, "OTHER_AUTH_ERROR", False), (403, "SCOPE_REQUIRED", False),
+])
+def test_desktop_receipt_does_not_confuse_auth_failure_with_unsupported(run_async, resident, status, reason, should_refresh):
+    plugin, session, _, connection = resident
+    original = {"requestId": str(uuid4()), "characterId": session["resident"]["characterId"], "mode": "maid"}
+    plugin._write_desktop_play(original, "starting")
+    credential = {"character": original["characterId"], "device": str(uuid4()), "proof": "fixture-proof",
+                  "accessToken": "fixture-access", "refreshToken": "fixture-refresh",
+                  "expiresAt": int(time.time() * 1000) + 60_000}
+    calls, saves = [], []
+
+    def request(url, payload, token, *, extra_headers):
+        op = url.rsplit("/", 1)[-1]
+        calls.append(op)
+        detail = reason if op == "play-status" else "DESKTOP_AUTHORIZATION_ENDED"
+        raise HTTPError(url, status, "Denied", {}, BytesIO(json.dumps({"error": {"reason": detail}}).encode()))
+
+    vault = SimpleNamespace(lock=nullcontext, load=lambda: dict(credential), save=lambda row: saves.append(dict(row)))
+    plugin._desktop_client = connection.DesktopDevice(plugin.portal, vault, request)
+    result = run_async(plugin.desktop_device("verify", plugin.panel_token))
+    assert result.error["code"] != "desktop_receipt_unavailable"
+    assert plugin._desktop_play_record()["requestId"] == original["requestId"]
+    if should_refresh:
+        assert calls == ["play-status", "refresh"]
+        assert "refreshToken" not in saves[-1]
+    else:
+        assert calls == ["play-status"]
+        assert not saves
 
 
 def test_desktop_refresh_reuses_original_rotation_after_network_failure(resident):

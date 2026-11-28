@@ -22,6 +22,7 @@ from .neko_resident_connection import (
     request_json,
     write_resident_state,
 )
+from .neko_resident_device import DesktopPlayReceiptUnavailable
 from .qiandengji_panel import require_idle
 
 TURN_ID = {"type": "string", "description": "本次千灯纪事件给出的回合 ID。"}
@@ -207,11 +208,14 @@ class ResidentMode(ResidentConnection):
             return self._desktop_pending_error()
         try:
             result = await asyncio.to_thread(self._desktop().authorized, "play-status", {"requestId": request_id})
-        except HTTPError as error:
-            if error.code in (404, 405):
-                return Err({"code": "desktop_receipt_unavailable", "requestId": request_id,
-                            "message": "当前官网版本尚未提供原游玩回执查询，请保留编号。"})
-            raise
+        except (DesktopPlayReceiptUnavailable, HTTPError) as error:
+            if isinstance(error, HTTPError) and error.code not in (404, 405):
+                raise
+            if isinstance(error, DesktopPlayReceiptUnavailable) and (error.character_id != row["characterId"]
+                    or (row.get("mode") and error.mode != row["mode"])):
+                return self._desktop_pending_error()
+            return Err({"code": "desktop_receipt_unavailable", "requestId": request_id,
+                        "message": "当前官网版本尚未提供原游玩回执查询，请保留编号。"})
         if not isinstance(result, dict):
             return self._desktop_pending_error()
         outcome = result.get("status")
@@ -286,7 +290,8 @@ class ResidentMode(ResidentConnection):
         if not await self._stop_resident_control():
             return Err({"code": "resident_stop_pending", "message": "正在等候上一条桌面请求结束。"})
         current = await self._refresh_desktop()
-        if not current or current["character"].get("characterId") != row["characterId"]:
+        if (not current or current["character"].get("characterId") != row["characterId"]
+                or (row.get("mode") and current["character"].get("bodyKind") != row["mode"])):
             return self._desktop_pending_error()
         device = self._desktop()
         self._write_desktop_play(row, "stopping")
@@ -304,7 +309,9 @@ class ResidentMode(ResidentConnection):
         # Older portals can acknowledge the stop and show the device is no
         # longer controlling, but cannot prove the original request terminal.
         current = await self._refresh_desktop()
-        if not current or current.get("controller") == "this_device":
+        if (not current or current.get("controller") == "this_device"
+                or current["character"].get("characterId") != row["characterId"]
+                or (row.get("mode") and current["character"].get("bodyKind") != row["mode"])):
             return Err({"code": "desktop_stop_unconfirmed", "message": "请按原请求核对官网控制端。"})
         self._write_desktop_play(row, "stopped")
         self._desktop_active_request = None

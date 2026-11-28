@@ -22,6 +22,30 @@ SECRET = re.compile(r"[A-Za-z0-9_-]{43}\Z")
 IDENTITY = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z")
 
 
+class DesktopPlayReceiptUnavailable(RuntimeError):
+    """The authorized device is valid on a portal without play receipts."""
+
+    def __init__(self, character_id, mode):
+        super().__init__("desktop_play_receipt_unavailable")
+        self.character_id, self.mode = character_id, mode
+
+
+def _portal_error_reason(error):
+    if error.fp is None:
+        return None
+    try:
+        with error:
+            raw = error.read(4097)
+        if len(raw) <= 4096:
+            result = json.loads(raw)
+            detail = result.get("error") if isinstance(result, dict) else None
+            if isinstance(detail, dict):
+                return detail.get("reason")
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 class WindowsCredentials:
     def __init__(self):
         import ctypes as c
@@ -127,6 +151,32 @@ class DesktopDevice:
     def _post(self, data, op, payload, token=None):
         return self.request(self.portal + API + "/" + op, payload, token, extra_headers=self.headers(data))
 
+    def _authorized_post(self, row, op, payload):
+        token = row["accessToken"]
+        try:
+            return self._post(row, op, payload, token)
+        except HTTPError as error:
+            if op != "play-status" or error.code not in (401, 403):
+                raise
+            reason = _portal_error_reason(error)
+            if (error.code, reason) not in ((401, "LOGIN_REQUIRED"), (403, "BROWSER_SESSION_REQUIRED")):
+                if error.code == 403 or reason == "DESKTOP_AUTHORIZATION_ENDED":
+                    raise
+                raise RuntimeError("desktop_play_receipt_auth_unconfirmed") from None
+            # Older portals send unrecognized paths to browser authentication.
+            # Confirm the saved device against the known route before falling back.
+            try:
+                status = self._post(row, "status", {}, token)
+            except HTTPError as status_error:
+                if status_error.code == 401 and _portal_error_reason(status_error) == "DESKTOP_AUTHORIZATION_ENDED":
+                    raise
+                raise RuntimeError("desktop_play_receipt_auth_unconfirmed") from None
+            character = status.get("character") if isinstance(status, dict) else None
+            if (not isinstance(character, dict) or character.get("characterId") != row.get("character")
+                    or character.get("bodyKind") not in ("maid", "numen")):
+                raise RuntimeError("desktop_play_receipt_auth_unconfirmed") from None
+            raise DesktopPlayReceiptUnavailable(character["characterId"], character["bodyKind"]) from None
+
     def settings(self):
         with self.vault.lock():
             return self.vault.load()
@@ -167,7 +217,7 @@ class DesktopDevice:
             try:
                 if row.get("expiresAt", 0) > time.time() * 1000 + 5_000 and not row.get("rotationId"):
                     try:
-                        return self._post(row,op,payload,row["accessToken"])
+                        return self._authorized_post(row, op, payload)
                     except HTTPError as err:
                         if err.code != 401:
                             raise
@@ -177,7 +227,7 @@ class DesktopDevice:
                 row = self._credentials(row,result)
                 row.pop("rotationId")
                 self.vault.save(row)
-                return self._post(row,op,payload,row["accessToken"])
+                return self._authorized_post(row, op, payload)
             except HTTPError as err:
                 if err.code == 401:
                     self._erase(row)
