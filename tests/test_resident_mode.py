@@ -33,7 +33,8 @@ def offered_turn(session):
     }
 
 
-def test_desktop_device_reads_first_then_uses_the_same_start_id_on_stop(monkeypatch, run_async, resident):
+@pytest.mark.parametrize("original_receipt", [False, True])
+def test_desktop_device_reads_first_then_uses_the_same_start_id_on_stop(monkeypatch, run_async, resident, original_receipt):
     plugin, session, mode, _ = resident
     character = {**session["resident"], "bodyId": str(uuid4())}
     session["resident"] = character
@@ -52,6 +53,11 @@ def test_desktop_device_reads_first_then_uses_the_same_start_id_on_stop(monkeypa
             assert plugin._desktop_play_record()["phase"] == "starting"
             controller = "this_device"
             return session
+        if op == "play-status":
+            if not original_receipt:
+                raise HTTPError(plugin.portal, 404, "Not Found", {}, None)
+            return {"requestId": payload["requestId"], "characterId": character["characterId"], "mode": "maid",
+                    "status": "stopped", "updatedAt": int(time.time() * 1000), "reason": "USER_STOPPED"}
         assert op == "stop"
         controller = None
         return {"stopped": True}
@@ -78,7 +84,10 @@ def test_desktop_device_reads_first_then_uses_the_same_start_id_on_stop(monkeypa
         assert body_calls == ["begin", "poll"]
         assert (await plugin.desktop_device("start", token, mode="maid")).error["code"] == "desktop_request_pending"
         stop = await plugin.desktop_device("stop", token)
-        assert stop.value == {"stopped": True, "requestId": start.value["requestId"], "controllerReleased": True}
+        expected = {"stopped": True, "requestId": start.value["requestId"], "controllerReleased": True}
+        if original_receipt:
+            expected["receiptStatus"] = "stopped"
+        assert stop.value == expected
         assert [p["requestId"] for op, p in device_calls if op in ("start", "stop")] == [start.value["requestId"]] * 2
         assert not plugin._resident_blocks_player()
 

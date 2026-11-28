@@ -291,8 +291,20 @@ class ResidentMode(ResidentConnection):
         device = self._desktop()
         self._write_desktop_play(row, "stopping")
         result = await asyncio.to_thread(device.authorized, "stop", {"requestId": row["requestId"]})
+        if not isinstance(result, dict) or result.get("stopped") is not True:
+            return self._desktop_pending_error()
+        receipt = await self._verify_desktop_play()
+        if isinstance(receipt, Ok):
+            if receipt.value["status"] not in ("stopped", "expired", "rejected"):
+                return self._desktop_pending_error()
+            return Ok({"stopped": True, "requestId": row["requestId"], "controllerReleased": True,
+                       "receiptStatus": receipt.value["status"]})
+        if receipt.error.get("code") != "desktop_receipt_unavailable":
+            return receipt
+        # Older portals can acknowledge the stop and show the device is no
+        # longer controlling, but cannot prove the original request terminal.
         current = await self._refresh_desktop()
-        if not isinstance(result, dict) or result.get("stopped") is not True or not current or current.get("controller") == "this_device":
+        if not current or current.get("controller") == "this_device":
             return Err({"code": "desktop_stop_unconfirmed", "message": "请按原请求核对官网控制端。"})
         self._write_desktop_play(row, "stopped")
         self._desktop_active_request = None
