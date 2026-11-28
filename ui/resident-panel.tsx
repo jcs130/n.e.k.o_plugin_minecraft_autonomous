@@ -24,6 +24,10 @@ const voiceStates: Record<string, string> = {
   failed: "播报失败", skipped: "已跳过播报", cancelled: "播报已取消", unknown: "待核实", unavailable: "语音暂不可用",
 }
 type State = { role?: string, localRoles?: string[], resident?: string, connected?: boolean, authorized?: boolean,
+  desktop?: {status: string, character?: Resident & {bodyId?: string}, controller?: string, controllerName?: string,
+    canStart?: boolean, pendingRequestId?: string, role?: string, activeKind?: string, modes?: string[]},
+  desktopPending?: boolean, desktopCode?: string, desktopUrl?: string,
+  desktopPlay?: {phase: string, requestId?: string},
   bodyReadable?: boolean, bodyView?: {available: boolean, characters: Body[]},
   bodyReceipt?: Receipt,
   bodyDeviceAvailable?: boolean, bodyDevice?: {state: string, pairId?: string, characterId?: string, expiresAt?: number},
@@ -54,13 +58,17 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
   const canShowDevice = !!state.bodyDeviceAvailable && !!state.bodyView?.available &&
     (!!character || state.bodyDevice?.state === "pending" || state.bodyDevice?.state === "paired")
   const checking = useRef(false)
-  const localRole = (role ?? state.role) || roles[0] || ""
+  const localRole = (role ?? state.desktop?.role ?? state.role) || roles[0] || ""
   const selected = residentSelection(residents, id, state.characterId, state.bodyKind)
   const bodyKind = bodies.includes(kind) ? kind : bodies[0]
   const chosenName = name ?? localRole
   const phase = state.control?.phase || "stopped"
   const health = state.control?.health || "idle"
   const controlling = phase !== "stopped"
+  const desktopBody = state.desktop?.character
+  const canPlayDesktop = (desktopBody?.bodyKind === "maid" || desktopBody?.bodyKind === "numen") &&
+    state.desktop?.canStart && state.desktop.activeKind === desktopBody.bodyKind && state.desktop.controller !== "this_device" && !!localRole &&
+    !controlling && !state.control?.playerBusy && !state.desktopPending
   const voice = state.control?.voice
   const offeredVoiceModes = voice?.outputModes.map(mode => voiceModes[mode]).filter(Boolean) || []
   const toast = useToast()
@@ -107,11 +115,47 @@ export default function ResidentPanel(props: PluginSurfaceProps<State>) {
   }, [state.browserCode, state.authorized, state.uiToken, props.api.refresh, busy])
 
   useEffect(() => {
+    if (!state.desktopPending || busy) return
+    return startPanelRefresh({document, interval: 3000, refresh: async () => {
+      await props.api.call("desktop_device", {op: "complete", uiToken: state.uiToken})
+      await props.api.refresh()
+    }})
+  }, [state.desktopPending, state.uiToken, props.api.refresh, busy])
+
+  useEffect(() => {
     if (!controlling || busy) return
     return startPanelRefresh({refresh: props.api.refresh, document, interval: 6000})
   }, [props.api.refresh, controlling, busy])
 
   return <Page title="连接千灯纪居民"><Stack gap={14}>
+    <Card title="登录千灯纪"><Stack gap={10}>
+      <Text>在这台电脑首次使用时，去官网选择角色并确认。已保存的授权会在打开面板时恢复。</Text>
+      {state.desktopPending && <Text>{state.desktopCode ? `在另一台设备确认时输入 ${state.desktopCode}` :
+        "请在系统浏览器确认授权，然后返回 N.E.K.O.。"}</Text>}
+      {state.desktopUrl && <Field label="在另一台设备打开的地址"><Input value={state.desktopUrl} onChange={() => {}} /></Field>}
+      {desktopBody && <Text>{desktopBody.name} · {label(desktopBody.bodyKind)}
+        {state.desktop?.controllerName ? ` · 控制端：${state.desktop.controllerName}` : ""}</Text>}
+      {state.desktop?.pendingRequestId && <Text>原换身请求 · {state.desktop.pendingRequestId}</Text>}
+      {state.desktopPlay && <Text>{state.desktopPlay.phase === "running" ? "本机已确认的游玩请求" : "原游玩请求待核对"}
+        {state.desktopPlay.requestId ? ` · ${state.desktopPlay.requestId}` : ""}</Text>}
+      {state.desktop?.status === "reauthorize" && <Text>本机设备授权已失效，请重新登录并选择原角色。</Text>}
+      {state.desktop?.status === "unavailable" && <Text>暂未读到官网角色状态，刷新后可核对原角色。</Text>}
+      <Inline>
+        {state.desktopPlay?.phase === "running" ? <Button tone="danger" disabled={busy || !state.uiToken}
+          onClick={() => call("desktop_device", {op: "stop"})}>停止游玩并释放控制</Button> :
+          desktopBody && !state.desktopPlay && <Button tone="primary" disabled={busy || !state.uiToken || !canPlayDesktop}
+            onClick={() => call("desktop_device", {op: "start", mode: desktopBody.bodyKind, localRole})}>开始游玩</Button>}
+        <Button tone="primary" disabled={busy || controlling || !state.uiToken || state.desktopPending || !!state.desktopPlay}
+          onClick={() => call("desktop_device", {op: "login"})}>{state.desktop?.character ? "重新选择角色" : "官网登录并选择角色"}</Button>
+        <Button disabled={busy || controlling || !state.uiToken || state.desktopPending || !!state.desktopPlay}
+          onClick={() => call("desktop_device", {op: "cross-device"})}>在另一台设备确认</Button>
+        <Button disabled={busy || !state.uiToken} onClick={() => call("desktop_device", {op: "refresh"})}>刷新设备状态</Button>
+        {state.desktopPlay?.requestId && <Button disabled={busy || !state.uiToken}
+          onClick={() => call("desktop_device", {op: "verify"})}>核对原游玩回执</Button>}
+        {(desktopBody || state.desktopPlay) && <FileDownload href="https://mc.kangqiang.site/resident-connect.html?flow=bodies"
+          label="官网查看原控制端或换身" openExternal />}
+      </Inline>
+    </Stack></Card>
     <Card title={state.connected ? `${state.role} → ${state.resident}` : "使用千灯纪女仆或 Numen"}><Stack gap={10}>
       <Text>授权后选择已有的车万女仆或 Numen，绑定完成后点「开始桌面控制」。居民由千灯纪执行游戏动作，使用你选的 N.E.K.O. 角色处理回合。</Text>
       <Inline>

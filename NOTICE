@@ -18,3 +18,6 @@ The resident website pairing, turn adapter, and hosted panel are adapted from
 https://github.com/jcs130/minecraft-ai-friend at bf913815,
 packages/agent-harness-py/integrations/neko_resident.
 Its MIT notice is preserved in LICENSE-Qiandengji-Resident.txt.
+The desktop device authorization client comes from the official Qiandengji
+resident 0.4.0 package published at https://mc.kangqiang.site/downloads.html.
+Package SHA-256: e52e4e5bb19896f4f877a6084234f1d21d84bec4035aee5e6a2946d5b35f0519.

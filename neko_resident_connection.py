@@ -19,6 +19,8 @@ from uuid import UUID, uuid4
 
 from plugin.sdk.plugin import Err, Ok, plugin_entry, ui
 
+from .neko_resident_device import DesktopDevice, DeviceVault
+
 PORTAL = "https://mc.kangqiang.site"
 SECRET = {"type": "string", "writeOnly": True}
 
@@ -88,8 +90,8 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
-def request_json(url, payload=None, token=None, *, timeout=8):
-    headers = {"Content-Type": "application/json"}
+def request_json(url, payload=None, token=None, *, timeout=8, extra_headers=None):
+    headers = {"Content-Type": "application/json", **(extra_headers or {})}
     if token:
         headers["Authorization"] = "Bearer " + token
     request = Request(url, data=json.dumps(payload).encode() if payload is not None else None, headers=headers)
@@ -151,6 +153,87 @@ class ResidentConnection:
     _body_device_pairing = None
     _body_device_character = None
     _body_device_grant = None
+    _desktop_client = None
+    _desktop_view = None
+
+    def _desktop(self):
+        if self._desktop_client is None:
+            vault = DeviceVault(self.data_path("desktop-device.lock"), self.portal)
+            self._desktop_client = DesktopDevice(self.portal, vault, request_json)
+        return self._desktop_client
+
+    async def _refresh_desktop(self):
+        device = self._desktop()
+        record = await asyncio.to_thread(device.settings)
+        if not record.get("refreshToken"):
+            self._desktop_view = {"status": "reauthorize" if record.get("character") else "unlinked"}
+            return None
+        try:
+            state = await asyncio.to_thread(device.authorized, "status", {})
+            character = state["character"]
+            if character["characterId"] != record["character"] or str(UUID(record["character"])) != record["character"]:
+                raise ValueError("desktop_character_changed")
+            self._desktop_view = {
+                "status": "authorized", "character": {key: character.get(key) for key in
+                    ("id", "characterId", "name", "bodyId", "bodyKind")}, "canStart": state.get("canStart") is True,
+                "controller": state.get("controller"), "controllerName": state.get("controllerName"),
+                "pendingRequestId": state.get("pendingRequestId"), "role": record.get("localRole"),
+                "activeKind": state.get("activeKind"), "modes": [kind for kind in BODY_KINDS if kind in state.get("modes", [])],
+            }
+            return state
+        except HTTPError as error:
+            self._desktop_view = {"status": "reauthorize" if error.code == 401 else "unavailable"}
+        except (OSError, TypeError, ValueError, KeyError):
+            self._desktop_view = {"status": "unavailable"}
+        return None
+
+    @ui.action(id="desktop_device", label="千灯纪设备授权", refresh_context=True)
+    @plugin_entry(id="desktop_device", name="千灯纪设备授权", kind="service", timeout=30,
+                  input_schema={"type": "object", "properties": {
+                      "op": {"type": "string", "enum": ["login", "cross-device", "complete", "refresh", "start", "stop", "verify"]},
+                      "localRole": {"type": "string", "maxLength": 128},
+                      "mode": {"type": "string", "enum": ["maid", "numen"]}, "uiToken": SECRET},
+                      "required": ["op", "uiToken"], "additionalProperties": False})
+    async def desktop_device(self, op, uiToken, localRole="", mode="", **_):
+        if not self._from_panel(uiToken):
+            return Err({"code": "resident_panel_required", "message": "请从千灯纪居民面板操作。"})
+        if self.pair_lock.locked() and op == "complete":
+            return Ok({"pending": True})
+        async with self.pair_lock:
+            device = self._desktop()
+            try:
+                if op == "refresh":
+                    await self._refresh_desktop()
+                    return Ok({"status": self._desktop_view["status"]})
+                if op == "start":
+                    return await self._start_desktop_resident(localRole, mode)
+                if op == "stop":
+                    return await self._stop_desktop_resident()
+                if op == "verify":
+                    return await self._verify_desktop_play()
+                if self._resident_phase != "stopped":
+                    return self._resident_pairing_blocked()
+                if self._desktop_play_record():
+                    return Err({"code": "desktop_request_pending", "message": "请先核对本机原控制请求。"})
+                if op in ("login", "cross-device"):
+                    url = await device.start(op == "cross-device")
+                    return Ok({"opened": await asyncio.to_thread(webbrowser.open, url)})
+                if op == "complete":
+                    if not await device.complete():
+                        return Ok({"pending": True})
+                    await self._refresh_desktop()
+                    return Ok({"status": self._desktop_view["status"]})
+            except HTTPError as error:
+                if op == "complete" and error.code in (400, 401, 404):
+                    device.close_login()
+                if op in ("start", "stop") and self._desktop_play_record():
+                    return self._desktop_pending_error()
+                return Err({"code": "desktop_portal_unavailable", "message": "官网未确认设备授权，请刷新状态。"})
+            except (ImportError, OSError, RuntimeError, TypeError, ValueError, KeyError):
+                if op in ("start", "stop") and self._desktop_play_record():
+                    return self._desktop_pending_error()
+                return Err({"code": "desktop_authorization_unavailable", "message": "暂未完成设备授权，请检查官网状态和系统凭据存储。"})
+        return Err({"code": "invalid_desktop_operation"})
 
     @staticmethod
     def _body_device_provider():
@@ -333,11 +416,22 @@ class ResidentConnection:
         role, session = self._read_resident_binding()
         resident = (session or {}).get("resident", {})
         login = self.website_login_state()
+        if self._desktop_view is None and self.data_path("desktop-device.lock").is_file():
+            try:
+                await self._refresh_desktop()
+            except (ImportError, OSError, RuntimeError, TypeError, ValueError):
+                self._desktop_view = {"status": "unavailable"}
+        device_login = self._desktop_client.login if self._desktop_client is not None else None
+        desktop_play = self._desktop_play_record()
         names, current = await asyncio.to_thread(self.local_characters)
         return {"role": role or getattr(self.ctx, "current_lanlan", "") or current,
                 "localRoles": names, "authorized": login["authorized"], "catalog": self.catalog or {},
                 "bodyReadable": self._body_readable(), "bodyView": self.body_view, "bodyReceipt": self.body_receipt,
                 "bodyDeviceAvailable": self._body_device_provider() is not None, "bodyDevice": self._body_device_status(),
+                "desktop": self._desktop_view, "desktopPending": device_login is not None,
+                "desktopCode": device_login.get("crossCode") if device_login else None,
+                "desktopUrl": device_login["url"] if device_login and device_login.get("crossCode") else None,
+                "desktopPlay": desktop_play,
                 "waiting": self.waiting[0]["name"] if self.waiting else None,
                 "resident": resident.get("name", ""), "connected": session is not None,
                 "bodyKind": resident.get("bodyKind"), "characterId": resident.get("characterId"),

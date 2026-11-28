@@ -9,11 +9,19 @@ import logging
 import secrets
 import time
 from urllib.error import HTTPError
+from uuid import UUID, uuid4
 
 from agent_mc_autonomy.configuration import Settings
 from plugin.sdk.plugin import Err, Ok, TransportError, plugin_entry, ui
 
-from .neko_resident_connection import PORTAL, SECRET, ResidentConnection, request_json, write_resident_state
+from .neko_resident_connection import (
+    PORTAL,
+    SECRET,
+    ResidentConnection,
+    read_session,
+    request_json,
+    write_resident_state,
+)
 from .qiandengji_panel import require_idle
 
 TURN_ID = {"type": "string", "description": "本次千灯纪事件给出的回合 ID。"}
@@ -131,7 +139,8 @@ def body_tools(turn):
 
 
 def post(session, operation, payload):
-    return request_json(session["endpoint"] + "/" + operation, payload, session["token"])
+    options = {"extra_headers": session["deviceHeaders"]} if "deviceHeaders" in session else {}
+    return request_json(session["endpoint"] + "/" + operation, payload, session["token"], **options)
 
 
 class ResidentMode(ResidentConnection):
@@ -153,6 +162,7 @@ class ResidentMode(ResidentConnection):
         self._resident_last_reply = None
         self._resident_voice_transcript_received = False
         self._resident_voice_receipt = None
+        self._desktop_active_request = None
 
     def _resident_status(self):
         turn = self._resident_turn
@@ -166,7 +176,127 @@ class ResidentMode(ResidentConnection):
                           "receipt": self._resident_voice_receipt}}
 
     def _resident_blocks_player(self):
-        return self._resident_phase != "stopped"
+        return self._resident_phase != "stopped" or bool(self._desktop_play_record())
+
+    def _desktop_play_record(self):
+        try:
+            row = json.loads(self.data_path("desktop-play.json").read_bytes())
+            if (not isinstance(row, dict) or row["phase"] not in ("starting", "running", "stopping", "stopped")
+                    or str(UUID(row["requestId"])) != row["requestId"] or str(UUID(row["characterId"])) != row["characterId"]):
+                raise ValueError("invalid_desktop_play_record")
+            if row["phase"] == "stopped":
+                return None
+            return {key: row[key] for key in ("phase", "requestId", "characterId", "mode") if key in row}
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            return {"phase": "unknown"}
+
+    def _write_desktop_play(self, row, phase):
+        write_resident_state(self.data_path("desktop-play.json"), {**row, "phase": phase})
+
+    def _desktop_pending_error(self):
+        row = self._desktop_play_record() or {}
+        return Err({"code": "desktop_play_unconfirmed", "requestId": row.get("requestId"),
+                    "message": "本次游玩结果待核对，请保留原请求并查看官网控制端。"})
+
+    async def _verify_desktop_play(self):
+        row = self._desktop_play_record() or {}
+        request_id = row.get("requestId")
+        if not request_id:
+            return self._desktop_pending_error()
+        try:
+            result = await asyncio.to_thread(self._desktop().authorized, "play-status", {"requestId": request_id})
+        except HTTPError as error:
+            if error.code in (404, 405):
+                return Err({"code": "desktop_receipt_unavailable", "requestId": request_id,
+                            "message": "当前官网版本尚未提供原游玩回执查询，请保留编号。"})
+            raise
+        if not isinstance(result, dict):
+            return self._desktop_pending_error()
+        outcome = result.get("status")
+        if (result.get("requestId") != request_id or result.get("characterId") != row["characterId"]
+                or (row.get("mode") and result.get("mode") != row["mode"])
+                or type(result.get("updatedAt")) is not int or outcome == "unknown"):
+            return self._desktop_pending_error()
+        if outcome == "active" and row["phase"] == "starting":
+            # A read can confirm the grant so the user can stop it. It does not
+            # recover the turn token or restart gameplay.
+            self._write_desktop_play(row, "running")
+        elif outcome in ("stopped", "expired", "rejected"):
+            if not await self._stop_resident_control():
+                return self._desktop_pending_error()
+            self._write_desktop_play(row, "stopped")
+            self._desktop_active_request = None
+        elif outcome != "active":
+            return self._desktop_pending_error()
+        return Ok({"status": outcome, "requestId": request_id})
+
+    async def _start_desktop_resident(self, local_role, mode):
+        with self._control_lock:
+            if self._resident_blocks_player():
+                return Err({"code": "desktop_request_pending", "message": "请先核对原居民控制请求。"})
+            if self._player_start_requests or self._configuration_writes or self._setup_active():
+                return Err({"code": "player_runtime_busy", "message": "请先停止玩家模式。"})
+            self._resident_phase = "starting"
+        started = False
+        try:
+            require_idle(self, Settings.parse(await self.config.dump()))
+            current = await self._refresh_desktop()
+            if (not current or not current.get("canStart") or mode not in ("maid", "numen")
+                    or current["character"].get("bodyKind") != mode or current.get("activeKind") != mode):
+                return Err({"code": "desktop_body_not_ready", "message": "请查看原控制端或在官网确认换身。"})
+            if current.get("controller") == "this_device":
+                return Err({"code": "desktop_request_pending", "message": "此设备已有控制请求，请先核对原回执。"})
+            device = self._desktop()
+            record = await asyncio.to_thread(device.settings)
+            role = await self._resolve_role(local_role or record.get("localRole", ""))
+            if not role:
+                return Err({"code": "resident_role_required", "message": "请选择负责这个身体的本机角色。"})
+            character = current["character"]
+            request = {"requestId": str(uuid4()), "characterId": character["characterId"], "mode": mode}
+            self._write_desktop_play(request, "starting")
+            try:
+                reply = await asyncio.to_thread(device.authorized, "start", {"requestId": request["requestId"], "mode": mode})
+            except HTTPError as exc:
+                if exc.code in (400, 401, 403, 409):
+                    self._write_desktop_play(request, "stopped")
+                raise
+            session = read_session(reply, self.portal)
+            if any(session["resident"].get(key) != character.get(key) for key in ("characterId", "id", "bodyId", "bodyKind")):
+                raise ValueError("desktop_character_changed")
+            session = {**session, "deviceHeaders": device.headers(record)}
+            # The verified grant is known even if the initial poll fails. Its
+            # original ID can still be stopped explicitly by this device.
+            self._write_desktop_play(request, "running")
+            self._desktop_active_request = request["requestId"]
+            await asyncio.to_thread(device.remember_role, role, mode)
+            await asyncio.to_thread(post, session, "begin", {})
+            await self._activate_resident(role, session)
+            started = True
+            return Ok({**self._resident_status(), "requestId": request["requestId"]})
+        finally:
+            if not started:
+                self._clear_resident_control()
+
+    async def _stop_desktop_resident(self):
+        row = self._desktop_play_record()
+        if not row or row["phase"] != "running":
+            return Err({"code": "desktop_request_pending", "message": "请先刷新状态并核对原控制请求。"})
+        if not await self._stop_resident_control():
+            return Err({"code": "resident_stop_pending", "message": "正在等候上一条桌面请求结束。"})
+        current = await self._refresh_desktop()
+        if not current or current["character"].get("characterId") != row["characterId"]:
+            return self._desktop_pending_error()
+        device = self._desktop()
+        self._write_desktop_play(row, "stopping")
+        result = await asyncio.to_thread(device.authorized, "stop", {"requestId": row["requestId"]})
+        current = await self._refresh_desktop()
+        if not isinstance(result, dict) or result.get("stopped") is not True or not current or current.get("controller") == "this_device":
+            return Err({"code": "desktop_stop_unconfirmed", "message": "请按原请求核对官网控制端。"})
+        self._write_desktop_play(row, "stopped")
+        self._desktop_active_request = None
+        return Ok({"stopped": True, "requestId": row["requestId"], "controllerReleased": True})
 
     @staticmethod
     def _resident_owns_control():
@@ -195,26 +325,7 @@ class ResidentMode(ResidentConnection):
             started = False
             try:
                 require_idle(self, Settings.parse(await self.config.dump()))
-                self._resident_replies_path = self.data_path("resident-replies", session["resident"]["characterId"] + ".json")
-                try:
-                    self._resident_last_reply = json.loads(self._resident_replies_path.read_bytes())
-                except FileNotFoundError:
-                    self._resident_last_reply = None
-                if self._resident_last_reply is not None and (
-                        not isinstance(self._resident_last_reply, dict)
-                        or not isinstance(self._resident_last_reply.get("turnHash"), str)
-                        or len(self._resident_last_reply["turnHash"]) != 64
-                        or type(self._resident_last_reply.get("retryable")) is not bool):
-                    raise ValueError("invalid_resident_reply_checkpoint")
-                first_turn = (await asyncio.to_thread(post, session, "poll", {}))["turn"]
-                for name, (method, description, schema) in TOOLS.items():
-                    self.register_llm_tool(name=name, role=role, handler=getattr(self, method),
-                                           description=description, parameters=schema)
-                    self._resident_tools.append(name)
-                self._resident_session, self._resident_role = session, role
-                self._resident_health = "waiting"
-                self._resident_phase = "running"
-                self._resident_poll_task = asyncio.create_task(self._poll_resident(first_turn))
+                await self._activate_resident(role, session)
                 started = True
                 return Ok(self._resident_status())
             except HTTPError as exc:
@@ -228,6 +339,28 @@ class ResidentMode(ResidentConnection):
             finally:
                 if not started:
                     self._clear_resident_control()
+
+    async def _activate_resident(self, role, session):
+        self._resident_replies_path = self.data_path("resident-replies", session["resident"]["characterId"] + ".json")
+        try:
+            self._resident_last_reply = json.loads(self._resident_replies_path.read_bytes())
+        except FileNotFoundError:
+            self._resident_last_reply = None
+        if self._resident_last_reply is not None and (
+                not isinstance(self._resident_last_reply, dict)
+                or not isinstance(self._resident_last_reply.get("turnHash"), str)
+                or len(self._resident_last_reply["turnHash"]) != 64
+                or type(self._resident_last_reply.get("retryable")) is not bool):
+            raise ValueError("invalid_resident_reply_checkpoint")
+        first_turn = (await asyncio.to_thread(post, session, "poll", {}))["turn"]
+        for name, (method, description, schema) in TOOLS.items():
+            self.register_llm_tool(name=name, role=role, handler=getattr(self, method),
+                                   description=description, parameters=schema)
+            self._resident_tools.append(name)
+        self._resident_session, self._resident_role = session, role
+        self._resident_health = "waiting"
+        self._resident_phase = "running"
+        self._resident_poll_task = asyncio.create_task(self._poll_resident(first_turn))
 
     async def _poll_resident(self, turn):
         while self._resident_phase == "running":
@@ -482,6 +615,8 @@ class ResidentMode(ResidentConnection):
         if not self._from_panel(uiToken):
             return self._resident_ui_denied()
         async with self.pair_lock:
+            if self._desktop_play_record():
+                return Err({"code": "desktop_stop_required", "message": "请从设备授权区停止原游玩请求。"})
             if not await self._stop_resident_control():
                 return Err({"code": "resident_stop_pending", "message": "正在等候上一条桌面请求结束，请稍后刷新。"})
             return Ok(self._resident_status())

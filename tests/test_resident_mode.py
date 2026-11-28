@@ -4,6 +4,7 @@ import importlib
 import json
 import threading
 import time
+from contextlib import nullcontext
 from types import SimpleNamespace
 from urllib.error import HTTPError
 from uuid import uuid4
@@ -30,6 +31,180 @@ def offered_turn(session):
             "version": 1, "messages": [], "outputs": [{"mode": "native", "scope": "nearby"}],
         }},
     }
+
+
+def test_desktop_device_reads_first_then_uses_the_same_start_id_on_stop(monkeypatch, run_async, resident):
+    plugin, session, mode, _ = resident
+    character = {**session["resident"], "bodyId": str(uuid4())}
+    session["resident"] = character
+    record = {"character": character["characterId"], "refreshToken": "fixture-refresh-only", "localRole": "YUI"}
+    device_calls, body_calls = [], []
+    controller = None
+
+    def authorized(op, payload):
+        nonlocal controller
+        device_calls.append((op, payload))
+        if op == "status":
+            return {"character": character, "activeKind": "maid", "controller": controller,
+                    "canStart": controller is None, "modes": ["maid"]}
+        if op == "start":
+            assert plugin._desktop_play_record()["requestId"] == payload["requestId"]
+            assert plugin._desktop_play_record()["phase"] == "starting"
+            controller = "this_device"
+            return session
+        assert op == "stop"
+        controller = None
+        return {"stopped": True}
+
+    def body_post(actual_session, op, _payload):
+        assert actual_session["deviceHeaders"] == {"X-QD-Device": "fixture-proof"}
+        body_calls.append(op)
+        return {"turn": None}
+
+    plugin._desktop_client = SimpleNamespace(login=None, settings=lambda: record, authorized=authorized,
+        headers=lambda _record: {"X-QD-Device": "fixture-proof"}, remember_role=lambda *_: None)
+    monkeypatch.setattr(mode, "post", body_post)
+
+    async def exercise():
+        token = plugin.panel_token
+        assert (await plugin.desktop_device("refresh", token)).value == {"status": "authorized"}
+        assert [op for op, _ in device_calls] == ["status"]
+        assert not body_calls
+        assert "fixture-refresh-only" not in json.dumps(await plugin.connection_context())
+        assert not plugin._resident_blocks_player()
+        start = await plugin.desktop_device("start", token, mode="maid")
+        assert start.value["phase"] == "running"
+        assert plugin._resident_blocks_player()
+        assert body_calls == ["begin", "poll"]
+        assert (await plugin.desktop_device("start", token, mode="maid")).error["code"] == "desktop_request_pending"
+        stop = await plugin.desktop_device("stop", token)
+        assert stop.value == {"stopped": True, "requestId": start.value["requestId"], "controllerReleased": True}
+        assert [p["requestId"] for op, p in device_calls if op in ("start", "stop")] == [start.value["requestId"]] * 2
+        assert not plugin._resident_blocks_player()
+
+    run_async(exercise())
+
+
+def test_unknown_desktop_start_is_durable_and_never_resubmitted(run_async, resident):
+    plugin, session, _, _ = resident
+    character = session["resident"]
+    starts = []
+
+    def authorized(op, payload):
+        if op == "status":
+            return {"character": character, "activeKind": "maid", "canStart": not starts}
+        assert op == "start"
+        starts.append(payload["requestId"])
+        raise TimeoutError()
+
+    plugin._desktop_client = SimpleNamespace(login=None, settings=lambda: {
+        "character": character["characterId"], "refreshToken": "fixture-only", "localRole": "YUI"}, authorized=authorized)
+
+    async def exercise():
+        token = plugin.panel_token
+        failure = await plugin.desktop_device("start", token, mode="maid")
+        assert failure.error["code"] == "desktop_play_unconfirmed"
+        assert failure.error["requestId"] == starts[0]
+        assert plugin._desktop_play_record()["phase"] == "starting"
+        assert plugin._desktop_play_record()["requestId"] == starts[0]
+        assert plugin._resident_blocks_player()
+        assert (await plugin.desktop_device("start", token, mode="maid")).error["code"] == "desktop_request_pending"
+        assert (await plugin.desktop_device("stop", token)).error["code"] == "desktop_request_pending"
+        assert (await plugin.desktop_device("refresh", token)).value == {"status": "authorized"}
+        assert len(starts) == 1
+
+    run_async(exercise())
+
+
+def test_desktop_stop_ends_local_control_even_when_portal_is_unreachable(run_async, resident):
+    plugin, session, _, _ = resident
+    original = {"requestId": str(uuid4()), "characterId": session["resident"]["characterId"]}
+    plugin._write_desktop_play(original, "running")
+    plugin._resident_phase = "running"
+    plugin._resident_session = session
+    calls = []
+
+    def authorized(op, _payload):
+        calls.append(op)
+        raise TimeoutError()
+
+    plugin._desktop_client = SimpleNamespace(login=None, settings=lambda: {
+        "character": original["characterId"], "refreshToken": "fixture-only"}, authorized=authorized)
+    failure = run_async(plugin.desktop_device("stop", plugin.panel_token))
+    assert failure.error["code"] == "desktop_play_unconfirmed"
+    assert failure.error["requestId"] == original["requestId"]
+    assert calls == ["status"]
+    assert plugin._resident_phase == "stopped"
+    assert plugin._resident_session is None
+    assert plugin._resident_blocks_player()
+
+
+def test_desktop_play_receipt_must_match_original_role_mode_and_id(run_async, resident):
+    plugin, session, _, _ = resident
+    original = {"requestId": str(uuid4()), "characterId": session["resident"]["characterId"], "mode": "maid"}
+    plugin._write_desktop_play(original, "starting")
+    calls = []
+    expired = {**original, "status": "expired", "updatedAt": int(time.time() * 1000), "reason": "LEASE_EXPIRED"}
+    replies = [HTTPError(plugin.portal, 404, "Not Found", {}, None),
+               {**expired, "characterId": str(uuid4())},
+               {"requestId": original["requestId"], "status": "unknown", "characterId": None, "mode": None,
+                "updatedAt": None, "reason": "NO_RECEIPT"}, expired]
+
+    def authorized(op, payload):
+        calls.append((op, payload))
+        reply = replies.pop(0)
+        if isinstance(reply, HTTPError):
+            raise reply
+        return reply
+
+    plugin._desktop_client = SimpleNamespace(login=None, authorized=authorized)
+
+    async def exercise():
+        assert (await plugin.desktop_device("verify", plugin.panel_token)).error["code"] == "desktop_receipt_unavailable"
+        for _ in range(2):
+            assert (await plugin.desktop_device("verify", plugin.panel_token)).error["code"] == "desktop_play_unconfirmed"
+            assert plugin._resident_blocks_player()
+        receipt = await plugin.desktop_device("verify", plugin.panel_token)
+        assert receipt.value == {"status": "expired", "requestId": original["requestId"]}
+        assert not plugin._resident_blocks_player()
+        assert calls == [("play-status", {"requestId": original["requestId"]})] * 4
+
+    run_async(exercise())
+
+
+def test_desktop_refresh_reuses_original_rotation_after_network_failure(resident):
+    plugin, session, _, connection = resident
+    original = {"character": session["resident"]["characterId"], "role": session["resident"]["id"],
+                "device": str(uuid4()), "proof": "p" * 43, "expiresAt": 0,
+                "refreshToken": "qdr2_" + "r" * 43, "accessToken": "qda2_" + "a" * 43}
+    row = dict(original)
+    calls = []
+
+    def save(new):
+        row.clear()
+        row.update(new)
+
+    def request(url, payload, token, *, extra_headers):
+        op = url.rsplit("/", 1)[-1]
+        calls.append((op, payload))
+        assert extra_headers == {"X-QD-Device": original["device"], "X-QD-Device-Proof": original["proof"]}
+        if op == "refresh":
+            if len(calls) == 1:
+                raise TimeoutError()
+            assert calls[0] == calls[1]
+            return {**original, "expiresAt": int(time.time() * 1000) + 60_000,
+                    "accessToken": "qda2_" + "b" * 43, "refreshToken": "qdr2_" + "s" * 43}
+        assert op == "status" and token == "qda2_" + "b" * 43
+        return {"character": session["resident"]}
+
+    vault = SimpleNamespace(lock=nullcontext, load=lambda: dict(row), save=save)
+    device = connection.DesktopDevice(plugin.portal, vault, request)
+    with pytest.raises(TimeoutError):
+        device.authorized("status", {})
+    assert row["rotationId"] == calls[0][1]["rotationId"]
+    assert device.authorized("status", {})["character"] == session["resident"]
+    assert [op for op, _ in calls] == ["refresh", "refresh", "status"]
+    assert "rotationId" not in row
 
 
 def test_browser_authorization_binds_exact_existing_body_without_start(monkeypatch, run_async, resident):

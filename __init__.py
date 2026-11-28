@@ -60,7 +60,13 @@ class MinecraftAutonomousPlugin(Dashboard, ResidentMode, QiandengjiPanel, NekoAc
 
     @lifecycle(id="shutdown")
     async def on_shutdown(self, **_):
+        if self._desktop_client is not None:
+            self._desktop_client.close_login()
         await self._stop_resident_control()
+        if self._desktop_active_request:
+            row = self._desktop_play_record()
+            if row and row.get("requestId") == self._desktop_active_request and row.get("phase") == "running":
+                await self.desktop_device("stop", self.panel_token)
         await self._close_neko_link()
         await self._close_runtime_setup()
         settings = Settings.parse(await self.config.dump())
